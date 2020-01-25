@@ -3,6 +3,7 @@ from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
 from PyQt5 import uic
+import os
 
 
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
@@ -19,7 +20,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_pressure = 0
         self.recording_on = False
         self.text = ""
-        self.foutput = None
+        self.targets_file = None
         self.targets_file = None;
         self.path = QPainterPath()
 
@@ -47,7 +48,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_prv.clicked.connect(self.f_btn_prv)
         self.btn_reset.clicked.connect(self.f_btn_reset)
         self.btn_goto.clicked.connect(self.f_btn_goto)
+        self.btn_quit.clicked.connect(self.f_btn_quit)
         self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
+        self.menu_quit.triggered.connect(self.f_menu_quit)
 
         self.show()
 
@@ -113,7 +116,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             painter.drawPath(self.path)
 
             # Write to file:
-            self.foutput.write(str(self.pen_x)+","+str(self.pen_y)+","+str(self.pen_pressure)+"\n")
+            self.targets_file.write(str(self.pen_x) + "," + str(self.pen_y) + "," + str(self.pen_pressure) + "\n")
 
     def set_recording_on(self):
         # add choose folder, after it enter filename
@@ -122,24 +125,31 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.update()               # update view after re-declare
         if ok:
             self.recording_on = True
-            self.foutput = open(text+".csv", "x")
+            self.targets_file = open(text + ".csv", "x")
             time = QDateTime.currentDateTime()
-            self.foutput.write(time.toString()+"\n")
-            self.foutput.write("X,"+"Y,"+"Pressure\n")
+            self.targets_file.write(time.toString() + "\n")
+            self.targets_file.write("X," + "Y," + "Pressure\n")
 
     # ends recording and closes file
     def set_recording_off(self):
         self.recording_on = False
-        self.foutput.close()
+        self.targets_file.close()
 
     # ------ Button Functions -----
 
     def f_menu_choose_target(self):
-        self.btn_start_ssn.setEnabled(True)
-        text, ok = QInputDialog.getText(self, 'File name', 'Insert filename for targets file:')
-        if ok:
-            self.foutput = open(text+".csv", "x")
+        # returns tuple, need [0] for file path
+        targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), 'CSV files (*.csv)')
+        if targets_file_path:
+            try:
+                self.targets_file = open(targets_file_path[0], "r")
+                self.btn_start_ssn.setEnabled(True)
+            except IOError:
+                msg = QMessageBox()
+                msg.about(self, "Error", "Load targets file in order to start the session")
 
+    def f_menu_quit(self):
+        self.f_btn_quit()
 
     def f_btn_start_ssn(self):
         self.toggle_buttons(True)
@@ -159,6 +169,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def f_btn_goto(self):
         print("GOTO!")
 
+    def f_btn_quit(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        answer = msg.question(self, 'Wait!', "Are you sure you want to quit? ", msg.Yes | msg.No, msg.No)
+        if answer == msg.Yes:
+            if self.targets_file:
+                self.targets_file.fclose()
+            self.close()
+
     # When setting state = true, buttons will be enabled. if false, will be disabled
     # buttons effected by this action: next, prev, reset, goto, start session
     def toggle_buttons(self, state):
@@ -169,18 +188,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size
-def calculate_mapping(mainform):
-    left = mainform.geometry().x()
-    right = mainform.geometry().width()
-    top = mainform.geometry().y()
-    bottom = mainform.geometry().height()-40        # -35 to ignore start bar
+def calculate_mapping(main_form):
+    screen_left = main_form.geometry().x()
+    screen_right = main_form.geometry().width()
+    top = main_form.geometry().y()
+    bottom = main_form.geometry().height()-40        # -35 to ignore start bar
     print("Wacom Desktop Center->Pen Settings->Mapping->Screen Area->'Portion' and fill the numbers below")
-    print("Mapping settings, set Top:", top,", Bottom:", bottom," Left:", left, "Right:", right)
+    print("Mapping settings, set Top:", top,", Bottom:", bottom," Left:", screen_left, "Right:", screen_right)
 
 
 app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv
 app.setStyle('Fusion')
 mainform = MainWindow()
 mainform.show()
-calculate_mapping(mainform)         #
-app.exec_()                         # start app
+calculate_mapping(mainform)           #
+sys.exit(app.exec_())                 # set exit code ass the app exit code

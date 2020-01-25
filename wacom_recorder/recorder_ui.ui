@@ -93,7 +93,7 @@
       </widget>
      </item>
      <item alignment="Qt::AlignTop">
-      <widget class="QPushButton" name="pushButton_2">
+      <widget class="QPushButton" name="quit_btn">
        <property name="text">
         <string>Quit</string>
        </property>

@@ -4,6 +4,8 @@ from PyQt5.QtGui import *        # The core classes common to widget and OpenGL 
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
 from PyQt5 import uic
 import os
+from shutil import copyfile
+from datetime import datetime
 
 
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
@@ -20,8 +22,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_pressure = 0
         self.recording_on = False
         self.text = ""
-        self.targets_file = None
-        self.targets_file = None;
+        # All files:
+        self.targets_file = None            # loaded by user, holds the targets.
+        self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
+        self.curr_trajectory_file = None    # saves X,Y, Pressure for each path
+        self.trials_file = None             # keeps track of each trajectory file
+        self.results_folder_path = None     # unique, using date and time
         self.path = QPainterPath()
 
         # UI settings
@@ -51,23 +57,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_quit.clicked.connect(self.f_btn_quit)
         self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
         self.menu_quit.triggered.connect(self.f_menu_quit)
-
         self.show()
-
-        # old buttons - will be deleted eventually:
-
-        # # start_rec_btn = QPushButton('Start Recording', self)
-        # # start_rec_btn.setToolTip('Start recording coordinates and draw on screen')
-        # start_rec_btn.clicked.connect(self.set_recording_on)
-        # start_rec_btn.move(0, 50)
-        # stop_rec_btn = QPushButton('Stop Recording', self)
-        # stop_rec_btn.setToolTip('stop recording coordinates and draw on screen')
-        # stop_rec_btn.clicked.connect(self.set_recording_off)
-        # stop_rec_btn.move(0, 100)
-        # next_btn = QPushButton('Next', self)
-        # next_btn.setToolTip('move to next target')
-        # next_btn.clicked.connect(self.set_recording_off)
-        # next_btn.move(100, 100)
 
     def tabletEvent(self, tabletEvent):
         self.pen_x = tabletEvent.globalX()
@@ -152,8 +142,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.f_btn_quit()
 
     def f_btn_start_ssn(self):
+        self.create_dir_copy_targets()
         self.toggle_buttons(True)
-        self.recording_on = True
+        # self.recording_on = True
 
     def f_btn_reset(self):
         self.recording_on = True
@@ -174,9 +165,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         msg.setIcon(QMessageBox.Warning)
         answer = msg.question(self, 'Wait!', "Are you sure you want to quit? ", msg.Yes | msg.No, msg.No)
         if answer == msg.Yes:
-            if self.targets_file:
-                self.targets_file.fclose()
-            self.close()
+            try:
+                self.targets_file.close()
+            except EnvironmentError:
+                print("Not targets file was closed")
+            try:
+                self.remaining_targets_file.close()
+            except EnvironmentError:
+                print("No remaining targets file was closed")
+            finally:
+                self.close()
 
     # When setting state = true, buttons will be enabled. if false, will be disabled
     # buttons effected by this action: next, prev, reset, goto, start session
@@ -185,6 +183,24 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_prv.setEnabled(state)
         self.btn_reset.setEnabled(state)
         self.btn_goto.setEnabled(state)
+
+    def create_dir_copy_targets(self):
+        pwd = os.getcwd();
+        now = datetime.now()
+        now_str = now.strftime("%d-%m-%Y-%H-%M-%S")
+        # create results dir - unique, using date & time
+        self.results_folder_path = pwd+"\\Results"+now_str           # backslash = \ --> windows env +\ for escape char
+        os.mkdir(self.results_folder_path)
+        
+        # copy original targets file twice, 1 for bup, 1 for remaining_targets
+        copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
+        copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")
+
+        # open remaining targets file and save handle
+        try:
+            self.remaining_targets_file = open(self.results_folder_path+"\\Remaining_targets.csv", "r+")
+        except IOError:
+            QMessageBox().about(self, "Error loading file", "Something is wrong, couldn't find remaining targets file")
 
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size

@@ -1,9 +1,9 @@
-import sys
+import sys, os, csv
 from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
+from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView
 from PyQt5 import uic
-import os
 from shutil import copyfile
 from datetime import datetime
 
@@ -40,7 +40,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_quit = self.findChild(QPushButton, 'quit_btn')
         self.menu_choose_targets = self.findChild(QAction, 'actionChoose_Targets_File')     # Find Menu Option
         self.menu_quit = self.findChild(QAction, 'actionQuit')
-        self.init_ui()                                                                      # connect buttons to actions
+        self.target_textedit = self.findChild(QTextEdit, 'target_textedit')
+        self.target_id_textedit = self.findChild(QTextEdit, 'targetnum_textedit_value')
+        self.tablet_paint_area = self.findChild(QGraphicsView, 'tablet_paint_graphicsview')
+        # /----- Beta version for painting inside graphicScene..... not working yet----/
+        # self.QGraphicsView.setScene(QGraphicsScene())
+        # self.item = QGraphicsPathItem()
+        # self.scene().addItem(self.item)
+        # self.tablet_paint_area.setScene(self.scene)
+        self.init_ui()
 
     # Read from recorder_ui.ui and connect each button to function
     def init_ui(self):
@@ -57,6 +65,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_quit.clicked.connect(self.f_btn_quit)
         self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
         self.menu_quit.triggered.connect(self.f_menu_quit)
+        self.target_textedit.setStyleSheet("QTextEdit {color:red}")
+        self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
         self.show()
 
     def tabletEvent(self, tabletEvent):
@@ -98,32 +108,32 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             size = self.size()
             painter.drawText(self.rect(), Qt.AlignTop | Qt.AlignLeft , text)
             pen = QPen(Qt.blue)
-            pen.setWidth(1)
+            pen.setWidth(50)
             painter.setPen(pen)
-
-            # painter.drawPoint(self.pen_x, self.pen_y)
-            # painter.end()
+            # /----- Beta version for painting inside graphicScene..... not working yet----/
+            #self.item.setPath(self.path)
             painter.drawPath(self.path)
 
             # Write to file:
-            self.targets_file.write(str(self.pen_x) + "," + str(self.pen_y) + "," + str(self.pen_pressure) + "\n")
+            # self.targets_file.write(str(self.pen_x) + "," + str(self.pen_y) + "," + str(self.pen_pressure) + "\n")
 
     def set_recording_on(self):
         # add choose folder, after it enter filename
-        text, ok = QInputDialog.getText(self, 'File name', 'insert new recording filename:')
+        # text, ok = QInputDialog.getText(self, 'File name', 'insert new recording filename:')
+        self.recording_on = True;
         self.path = QPainterPath()  # Re-declare path for a fresh start
         self.update()               # update view after re-declare
-        if ok:
-            self.recording_on = True
-            self.targets_file = open(text + ".csv", "x")
-            time = QDateTime.currentDateTime()
-            self.targets_file.write(time.toString() + "\n")
-            self.targets_file.write("X," + "Y," + "Pressure\n")
+        # if ok:
+        #    self.recording_on = True
+        #    self.targets_file = open(text + ".csv", "x")
+        #    time = QDateTime.currentDateTime()
+        #    self.targets_file.write(time.toString() + "\n")
+        #    self.targets_file.write("X," + "Y," + "Pressure\n")
 
     # ends recording and closes file
     def set_recording_off(self):
         self.recording_on = False
-        self.targets_file.close()
+       # self.targets_file.close()
 
     # ------ Button Functions -----
 
@@ -143,6 +153,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def f_btn_start_ssn(self):
         self.create_dir_copy_targets()
+        self.set_recording_on()
         self.toggle_buttons(True)
         # self.recording_on = True
 
@@ -152,7 +163,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.update()               # update view after re-declare
 
     def f_btn_next(self):
-        print("NEXT!")
+        self.read_next_target()
 
     def f_btn_prv(self):
         print("PRV!")
@@ -191,7 +202,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # create results dir - unique, using date & time
         self.results_folder_path = pwd+"\\Results"+now_str           # backslash = \ --> windows env +\ for escape char
         os.mkdir(self.results_folder_path)
-        
+
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
         copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
         copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")
@@ -201,6 +212,27 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.remaining_targets_file = open(self.results_folder_path+"\\Remaining_targets.csv", "r+")
         except IOError:
             QMessageBox().about(self, "Error loading file", "Something is wrong, couldn't find remaining targets file")
+
+    def read_next_target(self):
+        try:
+            row = self.remaining_targets_file.readline()
+            target_id = row.split(',')[0]
+            target = row.split(',')[1]
+            self.target_textedit.clear()
+            self.target_textedit.insertPlainText(target)
+            self.target_id_textedit.clear()
+            self.target_id_textedit.insertPlainText(target_id)
+        except IOError:             # Currently - BUG, doesn't catch end of file error.
+            print("End of targets file")
+            self.target_textedit.clear()
+            self.target_textedit.insertPlainText("END OF TARGETS FILE")
+            self.target_id_textedit.clear()
+            self.target_id_textedit.clear()
+
+
+        # read next target
+        # present on screen
+        # maybe clear previous target presented
 
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size

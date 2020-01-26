@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1055</width>
-    <height>646</height>
+    <height>699</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -190,6 +190,42 @@ p, li { white-space: pre-wrap; }
         <width>0</width>
         <height>391</height>
        </size>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Plain</enum>
+      </property>
+      <property name="lineWidth">
+       <number>3</number>
+      </property>
+      <property name="midLineWidth">
+       <number>1</number>
+      </property>
+      <property name="verticalScrollBarPolicy">
+       <enum>Qt::ScrollBarAlwaysOff</enum>
+      </property>
+      <property name="horizontalScrollBarPolicy">
+       <enum>Qt::ScrollBarAlwaysOff</enum>
+      </property>
+      <property name="sizeAdjustPolicy">
+       <enum>QAbstractScrollArea::AdjustIgnored</enum>
+      </property>
+      <property name="foregroundBrush">
+       <brush brushstyle="NoBrush">
+        <color alpha="255">
+         <red>0</red>
+         <green>0</green>
+         <blue>0</blue>
+        </color>
+       </brush>
+      </property>
+      <property name="renderHints">
+       <set>QPainter::TextAntialiasing</set>
+      </property>
+      <property name="viewportUpdateMode">
+       <enum>QGraphicsView::MinimalViewportUpdate</enum>
       </property>
      </widget>
     </item>

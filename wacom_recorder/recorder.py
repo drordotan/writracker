@@ -2,7 +2,7 @@ import sys, os, csv
 from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
-from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView
+from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5 import uic
 from shutil import copyfile
 from datetime import datetime
@@ -43,11 +43,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.target_textedit = self.findChild(QTextEdit, 'target_textedit')
         self.target_id_textedit = self.findChild(QTextEdit, 'targetnum_textedit_value')
         self.tablet_paint_area = self.findChild(QGraphicsView, 'tablet_paint_graphicsview')
+        self.scene = QGraphicsScene()
+        self.tablet_paint_area.setScene(self.scene)
         # /----- Beta version for painting inside graphicScene..... not working yet----/
         # self.QGraphicsView.setScene(QGraphicsScene())
         # self.item = QGraphicsPathItem()
-        # self.scene().addItem(self.item)
         # self.tablet_paint_area.setScene(self.scene)
+        # /--------- end of painting tries -------/
+
         self.init_ui()
 
     # Read from recorder_ui.ui and connect each button to function
@@ -93,7 +96,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         else:
             self.text += " Pen is up."
         tabletEvent.accept()
-        self.update()
+        self.update()                   # calls paintEvent behind the scenes
 
     def paintEvent(self, event):
         if self.recording_on:
@@ -110,9 +113,17 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             pen = QPen(Qt.blue)
             pen.setWidth(50)
             painter.setPen(pen)
-            # /----- Beta version for painting inside graphicScene..... not working yet----/
-            #self.item.setPath(self.path)
-            painter.drawPath(self.path)
+
+            # -------- demo
+            #self.path = self.tablet_paint_area.mapToScene(self.path)
+            # self.scene.addItem(self.tablet_paint_area.mapToScene(self.path))
+            # --------- end of demo
+
+            #in order to draw all over the screen (mainwindow widget)
+            # painter.drawPath(self.path)
+            #And to add to the scene:
+            self.scene.addPath(self.path)
+
 
             # Write to file:
             # self.targets_file.write(str(self.pen_x) + "," + str(self.pen_y) + "," + str(self.pen_pressure) + "\n")
@@ -121,8 +132,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # add choose folder, after it enter filename
         # text, ok = QInputDialog.getText(self, 'File name', 'insert new recording filename:')
         self.recording_on = True;
-        self.path = QPainterPath()  # Re-declare path for a fresh start
-        self.update()               # update view after re-declare
+        self.clean_display()
         # if ok:
         #    self.recording_on = True
         #    self.targets_file = open(text + ".csv", "x")
@@ -133,8 +143,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # ends recording and closes file
     def set_recording_off(self):
         self.recording_on = False
+        self.clean_display()
        # self.targets_file.close()
 
+    def clean_display(self):
+        self.scene.clear()
+        self.path = QPainterPath()  # Re-declare path for a fresh start
+        self.update()  # update view after re-declare
     # ------ Button Functions -----
 
     def f_menu_choose_target(self):
@@ -158,12 +173,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # self.recording_on = True
 
     def f_btn_reset(self):
-        self.recording_on = True
-        self.path = QPainterPath()  # Re-declare path for a fresh start
-        self.update()               # update view after re-declare
+        self.clean_display()
+        # self.recording_on = True
 
     def f_btn_next(self):
+        self.clean_display()
         self.read_next_target()
+        # save trajectory file, open new one
 
     def f_btn_prv(self):
         print("PRV!")
@@ -228,11 +244,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_textedit.insertPlainText("END OF TARGETS FILE")
             self.target_id_textedit.clear()
             self.target_id_textedit.clear()
-
-
-        # read next target
-        # present on screen
-        # maybe clear previous target presented
 
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size

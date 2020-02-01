@@ -5,7 +5,63 @@ from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditio
 from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5 import uic
 from shutil import copyfile
-from datetime import datetime
+from datetime import datetime, timedelta
+
+#-------------------------------------------------------------------------------------
+def save_trajectory(strokes, trial_num, sub_trial_num, out_dir):
+    """
+    Save a single trial's trajectory to one file
+
+    :param strokes: A list of Stroke objects
+    :param trial_num: Trial's serial number
+    :param sub_trial_num: Usually 1, unless during coding we decided to split the trial into several sub-trials
+    :param out_dir: Output directory
+    """
+
+    trial_num_portion = str(trial_num) if sub_trial_num == 1 else "{:}_part{:}".format(trial_num, sub_trial_num)
+    filename = "{:}/trajectory_{:}.csv".format(out_dir, trial_num_portion)
+
+    with open(filename, 'w') as fp:
+
+        writer = csv.DictWriter(fp, ['char_num', 'stroke', 'pen_down', 'x', 'y', 'pressure', 'time'], lineterminator=u.newline())
+        writer.writeheader()
+
+        stroke_num = 0
+        for stroke in strokes:
+            stroke_num += 1
+            for dot in stroke.trajectory:
+                row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down='1' if stroke.on_paper else '0',
+                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t))
+                writer.writerow(row)
+
+    return filename
+
+
+class Trajectory:
+    def __init__(self, filename, filepath):
+        self.filename = filename
+        self.filepath = filepath
+        self.file_handle = None
+        self.start_time = datetime.now().strftime("%H:%M:%S")
+
+    def open_traj_file(self, row):
+        try:
+            with open(self.filepath+"\\"+self.filename+".csv", mode='a+') as traj_file:
+                self.file_handle = csv.DictWriter(traj_file, ['char_num', 'stroke', 'pen_down', 'x', 'y', 'pressure', 'time'], lineterminator='\n')
+                if row == "header":
+                    self.file_handle.writeheader()
+                else:
+                    self.file_handle.writerow(row)
+        except IOError:
+            raise Exception("Error writing trajectory file in:" + self.filepath+"\\"+self.filename+".csv")
+
+    def add_row(self, x_cord, y_cord, pressure, char_num=0, stroke_num=0, pen_down=True):
+        time_abs = datetime.now().strftime("%H:%M:%S")
+        time_relative = datetime.strptime(time_abs, "%H:%M:%S") - datetime.strptime(self.start_time, "%H:%M:%S")
+        time_str = str(time_relative.seconds)+":"+str(time_relative.microseconds)
+        row = dict(char_num=char_num, stroke=stroke_num, pen_down=pen_down, x=x_cord, y=y_cord,
+                   pressure=pressure, time=time_str)
+        self.open_traj_file(row)
 
 
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
@@ -22,11 +78,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_pressure = 0
         self.recording_on = False
         self.text = ""
+        self.targets_dict = {}              # holds trajectory counter for each target
+        self.trials_id_counter = 0          # unique counter for each trial for trials.csv rows
         # All files:
         self.targets_file = None            # loaded by user, holds the targets.
         self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
-        self.curr_trajectory_file = None    # saves X,Y, Pressure for each path
         self.trials_file = None             # keeps track of each trajectory file
+        self.current_active_trajectory = None  # saves X,Y, Pressure for each path
         self.results_folder_path = None     # unique, using date and time
         self.path = QPainterPath()
 
@@ -78,23 +136,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_pressure = int(tabletEvent.pressure() * 100)
         self.pen_xtilt = tabletEvent.xTilt()
         self.pen_ytilt = tabletEvent.yTilt()
+        # write to traj file:
+        if self.current_active_trajectory is not None:
+            self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
+
         if tabletEvent.type() == QTabletEvent.TabletPress:
             self.pen_is_down = True
-            self.text = "TabletPress event"
             self.path.moveTo(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletMove:
             self.pen_is_down = True
-            self.text = "TabletMove event"
             self.path.lineTo(tabletEvent.pos())
             self.newPoint.emit(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletRelease:
             self.pen_is_down = False
-            self.text = "TabletRelease event"
-        self.text += "x={0}, y={1}, pressure={2}%,".format(self.pen_x, self.pen_y, self.pen_pressure)
-        if self.pen_is_down:
-            self.text += " Pen is down."
-        else:
-            self.text += " Pen is up."
         tabletEvent.accept()
         self.update()                   # calls paintEvent behind the scenes
 
@@ -124,34 +178,22 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             #And to add to the scene:
             self.scene.addPath(self.path)
 
-
-            # Write to file:
-            # self.targets_file.write(str(self.pen_x) + "," + str(self.pen_y) + "," + str(self.pen_pressure) + "\n")
-
     def set_recording_on(self):
-        # add choose folder, after it enter filename
-        # text, ok = QInputDialog.getText(self, 'File name', 'insert new recording filename:')
         self.recording_on = True;
         self.clean_display()
-        # if ok:
-        #    self.recording_on = True
-        #    self.targets_file = open(text + ".csv", "x")
-        #    time = QDateTime.currentDateTime()
-        #    self.targets_file.write(time.toString() + "\n")
-        #    self.targets_file.write("X," + "Y," + "Pressure\n")
 
     # ends recording and closes file
     def set_recording_off(self):
         self.recording_on = False
         self.clean_display()
-       # self.targets_file.close()
+        # self.targets_file.close()
 
     def clean_display(self):
         self.scene.clear()
         self.path = QPainterPath()  # Re-declare path for a fresh start
         self.update()  # update view after re-declare
-    # ------ Button Functions -----
 
+    # ------ Button Functions -----
     def f_menu_choose_target(self):
         # returns tuple, need [0] for file path
         targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), 'CSV files (*.csv)')
@@ -170,6 +212,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.create_dir_copy_targets()
         self.set_recording_on()
         self.toggle_buttons(True)
+        self.btn_start_ssn.setEnabled(False)
+        # read header line and ignore
+        row = self.remaining_targets_file.readline()
         # self.recording_on = True
 
     def f_btn_reset(self):
@@ -179,10 +224,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def f_btn_next(self):
         self.clean_display()
         self.read_next_target()
+        self.trials_id_counter += 1
         # save trajectory file, open new one
 
     def f_btn_prv(self):
-        print("PRV!")
+        self.clean_display()
+        self.read_prev_target()
+        self.trials_id_counter -= 1
 
     def f_btn_goto(self):
         print("GOTO!")
@@ -229,6 +277,41 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         except IOError:
             QMessageBox().about(self, "Error loading file", "Something is wrong, couldn't find remaining targets file")
 
+    def open_trajectory(self, target_id):
+        name = "trajectory_"+target_id+"_"+str(self.targets_dict[target_id])
+        self.current_active_trajectory = Trajectory(name, self.results_folder_path)
+        self.current_active_trajectory.open_traj_file("header")
+
+    def read_prev_target(self):
+        self.remaining_targets_file.seek(0)
+        prev_location = self.remaining_targets_file.tell()
+        curr_target_id = self.target_id_textedit.toPlainText()
+        curr_target = self.target_textedit.toPlainText()
+        prev_id = curr_target
+        prev_target = curr_target
+        row = True
+        while row:
+            prev_location_temp = self.remaining_targets_file.tell()
+            row = self.remaining_targets_file.readline()
+            row_target_id = row.split(',')[0]
+            row_target = row.split(',')[1]
+            if row_target_id == curr_target_id:
+                target_id = prev_id
+                target = prev_target
+                self.remaining_targets_file.seek(prev_location)
+                break
+            else:
+                prev_id = row_target_id
+                prev_target = row_target
+                prev_location = prev_location_temp
+
+        self.target_textedit.clear()
+        self.target_textedit.insertPlainText(target)
+        self.target_id_textedit.clear()
+        self.target_id_textedit.insertPlainText(target_id)
+        self.targets_dict[target_id] = self.targets_dict[target_id] + 1;
+        self.open_trajectory(target_id)
+
     def read_next_target(self):
         try:
             row = self.remaining_targets_file.readline()
@@ -238,6 +321,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_textedit.insertPlainText(target)
             self.target_id_textedit.clear()
             self.target_id_textedit.insertPlainText(target_id)
+            # increse trajectory
+            if target_id not in self.targets_dict.keys():
+                self.targets_dict[target_id] = 0
+            else:
+                self.targets_dict[target_id] = self.targets_dict[target_id]+1;
+            self.open_trajectory(target_id)
         except IOError:             # Currently - BUG, doesn't catch end of file error.
             print("End of targets file")
             self.target_textedit.clear()

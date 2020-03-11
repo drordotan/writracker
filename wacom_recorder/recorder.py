@@ -7,11 +7,10 @@ from PyQt5 import uic
 from shutil import copyfile
 from datetime import datetime, timedelta
 
-#-------------------------------------------------------------------------------------
+
 def save_trajectory(strokes, trial_num, sub_trial_num, out_dir):
     """
     Save a single trial's trajectory to one file
-
     :param strokes: A list of Stroke objects
     :param trial_num: Trial's serial number
     :param sub_trial_num: Usually 1, unless during coding we decided to split the trial into several sub-trials
@@ -179,7 +178,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.scene.addPath(self.path)
 
     def set_recording_on(self):
-        self.recording_on = True;
+        self.recording_on = True
         self.clean_display()
 
     # ends recording and closes file
@@ -291,8 +290,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         prev_target = curr_target
         row = True
         while row:
-            prev_location_temp = self.remaining_targets_file.tell()
             row = self.remaining_targets_file.readline()
+            prev_location_temp = self.remaining_targets_file.tell()
             row_target_id = row.split(',')[0]
             row_target = row.split(',')[1]
             if row_target_id == curr_target_id:

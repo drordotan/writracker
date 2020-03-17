@@ -46,7 +46,7 @@ class Trajectory:
     def open_traj_file(self, row):
         try:
             with open(self.filepath+"\\"+self.filename+".csv", mode='a+') as traj_file:
-                self.file_handle = csv.DictWriter(traj_file, ['char_num', 'stroke', 'pen_down', 'x', 'y', 'pressure', 'time'], lineterminator='\n')
+                self.file_handle = csv.DictWriter(traj_file, ['x', 'y', 'pressure', 'time'], lineterminator='\n')
                 if row == "header":
                     self.file_handle.writeheader()
                 else:
@@ -58,8 +58,7 @@ class Trajectory:
         time_abs = datetime.now().strftime("%H:%M:%S")
         time_relative = datetime.strptime(time_abs, "%H:%M:%S") - datetime.strptime(self.start_time, "%H:%M:%S")
         time_str = str(time_relative.seconds)+":"+str(time_relative.microseconds)
-        row = dict(char_num=char_num, stroke=stroke_num, pen_down=pen_down, x=x_cord, y=y_cord,
-                   pressure=pressure, time=time_str)
+        row = dict( x=x_cord, y=y_cord, pressure=pressure, time=time_str)
         self.open_traj_file(row)
 
 

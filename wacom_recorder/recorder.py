@@ -41,7 +41,7 @@ class Trajectory:
         self.filename = filename
         self.filepath = filepath
         self.file_handle = None
-        self.start_time = datetime.now().strftime("%H:%M:%S")
+        self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
     def open_traj_file(self, row):
         try:
@@ -55,10 +55,9 @@ class Trajectory:
             raise Exception("Error writing trajectory file in:" + self.filepath+"\\"+self.filename+".csv")
 
     def add_row(self, x_cord, y_cord, pressure, char_num=0, stroke_num=0, pen_down=True):
-        time_abs = datetime.now().strftime("%H:%M:%S")
-        time_relative = datetime.strptime(time_abs, "%H:%M:%S") - datetime.strptime(self.start_time, "%H:%M:%S")
-        time_str = str(time_relative.seconds)+":"+str(time_relative.microseconds)
-        row = dict( x=x_cord, y=y_cord, pressure=pressure, time=time_str)
+        time_abs = datetime.now().strftime("%M:%S:%f")[:-2]
+        time_relative = datetime.strptime(time_abs, "%M:%S:%f") - datetime.strptime(self.start_time, "%M:%S:%f")
+        row = dict( x=x_cord, y=y_cord, pressure=pressure, time=time_relative.total_seconds())
         self.open_traj_file(row)
 
 

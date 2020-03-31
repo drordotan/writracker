@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1055</width>
-    <height>699</height>
+    <height>703</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -110,17 +110,24 @@
         </property>
         <property name="font">
          <font>
-          <pointsize>25</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
+          <family>MS Shell Dlg 2</family>
+          <pointsize>36</pointsize>
+          <weight>50</weight>
+          <italic>false</italic>
+          <bold>false</bold>
          </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">font: 36pt &quot;MS Shell Dlg 2&quot;;
+background-color: rgb(255, 255, 255);
+border-color: rgb(0, 0, 0);</string>
         </property>
        </widget>
       </item>
       <item>
        <layout class="QVBoxLayout" name="verticalLayout_3">
         <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
-         <widget class="QRadioButton" name="traj_radiobtn_ok">
+         <widget class="QRadioButton" name="radiobtn_ok">
           <property name="enabled">
            <bool>false</bool>
           </property>
@@ -133,7 +140,7 @@
          </widget>
         </item>
         <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
-         <widget class="QRadioButton" name="traj_radiobtn_err">
+         <widget class="QRadioButton" name="radiobtn_err">
           <property name="enabled">
            <bool>false</bool>
           </property>
@@ -141,7 +148,7 @@
            <string>Tag the trajectory for current target as error.</string>
           </property>
           <property name="text">
-           <string>RadioButton</string>
+           <string>Error</string>
           </property>
          </widget>
         </item>

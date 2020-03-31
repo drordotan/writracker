@@ -8,34 +8,6 @@ from shutil import copyfile
 from datetime import datetime, timedelta
 
 
-def save_trajectory(strokes, trial_num, sub_trial_num, out_dir):
-    """
-    Save a single trial's trajectory to one file
-    :param strokes: A list of Stroke objects
-    :param trial_num: Trial's serial number
-    :param sub_trial_num: Usually 1, unless during coding we decided to split the trial into several sub-trials
-    :param out_dir: Output directory
-    """
-
-    trial_num_portion = str(trial_num) if sub_trial_num == 1 else "{:}_part{:}".format(trial_num, sub_trial_num)
-    filename = "{:}/trajectory_{:}.csv".format(out_dir, trial_num_portion)
-
-    with open(filename, 'w') as fp:
-
-        writer = csv.DictWriter(fp, ['char_num', 'stroke', 'pen_down', 'x', 'y', 'pressure', 'time'], lineterminator=u.newline())
-        writer.writeheader()
-
-        stroke_num = 0
-        for stroke in strokes:
-            stroke_num += 1
-            for dot in stroke.trajectory:
-                row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down='1' if stroke.on_paper else '0',
-                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t))
-                writer.writerow(row)
-
-    return filename
-
-
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
@@ -57,7 +29,7 @@ class Trajectory:
     def add_row(self, x_cord, y_cord, pressure, char_num=0, stroke_num=0, pen_down=True):
         time_abs = datetime.now().strftime("%M:%S:%f")[:-2]
         time_relative = datetime.strptime(time_abs, "%M:%S:%f") - datetime.strptime(self.start_time, "%M:%S:%f")
-        row = dict( x=x_cord, y=y_cord, pressure=pressure, time=time_relative.total_seconds())
+        row = dict(x=x_cord, y=y_cord, pressure=pressure, time=time_relative.total_seconds())
         self.open_traj_file(row)
 
 
@@ -95,6 +67,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_quit = self.findChild(QPushButton, 'quit_btn')
         self.menu_choose_targets = self.findChild(QAction, 'actionChoose_Targets_File')     # Find Menu Option
         self.menu_quit = self.findChild(QAction, 'actionQuit')
+        self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
+        self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
         self.target_textedit = self.findChild(QTextEdit, 'target_textedit')
         self.target_id_textedit = self.findChild(QTextEdit, 'targetnum_textedit_value')
         self.tablet_paint_area = self.findChild(QGraphicsView, 'tablet_paint_graphicsview')
@@ -188,7 +162,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def clean_display(self):
         self.scene.clear()
         self.path = QPainterPath()  # Re-declare path for a fresh start
-        self.update()  # update view after re-declare
+        self.update()               # update view after re-declare
 
     # ------ Button Functions -----
     def f_menu_choose_target(self):
@@ -209,10 +183,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.create_dir_copy_targets()
         self.set_recording_on()
         self.toggle_buttons(True)
+        self.btn_radio_err.setEnabled(True)
+        self.btn_radio_ok.setEnabled(True)
         self.btn_start_ssn.setEnabled(False)
         # read header line and ignore
         row = self.remaining_targets_file.readline()
-        # self.recording_on = True
+        self.f_btn_next()   # read first target
 
     def f_btn_reset(self):
         self.clean_display()
@@ -318,7 +294,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_textedit.insertPlainText(target)
             self.target_id_textedit.clear()
             self.target_id_textedit.insertPlainText(target_id)
-            # increse trajectory
+            # increase trajectory
             if target_id not in self.targets_dict.keys():
                 self.targets_dict[target_id] = 0
             else:

@@ -8,6 +8,17 @@ from shutil import copyfile
 from datetime import datetime, timedelta
 
 
+class Target:
+    def __init__(self, target_id, target_value, next_trial_id = 0):
+        self.id = target_id
+        self.value = target_value
+        self.trials = []
+        self.next_trial_id = next_trial_id;
+
+    def __str__(self):
+        return "id " + self.id + " value:" + self.value
+
+
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
@@ -56,6 +67,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
         self.results_folder_path = None     # unique, using date and time
         self.path = QPainterPath()
+        self.targets = []
+        self.curr_target_index = -1               # current target index
 
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
@@ -170,7 +183,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), 'CSV files (*.csv)')
         if targets_file_path:
             try:
-                self.targets_file = open(targets_file_path[0], "r")
+                with open(targets_file_path[0]) as self.targets_file:
+                    self.parse_targets()
                 self.btn_start_ssn.setEnabled(True)
             except IOError:
                 msg = QMessageBox()
@@ -187,7 +201,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_radio_ok.setEnabled(True)
         self.btn_start_ssn.setEnabled(False)
         # read header line and ignore
-        row = self.remaining_targets_file.readline()
+        row = self.remaining_targets_file.readline()    #  --- deprecated, delete after tests ---
         self.f_btn_next()   # read first target
 
     def f_btn_reset(self):
@@ -195,9 +209,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # self.recording_on = True
 
     def f_btn_next(self):
+        if self.curr_target_index >= 0: #otherwise, =-1 -> it's the first target, no need to close anything
+            self.close_target()
         self.clean_display()
         self.read_next_target()
-        self.trials_id_counter += 1
+        # self.trials_id_counter += 1
         # save trajectory file, open new one
 
     def f_btn_prv(self):
@@ -223,6 +239,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 print("No remaining targets file was closed")
             finally:
                 self.close()
+
+    # Read targets file, create target objects, and insert to the list
+    def parse_targets(self):
+        lines = []
+        next(self.targets_file)             # skip header
+        for row in self.targets_file:
+            target_id = row.split(',')[0]
+            target_value = row.split(',')[1].strip()
+            self.targets.append(Target(target_id, target_value))
+            lines.append(row)
 
     # When setting state = true, buttons will be enabled. if false, will be disabled
     # buttons effected by this action: next, prev, reset, goto, start session
@@ -250,63 +276,37 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         except IOError:
             QMessageBox().about(self, "Error loading file", "Something is wrong, couldn't find remaining targets file")
 
-    def open_trajectory(self, target_id):
-        name = "trajectory_"+target_id+"_"+str(self.targets_dict[target_id])
+    def open_trajectory(self, unique_id):
+        name = "trajectory_"+unique_id
         self.current_active_trajectory = Trajectory(name, self.results_folder_path)
         self.current_active_trajectory.open_traj_file("header")
 
-    def read_prev_target(self):
-        self.remaining_targets_file.seek(0)
-        prev_location = self.remaining_targets_file.tell()
-        curr_target_id = self.target_id_textedit.toPlainText()
-        curr_target = self.target_textedit.toPlainText()
-        prev_id = curr_target
-        prev_target = curr_target
-        row = True
-        while row:
-            row = self.remaining_targets_file.readline()
-            prev_location_temp = self.remaining_targets_file.tell()
-            row_target_id = row.split(',')[0]
-            row_target = row.split(',')[1]
-            if row_target_id == curr_target_id:
-                target_id = prev_id
-                target = prev_target
-                self.remaining_targets_file.seek(prev_location)
-                break
-            else:
-                prev_id = row_target_id
-                prev_target = row_target
-                prev_location = prev_location_temp
+    def close_target(self):
+        print("g")
 
-        self.target_textedit.clear()
-        self.target_textedit.insertPlainText(target)
-        self.target_id_textedit.clear()
-        self.target_id_textedit.insertPlainText(target_id)
-        self.targets_dict[target_id] = self.targets_dict[target_id] + 1;
-        self.open_trajectory(target_id)
+    def read_prev_target(self):
+        if self.curr_target_index > 0:
+            self.target_textedit.clear()
+            self.target_id_textedit.clear()
+            self.curr_target_index -= 1
+            current_target = self.targets[self.curr_target_index]
+            self.target_textedit.insertPlainText(current_target.value)
+            self.target_id_textedit.insertPlainText(current_target.id)
+            current_target.next_trial_id += 1
+            self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
 
     def read_next_target(self):
-        try:
-            row = self.remaining_targets_file.readline()
-            target_id = row.split(',')[0]
-            target = row.split(',')[1]
-            self.target_textedit.clear()
-            self.target_textedit.insertPlainText(target)
-            self.target_id_textedit.clear()
-            self.target_id_textedit.insertPlainText(target_id)
-            # increase trajectory
-            if target_id not in self.targets_dict.keys():
-                self.targets_dict[target_id] = 0
-            else:
-                self.targets_dict[target_id] = self.targets_dict[target_id]+1;
-            self.open_trajectory(target_id)
-        except IOError:             # Currently - BUG, doesn't catch end of file error.
-            print("End of targets file")
-            self.target_textedit.clear()
-            self.target_textedit.insertPlainText("END OF TARGETS FILE")
-            self.target_id_textedit.clear()
-            self.target_id_textedit.clear()
-
+        self.target_textedit.clear()
+        self.target_id_textedit.clear()
+        if self.curr_target_index < len(self.targets)-1:
+            self.curr_target_index += 1
+            current_target = self.targets[self.curr_target_index]
+            self.target_textedit.insertPlainText(current_target.value)
+            self.target_id_textedit.insertPlainText(current_target.id)
+            current_target.next_trial_id += 1
+            self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
+        else:
+            self.target_textedit.insertPlainText("** End of Targets File **")
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size
 def calculate_mapping(main_form):

@@ -19,6 +19,18 @@ class Target:
         return "id " + self.id + " value:" + self.value
 
 
+class Trial:
+    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, session_num, traj_file_name, abs_time = datetime.now().strftime("%H:%M:%S")):
+        self.id = trial_id
+        self.target_id = target_id
+        self.target_value = target_value
+        self.rc_code = rc_code
+        self.session_time = session_time
+        self.session_num = session_num
+        self.traj_file_name = traj_file_name
+        self.abs_time = abs_time
+
+
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
@@ -59,7 +71,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.recording_on = False
         self.text = ""
         self.targets_dict = {}              # holds trajectory counter for each target
-        self.trials_id_counter = 0          # unique counter for each trial for trials.csv rows
         # All files:
         self.targets_file = None            # loaded by user, holds the targets.
         self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
@@ -68,7 +79,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.results_folder_path = None     # unique, using date and time
         self.path = QPainterPath()
         self.targets = []
-        self.curr_target_index = -1               # current target index
+        self.curr_target_index = 0         # current target index
+        self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
+                                            # changes after first touch.
 
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
@@ -111,6 +124,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
+        self.target_textedit.setAlignment(Qt.AlignCenter)
         self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
         self.show()
 
@@ -120,10 +134,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_pressure = int(tabletEvent.pressure() * 100)
         self.pen_xtilt = tabletEvent.xTilt()
         self.pen_ytilt = tabletEvent.yTilt()
+
+        # mark Trial started flag, but only if the ok/error are not checked.
+        # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
+        if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False:
+            if not self.trial_started:
+                print("Writracker: Starting new trial\n")
+                self.trial_started = True
+                self.set_recording_on()
+
         # write to traj file:
         if self.current_active_trajectory is not None:
             self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
-
         if tabletEvent.type() == QTabletEvent.TabletPress:
             self.pen_is_down = True
             self.path.moveTo(tabletEvent.pos())
@@ -162,21 +184,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             #And to add to the scene:
             self.scene.addPath(self.path)
 
-    def set_recording_on(self):
-        self.recording_on = True
-        self.clean_display()
-
-    # ends recording and closes file
-    def set_recording_off(self):
-        self.recording_on = False
-        self.clean_display()
-        # self.targets_file.close()
-
-    def clean_display(self):
-        self.scene.clear()
-        self.path = QPainterPath()  # Re-declare path for a fresh start
-        self.update()               # update view after re-declare
-
     # ------ Button Functions -----
     def f_menu_choose_target(self):
         # returns tuple, need [0] for file path
@@ -195,31 +202,29 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def f_btn_start_ssn(self):
         self.create_dir_copy_targets()
-        self.set_recording_on()
+        # self.set_recording_on()
         self.toggle_buttons(True)
-        self.btn_radio_err.setEnabled(True)
-        self.btn_radio_ok.setEnabled(True)
+        # self.btn_radio_err.setEnabled(True)
+        # self.btn_radio_ok.setEnabled(True)
         self.btn_start_ssn.setEnabled(False)
-        # read header line and ignore
-        row = self.remaining_targets_file.readline()    #  --- deprecated, delete after tests ---
-        self.f_btn_next()   # read first target
+        # self.f_btn_next()   # read first target
 
     def f_btn_reset(self):
         self.clean_display()
         # self.recording_on = True
 
     def f_btn_next(self):
-        if self.curr_target_index >= 0: #otherwise, =-1 -> it's the first target, no need to close anything
-            self.close_target()
+        # if self.curr_target_index >= 0:         # otherwise, =-1 -> it's the first target, no need to close anything
+            # self.close_target()
         self.clean_display()
+        self.trial_started = False
+        self.toggle_rb(False)
         self.read_next_target()
-        # self.trials_id_counter += 1
-        # save trajectory file, open new one
 
     def f_btn_prv(self):
         self.clean_display()
+        self.trial_started = False
         self.read_prev_target()
-        self.trials_id_counter -= 1
 
     def f_btn_goto(self):
         print("GOTO!")
@@ -249,6 +254,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             target_value = row.split(',')[1].strip()
             self.targets.append(Target(target_id, target_value))
             lines.append(row)
+
+    # toggle radio buttons
+    def toggle_rb(self, state):
+        if state is False:        #need to fix - uncheck radio
+            self.btn_radio_ok.setChecked(False)
+            self.btn_radio_err.setChecked(False)
+        print("rb, setting: " + str(state))
+        self.btn_radio_ok.setEnabled(state)
+        self.btn_radio_err.setEnabled(state)
 
     # When setting state = true, buttons will be enabled. if false, will be disabled
     # buttons effected by this action: next, prev, reset, goto, start session
@@ -282,7 +296,26 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.current_active_trajectory.open_traj_file("header")
 
     def close_target(self):
-        print("g")
+        print("close_target()")
+
+    def set_recording_on(self):
+        print("Writracker: rec_on()")
+        self.recording_on = True
+        self.toggle_rb(True)            # Enable radio buttons
+        current_target = self.targets[self.curr_target_index]
+        self.clean_display()
+        self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
+
+    # ends recording and closes file
+    def set_recording_off(self):
+        self.recording_on = False
+        self.clean_display()
+        # self.targets_file.close()
+
+    def clean_display(self):
+        self.scene.clear()
+        self.path = QPainterPath()  # Re-declare path for a fresh start
+        self.update()               # update view after re-declare
 
     def read_prev_target(self):
         if self.curr_target_index > 0:
@@ -290,10 +323,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_id_textedit.clear()
             self.curr_target_index -= 1
             current_target = self.targets[self.curr_target_index]
+            self.target_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_textedit.insertPlainText(current_target.value)
+            self.target_id_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_id_textedit.insertPlainText(current_target.id)
             current_target.next_trial_id += 1
-            self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
+            # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
 
     def read_next_target(self):
         self.target_textedit.clear()
@@ -301,11 +336,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         if self.curr_target_index < len(self.targets)-1:
             self.curr_target_index += 1
             current_target = self.targets[self.curr_target_index]
+            self.target_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_textedit.insertPlainText(current_target.value)
+            self.target_id_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_id_textedit.insertPlainText(current_target.id)
             current_target.next_trial_id += 1
-            self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
+            # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
         else:
+            QMessageBox().about(self, "End of targets", "Reached the end of the targets file\n you can go back (using 'prev' or 'goto' buttons), or finish using exit button")
             self.target_textedit.insertPlainText("** End of Targets File **")
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size

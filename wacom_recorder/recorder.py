@@ -9,19 +9,22 @@ from datetime import datetime, timedelta
 
 
 class Target:
-    def __init__(self, target_id, target_value, next_trial_id = 0):
+    def __init__(self, target_id, target_value, next_trial_id=0):
         self.id = target_id
         self.value = target_value
         self.trials = []
-        self.next_trial_id = next_trial_id;
+        self.next_trial_id = next_trial_id      # this is actually the INDEX of the next trial in trials array
 
     def __str__(self):
-        return "id " + self.id + " value:" + self.value
+        trial_arr = ""
+        for trial in self.trials:
+            trial_arr += str(trial)
+        return "id " + self.id + " value:" + self.value + "[" + trial_arr + "]"
 
 
 class Trial:
-    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, session_num, traj_file_name, abs_time = datetime.now().strftime("%H:%M:%S")):
-        self.id = trial_id
+    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=0, abs_time=datetime.now().strftime("%H:%M:%S")):
+        self.id = trial_id                      # unique ID, defined in the main exec loop
         self.target_id = target_id
         self.target_value = target_value
         self.rc_code = rc_code
@@ -29,6 +32,10 @@ class Trial:
         self.session_num = session_num
         self.traj_file_name = traj_file_name
         self.abs_time = abs_time
+
+    def __str__(self):
+        return "Trial: " + str(self.id) + "|" + str(self.target_id) + "/" + str(self.target_value) + "|" \
+               + str(self.rc_code) + "|" + self.traj_file_name + str(self.session_time)+"|"+str(self.session_num)+"|"+str(self.abs_time)+"|"
 
 
 class Trajectory:
@@ -68,13 +75,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_ytilt = 0
         self.pen_y = 0
         self.pen_pressure = 0
-        self.recording_on = False
+        self.recording_on = False           # used in PaintEvent to catch events and draw
         self.text = ""
         self.targets_dict = {}              # holds trajectory counter for each target
         # All files:
         self.targets_file = None            # loaded by user, holds the targets.
         self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
         self.trials_file = None             # keeps track of each trajectory file
+        self.trial_unique_id = 0
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
         self.results_folder_path = None     # unique, using date and time
         self.path = QPainterPath()
@@ -173,13 +181,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             painter.setPen(pen)
 
             # -------- demo
-            #self.path = self.tablet_paint_area.mapToScene(self.path)
+            # self.path = self.tablet_paint_area.mapToScene(self.path)
             # self.scene.addItem(self.tablet_paint_area.mapToScene(self.path))
             # --------- end of demo
 
-            #in order to draw all over the screen (mainwindow widget)
+            # in order to draw all over the screen (mainwindow widget)
             # painter.drawPath(self.path)
-            #And to add to the scene:
+            # And to add to the scene:
             self.scene.addPath(self.path)
 
     # ------ Button Functions -----
@@ -202,24 +210,26 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.create_dir_copy_targets()
         self.toggle_buttons(True)
         self.btn_start_ssn.setEnabled(False)
-        # self.f_btn_next()   # read first target
-        self.read_next_target()
+        self.read_next_target()  # read first target
 
     def f_btn_reset(self):
         self.clean_display()
         # self.recording_on = True
 
     def f_btn_next(self):
-        # if self.curr_target_index >= 0:         # otherwise, =-1 -> it's the first target, no need to close anything
-            # self.close_target()
         self.clean_display()
+        if self.trial_started is True:
+            self.close_current_trial()
         self.trial_started = False
         self.toggle_rb(False)
         self.read_next_target()
 
     def f_btn_prv(self):
         self.clean_display()
+        if self.trial_started is True:
+            self.close_current_trial()
         self.trial_started = False
+        self.toggle_rb(False)
         self.read_prev_target()
 
     def f_btn_goto(self):
@@ -230,6 +240,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         msg.setIcon(QMessageBox.Warning)
         answer = msg.question(self, 'Wait!', "Are you sure you want to quit? ", msg.Yes | msg.No, msg.No)
         if answer == msg.Yes:
+            self.save_trials_file()
             try:
                 self.targets_file.close()
             except EnvironmentError:
@@ -240,6 +251,32 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 print("No remaining targets file was closed")
             finally:
                 self.close()
+
+    def save_trials_file(self):
+        with open(self.results_folder_path + "\\" + "trials.csv", mode='a+') as trials_file:
+            trials_csv_file = csv.DictWriter(trials_file, ['Trial_ID', 'Target_ID', 'Target_Value', 'RC_code',
+                                                           'Session_Time', 'Session_Number', 'Absolute_time',
+                                                           'File_name'], lineterminator='\n')
+            trials_csv_file.writeheader()
+            for target in self.targets:
+                for trial in target.trials:
+                    row = dict(Trial_ID=trial.id, Target_ID=trial.target_id, Target_Value=trial.target_value,
+                               RC_code=trial.rc_code, Session_Time=trial.session_time, Session_Number=trial.session_num,
+                               Absolute_time=trial.abs_time, File_name=trial.traj_file_name)
+                    trials_csv_file.writerow(row)
+
+    def close_current_trial(self):
+        current_target = self.targets[self.curr_target_index]
+        rc_code = "noValue"
+        if self.btn_radio_ok.isChecked() is True:
+            rc_code = "OK"
+        elif self.btn_radio_err.isChecked() is True:
+            rc_code = "ERROR"
+        traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
+        current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code,
+                              0, traj_filename, abs_time=datetime.now().strftime("%H:%M:%S"))  # need to Add current session time value here <---
+        current_target.trials.append(current_trial)
+        self.trial_unique_id += 1
 
     # Read targets file, create target objects, and insert to the list
     def parse_targets(self):

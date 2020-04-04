@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.results_folder_path = None     # unique, using date and time
         self.path = QPainterPath()
         self.targets = []
-        self.curr_target_index = 0         # current target index
+        self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
         self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
                                             # changes after first touch.
 
@@ -124,7 +124,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
-        self.target_textedit.setAlignment(Qt.AlignCenter)
         self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
         self.show()
 
@@ -134,7 +133,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_pressure = int(tabletEvent.pressure() * 100)
         self.pen_xtilt = tabletEvent.xTilt()
         self.pen_ytilt = tabletEvent.yTilt()
-
         # mark Trial started flag, but only if the ok/error are not checked.
         # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
         if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False:
@@ -202,12 +200,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def f_btn_start_ssn(self):
         self.create_dir_copy_targets()
-        # self.set_recording_on()
         self.toggle_buttons(True)
-        # self.btn_radio_err.setEnabled(True)
-        # self.btn_radio_ok.setEnabled(True)
         self.btn_start_ssn.setEnabled(False)
         # self.f_btn_next()   # read first target
+        self.read_next_target()
 
     def f_btn_reset(self):
         self.clean_display()
@@ -257,10 +253,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     # toggle radio buttons
     def toggle_rb(self, state):
-        if state is False:        #need to fix - uncheck radio
+        if state is False:
+            self.btn_radio_err.setAutoExclusive(False)  # MUST set false in order to uncheck both of the radio button
+            self.btn_radio_ok.setAutoExclusive(False)
             self.btn_radio_ok.setChecked(False)
             self.btn_radio_err.setChecked(False)
-        print("rb, setting: " + str(state))
+            self.btn_radio_err.setAutoExclusive(True)
+            self.btn_radio_ok.setAutoExclusive(True)
         self.btn_radio_ok.setEnabled(state)
         self.btn_radio_err.setEnabled(state)
 
@@ -343,7 +342,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             current_target.next_trial_id += 1
             # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
         else:
-            QMessageBox().about(self, "End of targets", "Reached the end of the targets file\n you can go back (using 'prev' or 'goto' buttons), or finish using exit button")
+            QMessageBox().about(self, "End of targets",
+                                      'Reached the end of the targets file\n you can go back '
+                                      '(using \'prev\' or \'goto\' buttons), or finish using exit button')
             self.target_textedit.insertPlainText("** End of Targets File **")
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size

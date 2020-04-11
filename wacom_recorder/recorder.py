@@ -76,7 +76,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_y = 0
         self.pen_pressure = 0
         self.recording_on = False           # used in PaintEvent to catch events and draw
-        self.text = ""
+        self.session_started = False        # Flag - ignore events before session started
         self.targets_dict = {}              # holds trajectory counter for each target
         # All files:
         self.targets_file = None            # loaded by user, holds the targets.
@@ -138,6 +138,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.show()
 
     def tabletEvent(self, tabletEvent):
+        if self.session_started is False:
+            tabletEvent.accept()
+            return  # ignore events before session started
         self.pen_x = tabletEvent.globalX()
         self.pen_y = tabletEvent.globalY()
         self.pen_pressure = int(tabletEvent.pressure() * 100)
@@ -168,20 +171,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def paintEvent(self, event):
         if self.recording_on:
-            text = self.text
-            i = text.find("\n\n")   # look for \n and decide if empty line = nothing is written
-            if i >= 0:
-                text = text.left(i)
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.TextAntialiasing)
-            painter.begin(self)
-            painter.setPen(Qt.red)
-            size = self.size()
-            painter.drawText(self.rect(), Qt.AlignTop | Qt.AlignLeft , text)
-            pen = QPen(Qt.blue)
-            pen.setWidth(50)
-            painter.setPen(pen)
-
+            self.scene.addPath(self.path)
+            # painter = QPainter(self)
+            # painter.begin(self)
             # -------- demo
             # self.path = self.tablet_paint_area.mapToScene(self.path)
             # self.scene.addItem(self.tablet_paint_area.mapToScene(self.path))
@@ -190,7 +182,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             # in order to draw all over the screen (mainwindow widget)
             # painter.drawPath(self.path)
             # And to add to the scene:
-            self.scene.addPath(self.path)
 
     # ------ Button Functions -----
     def f_menu_choose_target(self):
@@ -209,6 +200,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.f_btn_quit()
 
     def f_btn_start_ssn(self):
+        self.session_started = True
         self.create_dir_copy_targets()
         self.toggle_buttons(True)
         self.btn_start_ssn.setEnabled(False)

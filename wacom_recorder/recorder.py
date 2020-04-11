@@ -129,6 +129,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_reset.clicked.connect(self.f_btn_reset)
         self.btn_goto.clicked.connect(self.f_btn_goto)
         self.btn_quit.clicked.connect(self.f_btn_quit)
+        self.btn_radio_ok.clicked.connect(self.f_btn_rb)
+        self.btn_radio_err.clicked.connect(self.f_btn_rb)
         self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
@@ -232,6 +234,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.toggle_rb(False)
         self.read_prev_target()
 
+    # when pressing any of the radio buttons
+    def f_btn_rb(self):
+        self.toggle_buttons(True)
+
     def f_btn_goto(self):
         print("GOTO!")
 
@@ -300,13 +306,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_radio_ok.setEnabled(state)
         self.btn_radio_err.setEnabled(state)
 
-    # When setting state = true, buttons will be enabled. if false, will be disabled
     # buttons effected by this action: next, prev, reset, goto, start session
     def toggle_buttons(self, state):
         self.btn_next.setEnabled(state)
         self.btn_prv.setEnabled(state)
-        self.btn_reset.setEnabled(state)
         self.btn_goto.setEnabled(state)
+        self.btn_reset.setEnabled(not state)    # reset always in opposite mode to navigation buttons
 
     def create_dir_copy_targets(self):
         pwd = os.getcwd();
@@ -338,6 +343,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         print("Writracker: rec_on()")
         self.recording_on = True
         self.toggle_rb(True)            # Enable radio buttons
+        self.toggle_buttons(False)
         current_target = self.targets[self.curr_target_index]
         self.clean_display()
         self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
@@ -383,6 +389,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                       'Reached the end of the targets file\n you can go back '
                                       '(using \'prev\' or \'goto\' buttons), or finish using exit button')
             self.target_textedit.insertPlainText("** End of Targets File **")
+
 
 # Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size
 def calculate_mapping(main_form):

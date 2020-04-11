@@ -360,6 +360,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.update()               # update view after re-declare
 
     def read_prev_target(self):
+        if self.recording_on:
+            self.recording_on = False
+            self.targets[self.curr_target_index].next_trial_id += 1
         if self.curr_target_index > 0:
             self.target_textedit.clear()
             self.target_id_textedit.clear()
@@ -369,10 +372,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_textedit.insertPlainText(current_target.value)
             self.target_id_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_id_textedit.insertPlainText(current_target.id)
-            current_target.next_trial_id += 1
             # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
 
     def read_next_target(self):
+        if self.recording_on:
+            self.recording_on = False
+            self.targets[self.curr_target_index].next_trial_id += 1
         self.target_textedit.clear()
         self.target_id_textedit.clear()
         if self.curr_target_index < len(self.targets)-1:
@@ -382,7 +387,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_textedit.insertPlainText(current_target.value)
             self.target_id_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_id_textedit.insertPlainText(current_target.id)
-            current_target.next_trial_id += 1
             # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
         else:
             QMessageBox().about(self, "End of targets",

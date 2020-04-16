@@ -9,6 +9,7 @@ from shutil import copyfile
 from datetime import datetime, timedelta
 
 
+"""------------------------------------------------------------------------------------------------------------------"""
 class Target:
     def __init__(self, target_id, target_value, next_trial_id=0):
         self.id = target_id
@@ -23,6 +24,7 @@ class Target:
         return "id " + self.id + " value:" + self.value + "[" + trial_arr + "]"
 
 
+"""------------------------------------------------------------------------------------------------------------------"""
 class Trial:
     def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=0, abs_time=datetime.now().strftime("%H:%M:%S")):
         self.id = trial_id                      # unique ID, defined in the main exec loop
@@ -39,6 +41,7 @@ class Trial:
                + str(self.rc_code) + "|" + self.traj_file_name + str(self.session_time)+"|"+str(self.session_num)+"|"+str(self.abs_time)+"|"
 
 
+"""------------------------------------------------------------------------------------------------------------------"""
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
@@ -64,6 +67,7 @@ class Trajectory:
         self.open_traj_file(row)
 
 
+"""------------------------------------------------------------------------------------------------------------------"""
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
     newPoint = pyqtSignal(QPoint)
 
@@ -100,6 +104,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_reset = self.findChild(QPushButton, 'reset_btn')
         self.btn_goto = self.findChild(QPushButton, 'goto_btn')
         self.btn_quit = self.findChild(QPushButton, 'quit_btn')
+        self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
         self.menu_choose_targets = self.findChild(QAction, 'actionChoose_Targets_File')     # Find Menu Option
         self.menu_quit = self.findChild(QAction, 'actionQuit')
         self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
@@ -109,11 +114,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.tablet_paint_area = self.findChild(QGraphicsView, 'tablet_paint_graphicsview')
         self.scene = QGraphicsScene()
         self.tablet_paint_area.setScene(self.scene)
-        # /----- Beta version for painting inside graphicScene..... not working yet----/
-        # self.QGraphicsView.setScene(QGraphicsScene())
-        # self.item = QGraphicsPathItem()
-        # self.tablet_paint_area.setScene(self.scene)
-        # /--------- end of painting tries -------/
 
         self.init_ui()
 
@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def init_ui(self):
         # general window settings
         full_window = app.desktop().frameGeometry()            # get desktop resolution
-        self.resize(full_window.width(),full_window.height())  # set window size to full screen
+        self.resize(full_window.width(), full_window.height())  # set window size to full screen
         self.move(0, 0)
         # button links
         self.btn_start_ssn.clicked.connect(self.f_btn_start_ssn)
@@ -132,12 +132,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_quit.clicked.connect(self.f_btn_quit)
         self.btn_radio_ok.clicked.connect(self.f_btn_rb)
         self.btn_radio_err.clicked.connect(self.f_btn_rb)
+        self.btn_rotate.clicked.connect(self.f_btn_rotate)
         self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
         self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
+        # self.tablet_paint_area.fitInView(0, 0, 100, 50, Qt.KeepAspectRatio)  # Fit all tablet size in widget - option1
         self.show()
-        self.tablet_paint_area.fitInView(1, 1, 1920, 1020, Qt.KeepAspectRatio)   # Fit all tablet size in widget
+
 
     def tabletEvent(self, tabletEvent):
         if self.session_started is False:
@@ -174,8 +176,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def paintEvent(self, event):
         if self.recording_on:
             self.scene.addPath(self.path)
+            sceneRect = self.tablet_paint_area.sceneRect()              # Fit all tablet size in widget - option2
+            self.tablet_paint_area.fitInView(sceneRect, Qt.KeepAspectRatio)
 
     # ------ Button Functions -----
+    def f_btn_rotate(self):
+        self.tablet_paint_area.rotate(90)
+
     def f_menu_choose_target(self):
         # returns tuple, need [0] for file path
         targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), 'CSV files (*.csv)')

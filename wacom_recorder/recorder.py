@@ -1,4 +1,5 @@
 import sys, os, csv
+from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
@@ -136,6 +137,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
         self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
         self.show()
+        self.tablet_paint_area.fitInView(1, 1, 1920, 1020, Qt.KeepAspectRatio)   # Fit all tablet size in widget
 
     def tabletEvent(self, tabletEvent):
         if self.session_started is False:
@@ -172,16 +174,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def paintEvent(self, event):
         if self.recording_on:
             self.scene.addPath(self.path)
-            # painter = QPainter(self)
-            # painter.begin(self)
-            # -------- demo
-            # self.path = self.tablet_paint_area.mapToScene(self.path)
-            # self.scene.addItem(self.tablet_paint_area.mapToScene(self.path))
-            # --------- end of demo
-
-            # in order to draw all over the screen (mainwindow widget)
-            # painter.drawPath(self.path)
-            # And to add to the scene:
 
     # ------ Button Functions -----
     def f_menu_choose_target(self):

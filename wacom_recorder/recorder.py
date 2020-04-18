@@ -74,6 +74,8 @@ class Trajectory:
         self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
 """------------------------------------------------------------------------------------------------------------------"""
+
+
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
     newPoint = pyqtSignal(QPoint)
 
@@ -100,8 +102,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.targets = []
         self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
         self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
-                                            # changes after first touch.
-
+                                            # changes after first touch
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
         self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')                   # Find the button
@@ -109,6 +110,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_prv = self.findChild(QPushButton, 'prv_btn')
         self.btn_reset = self.findChild(QPushButton, 'reset_btn')
         self.btn_goto = self.findChild(QPushButton, 'goto_btn')
+        self.combox_targets = self.findChild(QComboBox, 'combobox_targets')
         self.btn_quit = self.findChild(QPushButton, 'quit_btn')
         self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
         self.menu_choose_targets = self.findChild(QAction, 'actionChoose_Targets_File')     # Find Menu Option
@@ -245,7 +247,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.toggle_buttons(True)
 
     def f_btn_goto(self):
-        print("GOTO!")
+        target_id = int(self.combox_targets.currentText().split("-")[0])
+        target_index = 0
+        self.clean_display()
+        if self.trial_started is True:
+            self.close_current_trial()
+        self.trial_started = False
+        self.toggle_rb(False)
+        for target in self.targets:  # searching for the correct Array index matching the target id not granted is equal)
+            if int(target.id) is target_id:
+                break
+            target_index += 1
+        self.read_next_target(from_goto=True, goto_index=int(target_index))
 
     def f_btn_quit(self):
         msg = QMessageBox()
@@ -290,7 +303,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         current_target.trials.append(current_trial)
         self.trial_unique_id += 1
 
-    # Read targets file, create target objects, and insert to the list
+    # Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
     def parse_targets(self):
         lines = []
         next(self.targets_file)             # skip header
@@ -298,6 +311,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             target_id = row.split(',')[0]
             target_value = row.split(',')[1].strip()
             self.targets.append(Target(target_id, target_value))
+            self.combox_targets.addItem(str(target_id)+"-"+str(target_value))
             lines.append(row)
 
     # toggle radio buttons
@@ -380,14 +394,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_id_textedit.insertPlainText(current_target.id)
             # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
 
-    def read_next_target(self):
+    # the goto parameters allow goto button to use this function when jumping instead of duplicating most of the code
+    # if from_goto is True, we also expects goto_index which is the index in targets[] to jump into.
+    def read_next_target(self, from_goto=False, goto_index=0):
         if self.recording_on:
             self.recording_on = False
             self.targets[self.curr_target_index].next_trial_id += 1
         self.target_textedit.clear()
         self.target_id_textedit.clear()
-        if self.curr_target_index < len(self.targets)-1:
-            self.curr_target_index += 1
+        if self.curr_target_index < len(self.targets)-1 or from_goto is True:
+            if from_goto is False:
+                self.curr_target_index += 1
+            else:
+                self.curr_target_index = goto_index
             current_target = self.targets[self.curr_target_index]
             self.target_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_textedit.insertPlainText(current_target.value)

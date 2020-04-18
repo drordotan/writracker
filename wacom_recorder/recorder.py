@@ -46,12 +46,16 @@ class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
         self.filepath = filepath
+        self.full_path = self.filepath+"\\"+self.filename+".csv"
         self.file_handle = None
         self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
+    def __str__(self):
+        return self.full_path
+
     def open_traj_file(self, row):
         try:
-            with open(self.filepath+"\\"+self.filename+".csv", mode='a+') as traj_file:
+            with open(self.full_path, mode='a+') as traj_file:
                 self.file_handle = csv.DictWriter(traj_file, ['x', 'y', 'pressure', 'time'], lineterminator='\n')
                 if row == "header":
                     self.file_handle.writeheader()
@@ -66,6 +70,8 @@ class Trajectory:
         row = dict(x=x_cord, y=y_cord, pressure=pressure, time=time_relative.total_seconds())
         self.open_traj_file(row)
 
+    def reset_start_time(self):
+        self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
 """------------------------------------------------------------------------------------------------------------------"""
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
@@ -179,7 +185,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             sceneRect = self.tablet_paint_area.sceneRect()              # Fit all tablet size in widget - option2
             self.tablet_paint_area.fitInView(sceneRect, Qt.KeepAspectRatio)
 
-    # ------ Button Functions -----
+    #               -------------------------- Button Functions --------------------------
     def f_btn_rotate(self):
         self.tablet_paint_area.rotate(90)
 
@@ -206,8 +212,17 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.read_next_target()  # read first target
 
     def f_btn_reset(self):
-        self.clean_display()
-        # self.recording_on = True
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        answer = msg.question(self, 'Reset current Target', "This action will also delete the current trajectory file\n Press yes to confirm", msg.Yes | msg.No, msg.No)
+        if answer == msg.Yes:
+            print("Writracker: trajectory file deleted, " + str(self.current_active_trajectory))
+            os.remove(str(self.current_active_trajectory))
+            self.set_recording_on()
+            self.current_active_trajectory.reset_start_time()
+            return
+        else:
+            return
 
     def f_btn_next(self):
         self.clean_display()
@@ -376,7 +391,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             current_target = self.targets[self.curr_target_index]
             self.target_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
             self.target_textedit.insertPlainText(current_target.value)
-            self.target_id_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
+            self.target_id_textedit.setAlignment(Qt.AlignCenter)   # Must set the alignment right before appending text
             self.target_id_textedit.insertPlainText(current_target.id)
             # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
         else:

@@ -17,8 +17,8 @@
    <bool>false</bool>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="horizontalLayout">
-    <item>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="1">
      <widget class="QGraphicsView" name="tablet_paint_graphicsview">
       <property name="minimumSize">
        <size>
@@ -64,14 +64,26 @@
       </property>
      </widget>
     </item>
-    <item>
+    <item row="0" column="0">
      <widget class="QSplitter" name="splitter">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
       <widget class="QLabel" name="label_3">
+       <property name="minimumSize">
+        <size>
+         <width>175</width>
+         <height>116</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>200</width>
+         <height>149</height>
+        </size>
+       </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;img src=&quot;img/writracker_logo.png&quot; width=70 height=100/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;img src=&quot;img/writracker_logo.png&quot; width=175 height=116/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
        </property>
        <property name="alignment">
         <set>Qt::AlignCenter</set>
@@ -177,6 +189,9 @@ border-color: rgb(255, 0, 0);</string>
       </widget>
       <widget class="QWidget" name="horizontalLayoutWidget_3">
        <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <property name="leftMargin">
+         <number>5</number>
+        </property>
         <item>
          <widget class="QRadioButton" name="radiobtn_err">
           <property name="enabled">
@@ -213,10 +228,25 @@ border-color: rgb(255, 0, 0);</string>
        <layout class="QVBoxLayout" name="verticalLayout_7">
         <item>
          <layout class="QVBoxLayout" name="verticalLayout_3">
-          <item>
+          <property name="leftMargin">
+           <number>5</number>
+          </property>
+          <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
            <widget class="QPushButton" name="next_btn">
             <property name="enabled">
              <bool>false</bool>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>175</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>175</width>
+              <height>25</height>
+             </size>
             </property>
             <property name="toolTip">
              <string>Save current trajectory and move to the next target</string>
@@ -230,10 +260,22 @@ border-color: rgb(255, 0, 0);</string>
             </property>
            </widget>
           </item>
-          <item>
+          <item alignment="Qt::AlignHCenter|Qt::AlignTop">
            <widget class="QPushButton" name="prv_btn">
             <property name="enabled">
              <bool>false</bool>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>175</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>175</width>
+              <height>16777215</height>
+             </size>
             </property>
             <property name="toolTip">
              <string>Save current trajectory and move to the previous target</string>
@@ -247,13 +289,38 @@ border-color: rgb(255, 0, 0);</string>
             </property>
            </widget>
           </item>
-          <item>
-           <widget class="QComboBox" name="combobox_targets"/>
+          <item alignment="Qt::AlignHCenter|Qt::AlignBottom">
+           <widget class="QComboBox" name="combobox_targets">
+            <property name="minimumSize">
+             <size>
+              <width>175</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>175</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
           </item>
-          <item>
+          <item alignment="Qt::AlignHCenter|Qt::AlignTop">
            <widget class="QPushButton" name="goto_btn">
             <property name="enabled">
              <bool>false</bool>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>175</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>175</width>
+              <height>16777215</height>
+             </size>
             </property>
             <property name="toolTip">
              <string>Choose target from a list and continue from there.</string>
@@ -267,10 +334,22 @@ border-color: rgb(255, 0, 0);</string>
             </property>
            </widget>
           </item>
-          <item>
+          <item alignment="Qt::AlignHCenter|Qt::AlignTop">
            <widget class="QPushButton" name="reset_btn">
             <property name="enabled">
              <bool>false</bool>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>175</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>175</width>
+              <height>16777215</height>
+             </size>
             </property>
             <property name="toolTip">
              <string>Discard current trajectory and repeat current target</string>
@@ -290,10 +369,25 @@ border-color: rgb(255, 0, 0);</string>
       </widget>
       <widget class="QWidget" name="verticalLayoutWidget">
        <layout class="QVBoxLayout" name="verticalLayout_6">
+        <property name="leftMargin">
+         <number>5</number>
+        </property>
         <item>
          <widget class="QPushButton" name="start_ssn_btn">
           <property name="enabled">
            <bool>false</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>175</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>175</width>
+            <height>16777215</height>
+           </size>
           </property>
           <property name="toolTip">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Starts the session&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -312,6 +406,18 @@ border-color: rgb(255, 0, 0);</string>
           <property name="enabled">
            <bool>true</bool>
           </property>
+          <property name="minimumSize">
+           <size>
+            <width>175</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>175</width>
+            <height>16777215</height>
+           </size>
+          </property>
           <property name="toolTip">
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Starts the session&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
           </property>
@@ -325,6 +431,18 @@ border-color: rgb(255, 0, 0);</string>
         </item>
         <item>
          <widget class="QPushButton" name="quit_btn">
+          <property name="minimumSize">
+           <size>
+            <width>175</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>175</width>
+            <height>16777215</height>
+           </size>
+          </property>
           <property name="text">
            <string>Quit</string>
           </property>

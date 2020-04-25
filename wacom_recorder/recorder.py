@@ -10,12 +10,15 @@ from datetime import datetime, timedelta
 
 
 """------------------------------------------------------------------------------------------------------------------"""
+
+
 class Target:
     def __init__(self, target_id, target_value, next_trial_id=0):
         self.id = target_id
         self.value = target_value
         self.trials = []
         self.next_trial_id = next_trial_id      # this is actually the INDEX of the next trial in trials array
+        self.rc_code = ""                       # Target RC code equals the last evaluated trial RC code.
 
     def __str__(self):
         trial_arr = ""
@@ -25,6 +28,8 @@ class Target:
 
 
 """------------------------------------------------------------------------------------------------------------------"""
+
+
 class Trial:
     def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=0, abs_time=datetime.now().strftime("%H:%M:%S")):
         self.id = trial_id                      # unique ID, defined in the main exec loop
@@ -42,6 +47,8 @@ class Trial:
 
 
 """------------------------------------------------------------------------------------------------------------------"""
+
+
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
@@ -266,6 +273,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         answer = msg.question(self, 'Wait!', "Are you sure you want to quit? ", msg.Yes | msg.No, msg.No)
         if answer == msg.Yes:
             self.save_trials_file()
+            self.save_remaining_targets_file()
             try:
                 self.targets_file.close()
             except EnvironmentError:
@@ -278,7 +286,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.close()
 
     def save_trials_file(self):
-        with open(self.results_folder_path + "\\" + "trials.csv", mode='a+') as trials_file:
+        with open(self.results_folder_path + "\\" + "trials.csv", mode='w') as trials_file:
             trials_csv_file = csv.DictWriter(trials_file, ['Trial_ID', 'Target_ID', 'Target_Value', 'RC_code',
                                                            'Session_Time', 'Session_Number', 'Absolute_time',
                                                            'File_name'], lineterminator='\n')
@@ -289,6 +297,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                RC_code=trial.rc_code, Session_Time=trial.session_time, Session_Number=trial.session_num,
                                Absolute_time=trial.abs_time, File_name=trial.traj_file_name)
                     trials_csv_file.writerow(row)
+
+    def save_remaining_targets_file(self):
+        with open(self.results_folder_path + "\\" + "remaining_targets.csv", mode='w') as targets_file:
+            targets_file = csv.DictWriter(targets_file, ['Target_ID', 'Target_Value'], lineterminator='\n')
+            targets_file.writeheader()
+            for target in self.targets:
+                if target.rc_code is not "OK":
+                    row = dict(Target_ID=target.id, Target_Value=target.value)
+                    targets_file.writerow(row)
 
     def close_current_trial(self):
         current_target = self.targets[self.curr_target_index]
@@ -301,6 +318,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code,
                               0, traj_filename, abs_time=datetime.now().strftime("%H:%M:%S"))  # need to Add current session time value here <---
         current_target.trials.append(current_trial)
+        current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1
 
     # Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
@@ -344,12 +362,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
         copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
         copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")
-
-        # open remaining targets file and save handle
-        try:
-            self.remaining_targets_file = open(self.results_folder_path+"\\Remaining_targets.csv", "r+")
-        except IOError:
-            QMessageBox().about(self, "Error loading file", "Something is wrong, couldn't find remaining targets file")
 
     def open_trajectory(self, unique_id):
         name = "trajectory_"+unique_id
@@ -399,6 +411,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def read_next_target(self, from_goto=False, goto_index=0):
         if self.recording_on:
             self.recording_on = False
+            self.save_trials_file()
+            self.save_remaining_targets_file()
             self.targets[self.curr_target_index].next_trial_id += 1
         self.target_textedit.clear()
         self.target_id_textedit.clear()

@@ -111,8 +111,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
         self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
                                             # changes after first touch
+        # Config options:
+        self.cyclic_ramaining_targets = True    # Controls whether ERROR target returns to end of the targets line
+
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
+        self.cfg_window = QWidget()
         self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')                   # Find the button
         self.btn_next = self.findChild(QPushButton, 'next_btn')
         self.btn_prv = self.findChild(QPushButton, 'prv_btn')
@@ -121,7 +125,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.combox_targets = self.findChild(QComboBox, 'combobox_targets')
         self.btn_quit = self.findChild(QPushButton, 'quit_btn')
         self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
-        self.menu_choose_targets = self.findChild(QAction, 'actionChoose_Targets_File')     # Find Menu Option
+        self.menu_choose_targets = self.findChild(QAction, 'actionChoose_start_ssn')     # Find Menu Option
         self.menu_quit = self.findChild(QAction, 'actionQuit')
         self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
         self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
@@ -149,13 +153,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_radio_ok.clicked.connect(self.f_btn_rb)
         self.btn_radio_err.clicked.connect(self.f_btn_rb)
         self.btn_rotate.clicked.connect(self.f_btn_rotate)
-        self.menu_choose_targets.triggered.connect(self.f_menu_choose_target)
+        # self.menu_choose_targets.triggered.connect(self.f_btn_start_ssn)  # not necessary now
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
         self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
         # self.tablet_paint_area.fitInView(0, 0, 100, 50, Qt.KeepAspectRatio)  # Fit all tablet size in widget - option1
         self.show()
-
 
     def tabletEvent(self, tabletEvent):
         if self.session_started is False:
@@ -195,26 +198,27 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             sceneRect = self.tablet_paint_area.sceneRect()              # Fit all tablet size in widget - option2
             self.tablet_paint_area.fitInView(sceneRect, Qt.KeepAspectRatio)
 
-    #               -------------------------- Button Functions --------------------------
+    #               -------------------------- Button/Menu Functions --------------------------
     def f_btn_rotate(self):
         self.tablet_paint_area.rotate(90)
 
-    def f_menu_choose_target(self):
-        # returns tuple, need [0] for file path
+    def f_menu_quit(self):
+        self.f_btn_quit()
+
+    # Choose targets file
+    def choose_target(self):
         targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), 'CSV files (*.csv)')
         if targets_file_path:
             try:
                 with open(targets_file_path[0]) as self.targets_file:
                     self.parse_targets()
-                self.btn_start_ssn.setEnabled(True)
             except IOError:
                 msg = QMessageBox()
                 msg.about(self, "Error", "Load targets file in order to start the session")
 
-    def f_menu_quit(self):
-        self.f_btn_quit()
-
     def f_btn_start_ssn(self):
+        self.choose_target()
+        self.pop_config_menu()
         self.session_started = True
         self.create_dir_copy_targets()
         self.toggle_buttons(True)
@@ -285,6 +289,38 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 print("No remaining targets file was closed")
             finally:
                 self.close()
+    #               -------------------------- GUI/messages Functions --------------------------
+
+    # This function creates & shows the configuration window, before starting a session.
+    def pop_config_menu(self):
+        self.cfg_window.setWindowTitle("Session configuration")
+        ok_btn = QPushButton("OK")
+        ok_btn.clicked.connect(self.cfg_window.close)
+        layout_v = QVBoxLayout()
+        layout_h = QHBoxLayout()
+        rbtn = QRadioButton("Yes")
+        rbtn.setChecked(True)
+        rbtn.clicked.connect(self.cfg_set_cyclic_targets_on)
+        layout_h.addWidget(rbtn)
+        rbtn = QRadioButton("No")
+        rbtn.clicked.connect(self.cfg_set_cyclic_targets_off)
+        layout_h.addWidget(rbtn)
+        label = QLabel("Continue displaying targets until all the targets were marked as OK?")
+        layout_v.addWidget(label)
+        layout_v.addLayout(layout_h)
+        layout_v.addWidget(ok_btn)
+        self.cfg_window.setLayout(layout_v)
+        self.cfg_window.setGeometry(QRect(100, 200, 100, 100))
+        self.cfg_window.setWindowModality(Qt.ApplicationModal)  # Block main windows until OK is pressed
+        self.cfg_window.show()
+
+    def cfg_set_cyclic_targets_off(self):
+        self.cyclic_ramaining_targets = False
+
+    def cfg_set_cyclic_targets_on(self):
+        self.cyclic_ramaining_targets = True
+        
+    #               -------------------------- rest of the Functions --------------------------
 
     def save_trials_file(self):
         with open(self.results_folder_path + "\\" + "trials.csv", mode='w') as trials_file:

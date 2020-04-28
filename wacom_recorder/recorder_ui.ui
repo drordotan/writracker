@@ -381,7 +381,7 @@ border-color: rgb(255, 0, 0);</string>
         <item alignment="Qt::AlignHCenter">
          <widget class="QPushButton" name="start_ssn_btn">
           <property name="enabled">
-           <bool>false</bool>
+           <bool>true</bool>
           </property>
           <property name="minimumSize">
            <size>
@@ -523,16 +523,16 @@ border-color: rgb(255, 0, 0);</string>
     <property name="title">
      <string>Options</string>
     </property>
-    <addaction name="actionChoose_Targets_File"/>
+    <addaction name="actionChoose_start_ssn"/>
     <addaction name="actionQuit"/>
     <addaction name="separator"/>
    </widget>
    <addaction name="menuChoose_targets_file"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="actionChoose_Targets_File">
+  <action name="actionChoose_start_ssn">
    <property name="text">
-    <string>Choose Targets File</string>
+    <string>Start Session</string>
    </property>
   </action>
   <action name="actionQuit">

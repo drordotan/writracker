@@ -1,4 +1,6 @@
 import sys, os, csv
+import subprocess, json         # This originally used only to check if WACOM tablet is connected
+
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
@@ -7,7 +9,6 @@ from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5 import uic
 from shutil import copyfile
 from datetime import datetime, timedelta
-
 
 """------------------------------------------------------------------------------------------------------------------"""
 
@@ -434,19 +435,26 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.target_textedit.insertPlainText("** End of Targets File **")
 
 
-# Print mapping parameters, otherwise the pen escapes the screen + screen mapping does not match window size
-def calculate_mapping(main_form):
-    screen_left = main_form.geometry().x()
-    screen_right = main_form.geometry().width()
-    top = main_form.geometry().y()
-    bottom = main_form.geometry().height()-40        # -35 to ignore start bar
-    print("Wacom Desktop Center->Pen Settings->Mapping->Screen Area->'Portion' and fill the numbers below")
-    print("Mapping settings, set Top:", top,", Bottom:", bottom," Left:", screen_left, "Right:", screen_right)
+# Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
+# The check isn't blocking the program from running - for the case the device status is not 100% reliable.
+def check_if_tablet_connected():
+    device_list = subprocess.getoutput(
+        "PowerShell -Command \"& {Get-PnpDevice | Select-Object Status,FriendlyName | ConvertTo-Json}\"")
+    devices_parsed = json.loads(device_list)
+    for dev in devices_parsed:
+        if str(dev['FriendlyName']).find("Wacom") is 0:
+            if str(dev['Status']) is not "OK":
+                QMessageBox().critical(None, "No Tablet Detected", "Could not verify a connection to a Wacom tablet.\n"
+                                                                   "Please make sure a tablet is connected.\n"
+                                                                   "You may proceed, but unexpected errors may occur")
+                return False
+            else:
+                return True
 
 
 app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv
 app.setStyle('Fusion')
 mainform = MainWindow()
 mainform.show()
-calculate_mapping(mainform)           #
+check_if_tablet_connected()
 sys.exit(app.exec_())                 # set exit code ass the app exit code

@@ -105,14 +105,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.trials_file = None             # keeps track of each trajectory file
         self.trial_unique_id = 0
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
-        self.results_folder_path = None     # unique, using date and time
+        self.results_folder_path = None        # unique, using date and time
         self.path = QPainterPath()
         self.targets = []
         self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
         self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
-                                            # changes after first touch
+        self.skip_ok_targets = False        # Controls viewing mode: when True, skip targets where RC = "ok".
+
         # Config options:
-        self.cyclic_ramaining_targets = True    # Controls whether ERROR target returns to end of the targets line
+        self.cyclic_remaining_targets = True    # Controls whether ERROR target returns to end of the targets line
 
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
@@ -244,7 +245,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.close_current_trial()
         self.trial_started = False
         self.toggle_rb(False)
-        self.read_next_target()
+        if self.skip_ok_targets:
+            self.read_next_error_target(read_backwards=False)
+        else:
+            self.read_next_target()
 
     def f_btn_prv(self):
         self.clean_display()
@@ -252,7 +256,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.close_current_trial()
         self.trial_started = False
         self.toggle_rb(False)
-        self.read_prev_target()
+        if self.skip_ok_targets:
+            self.read_next_error_target(read_backwards=True)
+        else:
+            self.read_prev_target()
 
     # when pressing any of the radio buttons
     def f_btn_rb(self):
@@ -266,8 +273,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.close_current_trial()
         self.trial_started = False
         self.toggle_rb(False)
-        for target in self.targets:  # searching for the correct Array index matching the target id not granted is equal)
-            if int(target.id) is target_id:
+        for target in self.targets: # searching for the correct Array index matching the target id
+            if int(target.id) == target_id:
                 break
             target_index += 1
         self.read_next_target(from_goto=True, goto_index=int(target_index))
@@ -315,11 +322,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.cfg_window.show()
 
     def cfg_set_cyclic_targets_off(self):
-        self.cyclic_ramaining_targets = False
+        self.cyclic_remaining_targets = False
 
     def cfg_set_cyclic_targets_on(self):
-        self.cyclic_ramaining_targets = True
-        
+        self.cyclic_remaining_targets = True
+
     #               -------------------------- rest of the Functions --------------------------
 
     def save_trials_file(self):
@@ -405,9 +412,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.current_active_trajectory = Trajectory(name, self.results_folder_path)
         self.current_active_trajectory.open_traj_file("header")
 
-    def close_target(self):
-        print("close_target()")
-
     def set_recording_on(self):
         print("Writracker: rec_on()")
         self.recording_on = True
@@ -428,47 +432,72 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.path = QPainterPath()  # Re-declare path for a fresh start
         self.update()               # update view after re-declare
 
+    def update_target_textfields(self, target_value, target_id):
+        self.target_textedit.clear()
+        self.target_id_textedit.clear()
+        self.target_textedit.setAlignment(Qt.AlignCenter)  # Must set the alignment right before appending text
+        self.target_textedit.insertPlainText(target_value)
+        self.target_id_textedit.setAlignment(Qt.AlignCenter)  # Must set the alignment right before appending text
+        self.target_id_textedit.insertPlainText(str(target_id))
+
+    def save_trial_record_off(self):
+        self.recording_on = False
+        self.save_trials_file()
+        self.save_remaining_targets_file()
+
+    # Read next with rc_code not "OK".
+    def read_next_error_target(self, read_backwards=False):
+        if self.recording_on:
+            self.save_trial_record_off()  # save files, set recording off
+            self.targets[self.curr_target_index].next_trial_id += 1
+        a = self.targets[self.curr_target_index:]
+        b = self.targets[0:self.curr_target_index]
+        circular_targets_list = a + b
+        circular_targets_list.append(circular_targets_list.pop(0))  # Avoid restarting current error target
+        if read_backwards:  # If lookup is in "previous" direction, need to manipulate circular list
+            circular_targets_list.reverse()
+            circular_targets_list.append(circular_targets_list.pop(0))
+        for target in circular_targets_list:
+            if target.rc_code != "OK":
+                self.curr_target_index = self.targets.index(target)
+                current_target = self.targets[self.curr_target_index]
+                self.update_target_textfields(current_target.value, current_target.id)
+                break;
+        else:   # No more error targets.
+            QMessageBox().about(self, "End of targets",
+                                      'All the targets has been marked as OK. For target navigation, use "goto"')
+            self.update_target_textfields("All targets marked OK", "")
+
     def read_prev_target(self):
         if self.recording_on:
-            self.recording_on = False
+            self.save_trial_record_off()  # save files, set recording off
             self.targets[self.curr_target_index].next_trial_id += 1
         if self.curr_target_index > 0:
-            self.target_textedit.clear()
-            self.target_id_textedit.clear()
             self.curr_target_index -= 1
             current_target = self.targets[self.curr_target_index]
-            self.target_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
-            self.target_textedit.insertPlainText(current_target.value)
-            self.target_id_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
-            self.target_id_textedit.insertPlainText(current_target.id)
-            # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
+            self.update_target_textfields(current_target.value, current_target.id)
 
     # the goto parameters allow goto button to use this function when jumping instead of duplicating most of the code
     # if from_goto is True, we also expects goto_index which is the index in targets[] to jump into.
     def read_next_target(self, from_goto=False, goto_index=0):
         if self.recording_on:
-            self.recording_on = False
-            self.save_trials_file()
-            self.save_remaining_targets_file()
+            self.save_trial_record_off()  # save files, set recording off
             self.targets[self.curr_target_index].next_trial_id += 1
-        self.target_textedit.clear()
-        self.target_id_textedit.clear()
         if self.curr_target_index < len(self.targets)-1 or from_goto is True:
             if from_goto is False:
                 self.curr_target_index += 1
             else:
                 self.curr_target_index = goto_index
             current_target = self.targets[self.curr_target_index]
-            self.target_textedit.setAlignment(Qt.AlignCenter)      # Must set the alignment right before appending text
-            self.target_textedit.insertPlainText(current_target.value)
-            self.target_id_textedit.setAlignment(Qt.AlignCenter)   # Must set the alignment right before appending text
-            self.target_id_textedit.insertPlainText(current_target.id)
-            # self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
+            self.update_target_textfields(current_target.value, current_target.id)
+        elif self.cyclic_remaining_targets:  # reached end of targets list. check config to decide how to continue.
+            self.skip_ok_targets = True
+            self.read_next_error_target()
         else:
             QMessageBox().about(self, "End of targets",
                                       'Reached the end of the targets file\n you can go back '
                                       '(using \'prev\' or \'goto\' buttons), or finish using exit button')
-            self.target_textedit.insertPlainText("** End of Targets File **")
+            self.update_target_textfields("*End of targets*", "")
 
 
 # Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
@@ -478,8 +507,8 @@ def check_if_tablet_connected():
         "PowerShell -Command \"& {Get-PnpDevice | Select-Object Status,FriendlyName | ConvertTo-Json}\"")
     devices_parsed = json.loads(device_list)
     for dev in devices_parsed:
-        if str(dev['FriendlyName']).find("Wacom") is 0:
-            if str(dev['Status']) is not "OK":
+        if str(dev['FriendlyName']).find("Wacom") == 0:
+            if str(dev['Status']) != "OK":
                 QMessageBox().critical(None, "No Tablet Detected", "Could not verify a connection to a Wacom tablet.\n"
                                                                    "Please make sure a tablet is connected.\n"
                                                                    "You may proceed, but unexpected errors may occur")

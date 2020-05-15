@@ -331,24 +331,24 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def save_trials_file(self):
         with open(self.results_folder_path + "\\" + "trials.csv", mode='w') as trials_file:
-            trials_csv_file = csv.DictWriter(trials_file, ['Trial_ID', 'Target_ID', 'Target_Value', 'RC_code',
-                                                           'Session_Time', 'Session_Number', 'Absolute_time',
-                                                           'File_name'], lineterminator='\n')
+            trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
+                                                           'session_time', 'session_number', 'absolute_time',
+                                                           'file_name'], lineterminator='\n')
             trials_csv_file.writeheader()
             for target in self.targets:
                 for trial in target.trials:
-                    row = dict(Trial_ID=trial.id, Target_ID=trial.target_id, Target_Value=trial.target_value,
-                               RC_code=trial.rc_code, Session_Time=trial.session_time, Session_Number=trial.session_num,
-                               Absolute_time=trial.abs_time, File_name=trial.traj_file_name)
+                    row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
+                               rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
+                               absolute_time=trial.abs_time, file_name=trial.traj_file_name)
                     trials_csv_file.writerow(row)
 
     def save_remaining_targets_file(self):
         with open(self.results_folder_path + "\\" + "remaining_targets.csv", mode='w') as targets_file:
-            targets_file = csv.DictWriter(targets_file, ['Target_ID', 'Target_Value'], lineterminator='\n')
+            targets_file = csv.DictWriter(targets_file, ['target_id', 'target'], lineterminator='\n')
             targets_file.writeheader()
             for target in self.targets:
                 if target.rc_code is not "OK":
-                    row = dict(Target_ID=target.id, Target_Value=target.value)
+                    row = dict(target_id=target.id, target=target.value)
                     targets_file.writerow(row)
 
     def close_current_trial(self):

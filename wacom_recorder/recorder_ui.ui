@@ -640,6 +640,9 @@ border-color: rgb(255, 0, 0);</string>
       <property name="renderHints">
        <set>QPainter::TextAntialiasing</set>
       </property>
+      <property name="dragMode">
+       <enum>QGraphicsView::ScrollHandDrag</enum>
+      </property>
       <property name="viewportUpdateMode">
        <enum>QGraphicsView::MinimalViewportUpdate</enum>
       </property>
@@ -653,7 +656,7 @@ border-color: rgb(255, 0, 0);</string>
      <x>0</x>
      <y>0</y>
      <width>1114</width>
-     <height>21</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuChoose_targets_file">

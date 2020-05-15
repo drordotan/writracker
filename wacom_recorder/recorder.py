@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
         self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
-        # self.tablet_paint_area.fitInView(0, 0, 100, 50, Qt.KeepAspectRatio)  # Fit all tablet size in widget - option1
+        self.tablet_paint_area.fitInView(800, 600, 0, 0, Qt.KeepAspectRatio)  # reset the graphicsView scaling
         self.show()
 
     def tabletEvent(self, tabletEvent):
@@ -210,8 +210,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def paintEvent(self, event):
         if self.recording_on:
             self.scene.addPath(self.path)
-            sceneRect = self.tablet_paint_area.sceneRect()              # Fit all tablet size in widget - option2
-            self.tablet_paint_area.fitInView(sceneRect, Qt.KeepAspectRatio)
 
     #               -------------------------- Button/Menu Functions --------------------------
     def f_btn_rotate(self):
@@ -316,12 +314,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         return
 
     def f_btn_plus(self):
-        # Place holder
-        return
+        self.tablet_paint_area.scale(1.25, 1.25)
 
     def f_btn_minus(self):
-        # Place Holder
-        return
+        self.tablet_paint_area.scale(0.75, 0.75)
 
     #               -------------------------- GUI/messages Functions --------------------------
 

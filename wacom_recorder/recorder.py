@@ -118,7 +118,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
         self.cfg_window = QWidget()
-        self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')                   # Find the button
+        # UI - Button
+        self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')
+        self.btn_end_ssn = self.findChild(QPushButton, 'end_ssn_btn')
         self.btn_next = self.findChild(QPushButton, 'next_btn')
         self.btn_prv = self.findChild(QPushButton, 'prv_btn')
         self.btn_reset = self.findChild(QPushButton, 'reset_btn')
@@ -126,15 +128,24 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.combox_targets = self.findChild(QComboBox, 'combobox_targets')
         self.btn_quit = self.findChild(QPushButton, 'quit_btn')
         self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
-        self.menu_choose_targets = self.findChild(QAction, 'actionChoose_start_ssn')     # Find Menu Option
+        self.btn_plus = self.findChild(QPushButton, 'plus_btn')
+        self.btn_minus = self.findChild(QPushButton, 'minus_btn')
+        self.menu_choose_targets = self.findChild(QAction, 'actionChoose_start_ssn')
         self.menu_quit = self.findChild(QAction, 'actionQuit')
         self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
         self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
+        # UI - text edits
         self.target_textedit = self.findChild(QTextEdit, 'target_textedit')
         self.target_id_textedit = self.findChild(QTextEdit, 'targetnum_textedit_value')
+        # UI - central painting area
         self.tablet_paint_area = self.findChild(QGraphicsView, 'tablet_paint_graphicsview')
         self.scene = QGraphicsScene()
         self.tablet_paint_area.setScene(self.scene)
+        # UI - labels (mostly used for statistics)
+        self.lbl_targetsfile = self.findChild(QLabel, 'stats_targetsname_label')
+        self.lbl_total_targets = self.findChild(QLabel, 'stats_total_label')
+        self.lbl_completed = self.findChild(QLabel, 'stats_complete_label')
+        self.lbl_remaining = self.findChild(QLabel, 'stats_remaining_label')
 
         self.init_ui()
 
@@ -146,6 +157,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.move(0, 0)
         # button links
         self.btn_start_ssn.clicked.connect(self.f_btn_start_ssn)
+        self.btn_end_ssn.clicked.connect(self.f_btn_end_ssn)
         self.btn_next.clicked.connect(self.f_btn_next)
         self.btn_prv.clicked.connect(self.f_btn_prv)
         self.btn_reset.clicked.connect(self.f_btn_reset)
@@ -154,6 +166,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_radio_ok.clicked.connect(self.f_btn_rb)
         self.btn_radio_err.clicked.connect(self.f_btn_rb)
         self.btn_rotate.clicked.connect(self.f_btn_rotate)
+        self.btn_plus.clicked.connect(self.f_btn_plus)
+        self.btn_minus.clicked.connect(self.f_btn_minus)
         # self.menu_choose_targets.triggered.connect(self.f_btn_start_ssn)  # not necessary now
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
@@ -296,6 +310,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 print("No remaining targets file was closed")
             finally:
                 self.close()
+
+    def f_btn_end_ssn(self):
+        # Place holder
+        return
+
+    def f_btn_plus(self):
+        # Place holder
+        return
+
+    def f_btn_minus(self):
+        # Place Holder
+        return
+
     #               -------------------------- GUI/messages Functions --------------------------
 
     # This function creates & shows the configuration window, before starting a session.

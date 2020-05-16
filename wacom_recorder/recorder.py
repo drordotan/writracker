@@ -238,7 +238,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.choose_target()
         self.pop_config_menu()
         self.session_started = True
-        self.create_dir_copy_targets()
         self.toggle_buttons(True)
         self.btn_start_ssn.setEnabled(False)
         self.stats_reset()
@@ -327,14 +326,36 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.tablet_paint_area.scale(0.75, 0.75)
 
     #               -------------------------- GUI/messages Functions --------------------------
+    def pop_folder_selector(self):
+        folder = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
+        if folder:
+            path_ok = os.access(folder, os.W_OK | os.X_OK)
+            if not path_ok:
+                QMessageBox.about(self, "Error writing to results folder", "Can't access results folder! \n"
+                                        "Please choose another folder, or fix permissions")
+                self.results_folder_path = None
+        else:
+            self.results_folder_path = None
+        self.results_folder_path = folder
+        self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path ok: '"+folder+"'\n\n")
+
+    def check_cfg_before_exit(self):
+        if os.path.isdir(self.results_folder_path):
+            self.cfg_window.close()
+            self.create_dir_copy_targets()
+        else:
+            QMessageBox.about(self, "Configuration error", "Please choose another results folder")
 
     # This function creates & shows the configuration window, before starting a session.
     def pop_config_menu(self):
         self.cfg_window.setWindowTitle("Session configuration")
-        ok_btn = QPushButton("OK")
-        ok_btn.clicked.connect(self.cfg_window.close)
         layout_v = QVBoxLayout()
         layout_h = QHBoxLayout()
+        ok_btn = QPushButton("OK")
+        ok_btn.clicked.connect(self.check_cfg_before_exit)
+        choose_folder_btn = QPushButton("Choose folder")
+        choose_folder_btn.clicked.connect(self.pop_folder_selector)
+        label_chosen_folder = QLabel(objectName="label_chosen_folder")
         rbtn = QRadioButton("Yes")
         rbtn.setChecked(True)
         rbtn.clicked.connect(self.cfg_set_cyclic_targets_on)
@@ -342,14 +363,24 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         rbtn = QRadioButton("No")
         rbtn.clicked.connect(self.cfg_set_cyclic_targets_off)
         layout_h.addWidget(rbtn)
-        label = QLabel("Continue displaying targets until all the targets were marked as OK?")
-        layout_v.addWidget(label)
+        label_results = QLabel("Results files folder:")
+        label_cyclic_cfg = QLabel("Continue displaying targets until all the targets were marked as OK?")
+        # Add everything to the the main layout, layout_v (vertical)
+        layout_v.addWidget(label_results)
+        layout_v.addWidget(choose_folder_btn)
+        layout_v.addWidget(label_chosen_folder)
+        layout_v.addWidget(label_cyclic_cfg)
         layout_v.addLayout(layout_h)
         layout_v.addWidget(ok_btn)
         self.cfg_window.setLayout(layout_v)
         self.cfg_window.setGeometry(QRect(100, 200, 100, 100))
         self.cfg_window.setWindowModality(Qt.ApplicationModal)  # Block main windows until OK is pressed
         self.cfg_window.show()
+        # Center the window in the middle of the screen:
+        fr_gm = self.cfg_window.frameGeometry()
+        sc_gm = app.desktop().screenGeometry().center()
+        fr_gm.moveCenter(sc_gm)
+        self.cfg_window.move(fr_gm.topLeft())
 
     def cfg_set_cyclic_targets_off(self):
         self.cyclic_remaining_targets = False
@@ -450,12 +481,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_reset.setEnabled(not state)    # reset always in opposite mode to navigation buttons
 
     def create_dir_copy_targets(self):
-        pwd = os.getcwd();
-        now = datetime.now()
-        now_str = now.strftime("%d-%m-%Y-%H-%M-%S")
-        # create results dir - unique, using date & time
-        self.results_folder_path = pwd+"\\Results"+now_str           # backslash = \ --> windows env +\ for escape char
-        os.mkdir(self.results_folder_path)
+        # pwd = os.getcwd();
+        # now = datetime.now()
+        # now_str = now.strftime("%d-%m-%Y-%H-%M-%S")
+        # # create results dir - unique, using date & time
+        # self.results_folder_path = pwd+"\\Results"+now_str           # backslash = \ --> windows env +\ for escape char
+        # os.mkdir(self.results_folder_path)
 
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
         copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")

@@ -89,7 +89,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
-        # pen settings & variables - maybe move to other class?
+        self.title = "WriTracker Recorder"
+        # pen settings & variables
         self.pen_is_down = False
         self.pen_x = 0
         self.pen_xtilt = 0
@@ -108,6 +109,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.results_folder_path = None        # unique, using date and time
         self.path = QPainterPath()
         self.targets = []
+        self.stats = {}                     # session stats values, total/completed/remaining targets
         self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
         self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
         self.skip_ok_targets = False        # Controls viewing mode: when True, skip targets where RC = "ok".
@@ -152,6 +154,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # Read from recorder_ui.ui and connect each button to function
     def init_ui(self):
         # general window settings
+        self.setWindowTitle(self.title)
         full_window = app.desktop().frameGeometry()            # get desktop resolution
         self.resize(full_window.width(), full_window.height())  # set window size to full screen
         self.move(0, 0)
@@ -228,6 +231,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             except IOError:
                 msg = QMessageBox()
                 msg.about(self, "Error", "Load targets file in order to start the session")
+        self.lbl_targetsfile.setText(os.path.basename(targets_file_path[0]))
+        self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path[0]))
 
     def f_btn_start_ssn(self):
         self.choose_target()
@@ -236,6 +241,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.create_dir_copy_targets()
         self.toggle_buttons(True)
         self.btn_start_ssn.setEnabled(False)
+        self.stats_reset()
+        self.stats_update()
         self.read_next_target()  # read first target
 
     def f_btn_reset(self):
@@ -388,6 +395,30 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1
 
+    def stats_reset(self):
+        self.stats['total_targets'] = 0
+        self.stats['completed_ok'] = 0
+        self.stats['completed_error'] = 0
+        self.stats['remaining'] = 0
+
+    # Calculate stats based on the the current working mode, and update QLabel fields
+    def stats_update(self):
+        self.stats_reset()
+        self.stats['total_targets'] = len(self.targets)
+        for target in self.targets:
+            if target.rc_code == "OK":
+                self.stats['completed_ok'] += 1
+            elif target.rc_code != "":             # reaching here means that's an error target
+                self.stats['completed_error'] += 1
+            else:
+                self.stats['remaining'] += 1     # reaching here means an untagged target
+        if self.cyclic_remaining_targets:          # counting remaining targets according to the current config
+            self.stats['remaining'] += self.stats['completed_error']
+        self.lbl_total_targets.setText("Total targets: " + str(self.stats['total_targets']))
+        self.lbl_completed.setText("Completed targets: " + str(self.stats['completed_ok']) + " OK, " +
+                                   str(self.stats['completed_error']) + " Error")
+        self.lbl_remaining.setText("Remaining targets: " + str(self.stats['remaining']))
+
     # Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
     def parse_targets(self):
         lines = []
@@ -467,6 +498,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.recording_on = False
         self.save_trials_file()
         self.save_remaining_targets_file()
+        self.stats_update()
 
     # Read next with rc_code not "OK".
     def read_next_error_target(self, read_backwards=False):

@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5 import uic
 from shutil import copyfile
 from datetime import datetime, timedelta
+import pandas as pd             # read excel file input
 
 """------------------------------------------------------------------------------------------------------------------"""
 
@@ -223,16 +224,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     # Choose targets file
     def choose_target(self):
-        targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), 'CSV files (*.csv)')
+        targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
         if targets_file_path:
             try:
                 with open(targets_file_path[0]) as self.targets_file:
-                    self.parse_targets()
+                    self.parse_targets(targets_file_path[0])
+                    self.lbl_targetsfile.setText(os.path.basename(targets_file_path[0]))
+                    self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path[0]))
             except IOError:
                 msg = QMessageBox()
                 msg.about(self, "Error", "Load targets file in order to start the session")
-        self.lbl_targetsfile.setText(os.path.basename(targets_file_path[0]))
-        self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path[0]))
 
     def f_btn_start_ssn(self):
         self.choose_target()
@@ -455,15 +456,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.lbl_remaining.setText("Remaining targets: " + str(self.stats['remaining']))
 
     # Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
-    def parse_targets(self):
-        lines = []
-        next(self.targets_file)             # skip header
-        for row in self.targets_file:
-            target_id = row.split(',')[0]
-            target_value = row.split(',')[1].strip()
-            self.targets.append(Target(target_id, target_value))
-            self.combox_targets.addItem(str(target_id)+"-"+str(target_value))
-            lines.append(row)
+    def parse_targets(self, targets_file_path):
+        if targets_file_path.split('.')[1] != "csv":    # read as excel file
+            df = pd.read_excel(targets_file_path)
+        else:  # read as csv
+            df = pd.read_csv(targets_file_path)
+        for index, row in df.iterrows():
+            self.targets.append(Target(row["target ID"],row["target value"]))
+            self.combox_targets.addItem(str(row["target ID"])+"-"+str(row["target value"]))
 
     # toggle radio buttons
     def toggle_rb(self, state):
@@ -486,8 +486,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def create_dir_copy_targets(self):
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
-        copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
-        copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")
+        name = self.targets_file.name
+        file_type = name.split('.')[1]
+        if file_type != "csv":
+            # Remaining targets file should in any case stay csv because we might use it later.
+            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path+"\\Remaining_targets.csv", index=False)
+            copyfile(self.targets_file.name, self.results_folder_path + "\\Original_targets_file_copy."+file_type)
+        else:
+            copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
+            copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")
 
     def open_trajectory(self, unique_id):
         name = "trajectory_"+unique_id

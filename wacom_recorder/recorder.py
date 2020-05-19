@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 
 class Target:
-    def __init__(self, target_id, target_value, next_trial_id=0):
+    def __init__(self, target_id, target_value, next_trial_id=1):
         self.id = target_id
         self.value = target_value
         self.trials = []
@@ -104,7 +104,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.targets_file = None            # loaded by user, holds the targets.
         self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
         self.trials_file = None             # keeps track of each trajectory file
-        self.trial_unique_id = 0
+        self.trial_unique_id = 1
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
         self.results_folder_path = None        # unique, using date and time
         self.path = QPainterPath()
@@ -396,12 +396,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                                            'session_time', 'session_number', 'absolute_time',
                                                            'file_name'], lineterminator='\n')
             trials_csv_file.writeheader()
+            sorted_trials = []
             for target in self.targets:
                 for trial in target.trials:
-                    row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
-                               rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
-                               absolute_time=trial.abs_time, file_name=trial.traj_file_name)
-                    trials_csv_file.writerow(row)
+                    sorted_trials.append(trial)
+            sorted_trials.sort(key=lambda x: x.id)    # sort by unique trial ID
+            for trial in sorted_trials:
+                row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
+                           rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
+                           absolute_time=trial.abs_time, file_name=trial.traj_file_name)
+                trials_csv_file.writerow(row)
 
     def save_remaining_targets_file(self):
         with open(self.results_folder_path + "\\" + "remaining_targets.csv", mode='w') as targets_file:
@@ -481,13 +485,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_reset.setEnabled(not state)    # reset always in opposite mode to navigation buttons
 
     def create_dir_copy_targets(self):
-        # pwd = os.getcwd();
-        # now = datetime.now()
-        # now_str = now.strftime("%d-%m-%Y-%H-%M-%S")
-        # # create results dir - unique, using date & time
-        # self.results_folder_path = pwd+"\\Results"+now_str           # backslash = \ --> windows env +\ for escape char
-        # os.mkdir(self.results_folder_path)
-
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
         copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
         copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")

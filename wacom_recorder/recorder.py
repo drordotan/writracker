@@ -318,7 +318,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.close()
 
     def f_btn_end_ssn(self):
-        # Place holder
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        answer = msg.question(self, 'Wait!', "Are you sure you want to end this session? \n", msg.Yes | msg.No, msg.No)
+        if answer == msg.Yes:
+            self.reset_session()
         return
 
     def f_btn_plus(self):
@@ -344,6 +348,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def check_cfg_before_exit(self):
         if os.path.isdir(self.results_folder_path):
             self.cfg_window.close()
+            # Reset, otherwise left for the next time a session is started in the current run:
+            self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path: ")
             self.create_dir_copy_targets()
         else:
             QMessageBox.about(self, "Configuration error", "Please choose another results folder")
@@ -391,6 +397,39 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.cyclic_remaining_targets = True
 
     #               -------------------------- rest of the Functions --------------------------
+
+    # Resets all the session variables. Saves working files before closing. Resets configuration options.
+    def reset_session(self):
+        if self.trial_started is True:
+            self.close_current_trial()
+        self.set_recording_off()
+        self.session_started = False
+        # Gui fields reset
+        self.update_target_textfields("", "")
+        self.combox_targets.clear()
+        self.lbl_targetsfile.clear()
+        self.toggle_buttons(False)
+        self.btn_reset.setEnabled(False)
+        self.btn_start_ssn.setEnabled(True)
+        # Save files before resetting
+        self.save_remaining_targets_file()
+        self.save_trials_file()
+        # reset environment variables
+        self.targets.clear()
+        self.stats_update()
+        self.targets_dict = {}
+        self.targets_file = None
+        self.remaining_targets_file = None
+        self.trials_file = None
+        self.trial_unique_id = 1
+        self.current_active_trajectory = None
+        self.results_folder_path = None
+        self.targets = []
+        self.stats = {}
+        self.curr_target_index = -1
+        self.trial_started = False
+        self.skip_ok_targets = False
+        self.cyclic_remaining_targets = True
 
     def save_trials_file(self):
         with open(self.results_folder_path + "\\" + "trials.csv", mode='w') as trials_file:
@@ -515,7 +554,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def set_recording_off(self):
         self.recording_on = False
         self.clean_display()
-        # self.targets_file.close()
 
     def clean_display(self):
         self.scene.clear()

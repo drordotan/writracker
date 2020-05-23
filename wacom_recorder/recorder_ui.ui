@@ -95,14 +95,14 @@
         <property name="font">
          <font>
           <family>MS Shell Dlg 2</family>
-          <pointsize>16</pointsize>
+          <pointsize>14</pointsize>
           <weight>50</weight>
           <italic>false</italic>
           <bold>false</bold>
          </font>
         </property>
         <property name="styleSheet">
-         <string notr="true">font: 16pt &quot;MS Shell Dlg 2&quot;;
+         <string notr="true">font: 14pt &quot;MS Shell Dlg 2&quot;;
 background-color: rgb(255, 255, 255);
 border-color: rgb(255, 0, 0);</string>
         </property>
@@ -136,13 +136,13 @@ border-color: rgb(255, 0, 0);</string>
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>30</height>
+          <height>35</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>201</width>
-          <height>25</height>
+          <height>35</height>
          </size>
         </property>
         <property name="font">
@@ -388,6 +388,9 @@ border-color: rgb(255, 0, 0);</string>
           </property>
           <property name="wordWrap">
            <bool>true</bool>
+          </property>
+          <property name="textInteractionFlags">
+           <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
           </property>
          </widget>
         </item>
@@ -656,7 +659,7 @@ border-color: rgb(255, 0, 0);</string>
      <x>0</x>
      <y>0</y>
      <width>1114</width>
-     <height>26</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuChoose_targets_file">

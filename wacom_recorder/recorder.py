@@ -175,7 +175,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # self.menu_choose_targets.triggered.connect(self.f_btn_start_ssn)  # not necessary now
         self.menu_quit.triggered.connect(self.f_menu_quit)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
-        self.target_id_textedit.setStyleSheet("QTextEdit {color:red}")
+        self.target_id_textedit.setStyleSheet("QTextEdit {color:black}")
         self.tablet_paint_area.fitInView(800, 600, 0, 0, Qt.KeepAspectRatio)  # reset the graphicsView scaling
         self.show()
 
@@ -229,7 +229,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             try:
                 with open(targets_file_path[0]) as self.targets_file:
                     self.parse_targets(targets_file_path[0])
-                    self.lbl_targetsfile.setText(os.path.basename(targets_file_path[0]))
+                    self.lbl_targetsfile.setText("<strong> Current targets file Path: </strong><div align=left>"
+                                                 + targets_file_path[0] +"</div>")
                     self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path[0]))
             except IOError:
                 msg = QMessageBox()

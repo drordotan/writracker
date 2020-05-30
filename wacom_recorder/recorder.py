@@ -222,29 +222,20 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def f_menu_quit(self):
         self.f_btn_quit()
 
-    # Choose targets file
-    def choose_target(self):
-        targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
-        if targets_file_path:
-            try:
-                with open(targets_file_path[0]) as self.targets_file:
-                    self.parse_targets(targets_file_path[0])
-                    self.lbl_targetsfile.setText("<strong> Current targets file Path: </strong><div align=left>"
-                                                 + targets_file_path[0] +"</div>")
-                    self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path[0]))
-            except IOError:
-                msg = QMessageBox()
-                msg.about(self, "Error", "Load targets file in order to start the session")
-
     def f_btn_start_ssn(self):
-        self.choose_target()
-        self.pop_config_menu()
-        self.session_started = True
-        self.toggle_buttons(True)
-        self.btn_start_ssn.setEnabled(False)
-        self.stats_reset()
-        self.stats_update()
-        self.read_next_target()  # read first target
+        QMessageBox().about(self, "Starting a new session", "In the first dialog, choose the targets file"
+                                                            "(excel or .csv File)\nIn the second dialog, choose the "
+                                                            "results folder, where all the raw"
+                                                            " trajectories will be saved")
+        if self.choose_target():
+            if self.pop_folder_selector():
+                self.pop_config_menu()
+                self.session_started = True
+                self.toggle_buttons(True)
+                self.btn_start_ssn.setEnabled(False)
+                self.stats_reset()
+                self.stats_update()
+                self.read_next_target()  # read first target
 
     def f_btn_reset(self):
         msg = QMessageBox()
@@ -332,18 +323,44 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.tablet_paint_area.scale(0.75, 0.75)
 
     #               -------------------------- GUI/messages Functions --------------------------
+    # Choose targets file
+    def choose_target(self):
+        while True:
+            targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
+            if targets_file_path:
+                try:
+                    with open(targets_file_path[0]) as self.targets_file:
+                        self.parse_targets(targets_file_path[0])
+                        self.lbl_targetsfile.setText("<strong> Current targets file Path: </strong><div align=left>"
+                                                     + targets_file_path[0] +"</div>")
+                        self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path[0]))
+                        return True
+                except IOError:
+                    msg = QMessageBox()
+                    answer = msg.question(self, "Error", "Load targets file in order to start the session \n"
+                                                         "would you like to try another file?",
+                                          msg.Yes | msg.No, msg.Yes)
+                    if answer == msg.Yes:
+                        continue
+                    else:
+                        return False
+
     def pop_folder_selector(self):
-        folder = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
-        if folder:
-            path_ok = os.access(folder, os.W_OK | os.X_OK)
-            if not path_ok:
-                QMessageBox.about(self, "Error writing to results folder", "Can't access results folder! \n"
-                                        "Please choose another folder, or fix permissions")
-                self.results_folder_path = None
-        else:
-            self.results_folder_path = None
-        self.results_folder_path = folder
-        self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path ok: '"+folder+"'\n\n")
+        while True:
+            folder = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
+            if folder:
+                path_ok = os.access(folder, os.W_OK | os.X_OK)
+                if path_ok:
+                    self.results_folder_path = folder
+                    return True
+            msg = QMessageBox()
+            answer = msg.question(self, "Error", "The chosen folder is not valid, or doesn't have write permissions \n"
+                                                 "would you like to try another folder?",
+                                  msg.Yes | msg.No, msg.Yes)
+            if answer == msg.Yes:
+                continue
+            else:
+                return False
 
     def check_cfg_before_exit(self):
         if os.path.isdir(self.results_folder_path):
@@ -389,6 +406,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         sc_gm = app.desktop().screenGeometry().center()
         fr_gm.moveCenter(sc_gm)
         self.cfg_window.move(fr_gm.topLeft())
+        self.cfg_window.findChild(QLabel, "label_chosen_folder").setText(
+                                                                 "Path ok: '" + self.results_folder_path + "'\n\n")
 
     def cfg_set_cyclic_targets_off(self):
         self.cyclic_remaining_targets = False

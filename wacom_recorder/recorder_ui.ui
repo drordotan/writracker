@@ -498,6 +498,29 @@ border-color: rgb(255, 0, 0);</string>
           </property>
          </widget>
         </item>
+        <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+         <widget class="QPushButton" name="continue_ssn_btn">
+          <property name="minimumSize">
+           <size>
+            <width>175</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>175</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>Choose an existing results folder, and continue the session.
+The software will use &quot;remaining_targets_file.csv&quot; and will load the session to the exact status as it was finished.</string>
+          </property>
+          <property name="text">
+           <string>Continue Existing Session</string>
+          </property>
+         </widget>
+        </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_plusminus">
           <property name="spacing">

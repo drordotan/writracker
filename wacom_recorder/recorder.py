@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditio
 from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5 import uic
 from shutil import copyfile
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import pandas as pd             # read excel file input
 
 """------------------------------------------------------------------------------------------------------------------"""
@@ -26,14 +26,14 @@ class Target:
         trial_arr = ""
         for trial in self.trials:
             trial_arr += str(trial)
-        return "id " + self.id + " value:" + self.value + "[" + trial_arr + "]"
+        return "id " + str(self.id) + " value:" + self.value + "| trials: [" + trial_arr + "]" + " | rc: " + self.rc_code + " | next trial ID: " + str(self.next_trial_id)
 
 
 """------------------------------------------------------------------------------------------------------------------"""
 
 
 class Trial:
-    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=0, abs_time=datetime.now().strftime("%H:%M:%S")):
+    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S")):
         self.id = trial_id                      # unique ID, defined in the main exec loop
         self.target_id = target_id
         self.target_value = target_value
@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.cfg_window = QWidget()
         # UI - Button
         self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')
+        self.btn_continue_ssn = self.findChild(QPushButton, 'continue_ssn_btn')
         self.btn_end_ssn = self.findChild(QPushButton, 'end_ssn_btn')
         self.btn_next = self.findChild(QPushButton, 'next_btn')
         self.btn_prv = self.findChild(QPushButton, 'prv_btn')
@@ -161,6 +162,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.move(0, 0)
         # button links
         self.btn_start_ssn.clicked.connect(self.f_btn_start_ssn)
+        self.btn_continue_ssn.clicked.connect(self.f_btn_continue_ssn)
         self.btn_end_ssn.clicked.connect(self.f_btn_end_ssn)
         self.btn_next.clicked.connect(self.f_btn_next)
         self.btn_prv.clicked.connect(self.f_btn_prv)
@@ -221,6 +223,33 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def f_menu_quit(self):
         self.f_btn_quit()
+
+# This function loads previous session status, and continues it
+    def f_btn_continue_ssn(self):
+        QMessageBox().about(self, "Continuing an existing session", "Choose the an existing results folder")
+        while True:
+            if self.pop_folder_selector():
+                if self.choose_target(continue_session=True):
+                    try:
+                        df = pd.read_csv(str(self.results_folder_path)+"/trials.csv")
+                    except(IOError):    # -- allow the user to exit the loop
+                        msg = QMessageBox()
+                        answer = msg.question(self, "Error", "Couldn't load trials.csv \n"
+                                                             "would you like to try another folder?",
+                                              msg.Yes | msg.No, msg.Yes)
+                        if answer == msg.Yes:
+                            continue
+                        else:
+                            return False
+                    self.parse_data_dataframe(df)
+                    self.pop_config_menu()
+                    self.session_started = True
+                    self.toggle_buttons(True)
+                    self.btn_start_ssn.setEnabled(False)
+                    self.stats_reset()
+                    self.stats_update()
+                    self.read_next_target()  # read first target
+                    return True
 
     def f_btn_start_ssn(self):
         QMessageBox().about(self, "Starting a new session", "In the first dialog, choose the targets file"
@@ -324,16 +353,20 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     #               -------------------------- GUI/messages Functions --------------------------
     # Choose targets file
-    def choose_target(self):
+    def choose_target(self, continue_session=False):
         while True:
-            targets_file_path = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
+            if continue_session == False:
+                targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
+                targets_file_path = targets_file_path_raw[0]
+            else:
+                targets_file_path = self.results_folder_path+"/Original_targets_file_copy.csv"
             if targets_file_path:
                 try:
-                    with open(targets_file_path[0]) as self.targets_file:
-                        self.parse_targets(targets_file_path[0])
+                    with open(targets_file_path) as self.targets_file:
+                        self.parse_targets(targets_file_path)
                         self.lbl_targetsfile.setText("<strong> Current targets file Path: </strong><div align=left>"
-                                                     + targets_file_path[0] +"</div>")
-                        self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path[0]))
+                                                     + targets_file_path +"</div>")
+                        self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path))
                         return True
                 except IOError:
                     msg = QMessageBox()
@@ -416,6 +449,33 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.cyclic_remaining_targets = True
 
     #               -------------------------- rest of the Functions --------------------------
+    # Input: Pandas dataframe. functionality: reads the database and restores session status
+    def parse_data_dataframe(self, df):
+        self.trial_unique_id = df.trial_id.max() + 1
+        # -- Fill targets list --
+        for target in self.targets:  # fill in targets' rc property.
+            if target.value in df.set_index('target').query('rc=="OK"', inplace=False).T.to_dict():
+                target.rc_code = "OK"
+            else:  # If the target wasn't marked as OK even once, it's some kind of error. use it's value.
+                target.rc_code = df.set_index('target')['rc'].to_dict()[target.value]
+            last_trial_file_name = df.set_index('target')['file_name'].to_dict()[target.value]
+            num_idx = df.set_index('target')['file_name'].to_dict()[target.value].rfind('l')
+            target.next_trial_id = int(last_trial_file_name[num_idx + 1:]) + 1
+
+            # -- Fill trials list per target --
+            # fill previous trials, for each target. read from database = trials.csv:
+            df['target'].str.strip()  # remove space, might be added by pandas when converted to CSV
+            trials_dict = df.set_index('trial_id').query('target==' + "'" + str(target.value) + "'",
+                                                         inplace=False).T.to_dict()
+            for key in trials_dict.keys():
+                tmp_trial = Trial(trial_id=key, target_id=target.id, target_value=target.value,
+                                  rc_code=trials_dict[key]['rc'],
+                                  session_time=trials_dict[key]['session_time'],
+                                  session_num=trials_dict[key]['session_number'],
+                                  traj_file_name=trials_dict[key]['file_name'],
+                                  abs_time=trials_dict[key]['absolute_time'])
+                target.trials.append(tmp_trial)
+        return True
 
     # Resets all the session variables. Saves working files before closing. Resets configuration options.
     def reset_session(self):
@@ -484,8 +544,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         elif self.btn_radio_err.isChecked() is True:
             rc_code = "ERROR"
         traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
-        current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code,
-                              0, traj_filename, abs_time=datetime.now().strftime("%H:%M:%S"))  # need to Add current session time value here <---
+        current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code, 0,
+                              traj_filename, str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S"))  # need to Add current session time value here <---
         current_target.trials.append(current_trial)
         current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1
@@ -544,13 +604,17 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_reset.setEnabled(not state)    # reset always in opposite mode to navigation buttons
 
     def create_dir_copy_targets(self):
+        # If the file already exists, we assume the user chose "continue existing session". no need to create copies.
+        if os.path.isfile(self.results_folder_path+"\\Remaining_targets.csv"): #
+            print("Recorder: Remaining_targets.csv file exists. Assuming this is a restored session")
+            return True
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
         name = self.targets_file.name
         file_type = name.split('.')[1]
         if file_type != "csv":
-            # Remaining targets file should in any case stay csv because we might use it later.
+            # Remaining targets/Original Targets files should in any be converted to csv because we might use it later.
             pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path+"\\Remaining_targets.csv", index=False)
-            copyfile(self.targets_file.name, self.results_folder_path + "\\Original_targets_file_copy."+file_type)
+            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path+"\\Original_targets_file_copy.csv", index=False)
         else:
             copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
             copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")

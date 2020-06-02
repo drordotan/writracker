@@ -241,7 +241,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                         if answer == msg.Yes:
                             continue
                         else:
-                            return False
+                            return True
                     self.parse_data_dataframe(df)
                     self.pop_config_menu()
                     self.session_started = True
@@ -251,7 +251,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                     self.stats_update()
                     self.read_next_target()  # read first target
                     return True
-
+            else: return False
     def f_btn_start_ssn(self):
         QMessageBox().about(self, "Starting a new session", "In the first dialog, choose the targets file"
                                                             "(excel or .csv File)\nIn the second dialog, choose the "
@@ -381,7 +381,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def pop_folder_selector(self):
         while True:
-            folder = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
+            folder = str(QFileDialog.getExistingDirectory(self, "Select results directory"))
             if folder:
                 path_ok = os.access(folder, os.W_OK | os.X_OK)
                 if path_ok:
@@ -400,7 +400,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def fill_combox_errors(self):
         errors_input = self.cfg_window.findChild(QLineEdit, "lineedit_error_types").text()
         if errors_input == "":
-            self.combox_errors.addItem("Error")
+            self.combox_errors.addItems(["Spelling", "Motor", "Incomplete"])
             return True
         error_list = errors_input.split(",")
         for error_type in error_list:
@@ -472,29 +472,31 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # Input: Pandas dataframe. functionality: reads the database and restores session status
     def parse_data_dataframe(self, df):
         self.trial_unique_id = df.trial_id.max() + 1
+        df['target'] = df.target.str.strip()  # remove space, might be added by pandas when converted to CSV
         # -- Fill targets list --
         for target in self.targets:  # fill in targets' rc property.
-            if target.value in df.set_index('target').query('rc=="OK"', inplace=False).T.to_dict():
-                target.rc_code = "OK"
-            else:  # If the target wasn't marked as OK even once, it's some kind of error. use it's value.
-                target.rc_code = df.set_index('target')['rc'].to_dict()[target.value]
-            last_trial_file_name = df.set_index('target')['file_name'].to_dict()[target.value]
-            num_idx = df.set_index('target')['file_name'].to_dict()[target.value].rfind('l')
-            target.next_trial_id = int(last_trial_file_name[num_idx + 1:]) + 1
+            if target.value in df.set_index('target').to_dict().keys():
+                if target.value in df.set_index('target').query('rc=="OK"', inplace=False).T.to_dict():
+                    target.rc_code = "OK"
+                # If the target wasn't marked as OK even once, it's some kind of error. use it's value.
+                else:
+                    target.rc_code = df.set_index('target')['rc'].to_dict()[target.value]
+                last_trial_file_name = df.set_index('target')['file_name'].to_dict()[target.value]
+                num_idx = df.set_index('target')['file_name'].to_dict()[target.value].rfind('l')
+                target.next_trial_id = int(last_trial_file_name[num_idx + 1:]) + 1
 
-            # -- Fill trials list per target --
-            # fill previous trials, for each target. read from database = trials.csv:
-            df['target'].str.strip()  # remove space, might be added by pandas when converted to CSV
-            trials_dict = df.set_index('trial_id').query('target==' + "'" + str(target.value) + "'",
-                                                         inplace=False).T.to_dict()
-            for key in trials_dict.keys():
-                tmp_trial = Trial(trial_id=key, target_id=target.id, target_value=target.value,
-                                  rc_code=trials_dict[key]['rc'],
-                                  session_time=trials_dict[key]['session_time'],
-                                  session_num=trials_dict[key]['session_number'],
-                                  traj_file_name=trials_dict[key]['file_name'],
-                                  abs_time=trials_dict[key]['absolute_time'])
-                target.trials.append(tmp_trial)
+                # -- Fill trials list per target --
+                # fill previous trials, for each target. read from database = trials.csv:
+                trials_dict = df.set_index('trial_id').query('target==' + "'" + str(target.value) + "'",
+                                                             inplace=False).T.to_dict()
+                for key in trials_dict.keys():
+                    tmp_trial = Trial(trial_id=key, target_id=target.id, target_value=target.value,
+                                      rc_code=trials_dict[key]['rc'],
+                                      session_time=trials_dict[key]['session_time'],
+                                      session_num=trials_dict[key]['session_number'],
+                                      traj_file_name=trials_dict[key]['file_name'],
+                                      abs_time=trials_dict[key]['absolute_time'])
+                    target.trials.append(tmp_trial)
         return True
 
     # Resets all the session variables. Saves working files before closing. Resets configuration options.
@@ -602,7 +604,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         else:  # read as csv
             df = pd.read_csv(targets_file_path)
         for index, row in df.iterrows():
-            self.targets.append(Target(row["target ID"],row["target value"]))
+            self.targets.append(Target(row["target ID"], row["target value"].strip()))
             self.combox_targets.addItem(str(row["target ID"])+"-"+str(row["target value"]))
 
     # toggle radio buttons

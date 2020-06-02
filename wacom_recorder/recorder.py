@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.menu_quit = self.findChild(QAction, 'actionQuit')
         self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
         self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
+        self.combox_errors = self.findChild(QComboBox, 'combobox_errortype')
         # UI - text edits
         self.target_textedit = self.findChild(QTextEdit, 'target_textedit')
         self.target_id_textedit = self.findChild(QTextEdit, 'targetnum_textedit_value')
@@ -395,8 +396,20 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             else:
                 return False
 
+    # Read the text input in the config window and inserts the values into the combox
+    def fill_combox_errors(self):
+        errors_input = self.cfg_window.findChild(QLineEdit, "lineedit_error_types").text()
+        if errors_input == "":
+            self.combox_errors.addItem("Error")
+            return True
+        error_list = errors_input.split(",")
+        for error_type in error_list:
+            if error_type.strip() != "":
+                self.combox_errors.addItem(error_type.strip())
+
     def check_cfg_before_exit(self):
         if os.path.isdir(self.results_folder_path):
+            self.fill_combox_errors()
             self.cfg_window.close()
             # Reset, otherwise left for the next time a session is started in the current run:
             self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path: ")
@@ -423,12 +436,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         layout_h.addWidget(rbtn)
         label_results = QLabel("Results files folder:")
         label_cyclic_cfg = QLabel("Continue displaying targets until all the targets were marked as OK?")
+        label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
+                                   " errors list. \nInsert Error types, divided by commas(',') "
+                                   "or leave empty to tag as 'Error'")
+        lineedit_error_types = QLineEdit(objectName="lineedit_error_types")
+        lineedit_error_types.setPlaceholderText("Error_Example, Error_example_writing, Error_example_typo, Error_42")
         # Add everything to the the main layout, layout_v (vertical)
         layout_v.addWidget(label_results)
         layout_v.addWidget(choose_folder_btn)
         layout_v.addWidget(label_chosen_folder)
         layout_v.addWidget(label_cyclic_cfg)
         layout_v.addLayout(layout_h)
+        layout_v.addWidget(label_error_types)
+        layout_v.addWidget(lineedit_error_types)
         layout_v.addWidget(ok_btn)
         self.cfg_window.setLayout(layout_v)
         self.cfg_window.setGeometry(QRect(100, 200, 100, 100))
@@ -486,6 +506,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # Gui fields reset
         self.update_target_textfields("", "")
         self.combox_targets.clear()
+        self.combox_errors.clear()
         self.lbl_targetsfile.clear()
         self.toggle_buttons(False)
         self.btn_reset.setEnabled(False)
@@ -542,7 +563,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         if self.btn_radio_ok.isChecked() is True:
             rc_code = "OK"
         elif self.btn_radio_err.isChecked() is True:
-            rc_code = "ERROR"
+            rc_code = self.combox_errors.currentText()
         traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
         current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code, 0,
                               traj_filename, str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S"))  # need to Add current session time value here <---

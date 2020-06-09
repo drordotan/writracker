@@ -11,8 +11,9 @@ from shutil import copyfile
 from datetime import datetime, date, timedelta
 import pandas as pd             # read excel file input
 
-"""------------------------------------------------------------------------------------------------------------------"""
 
+#-------------------------------------------------------------------------------------------------------------
+#todo: move these classes to recorder.io module
 
 class Target:
     def __init__(self, target_id, target_value, next_trial_id=1):
@@ -29,7 +30,7 @@ class Target:
         return "id " + str(self.id) + " value:" + self.value + "| trials: [" + trial_arr + "]" + " | rc: " + self.rc_code + " | next trial ID: " + str(self.next_trial_id)
 
 
-"""------------------------------------------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------------------------------------
 
 
 class Trial:
@@ -48,14 +49,14 @@ class Trial:
                + str(self.rc_code) + "|" + self.traj_file_name + str(self.session_time)+"|"+str(self.session_num)+"|"+str(self.abs_time)+"|"
 
 
-"""------------------------------------------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------------------------------------
 
 
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
         self.filepath = filepath
-        self.full_path = self.filepath+"\\"+self.filename+".csv"
+        self.full_path = self.filepath + os.sep + self.filename + ".csv"
         self.file_handle = None
         self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
@@ -71,7 +72,7 @@ class Trajectory:
                 else:
                     self.file_handle.writerow(row)
         except IOError:
-            raise Exception("Error writing trajectory file in:" + self.filepath+"\\"+self.filename+".csv")
+            raise Exception("Error writing trajectory file in:" + self.filepath + os.sep + self.filename+".csv")
 
     def add_row(self, x_cord, y_cord, pressure, char_num=0, stroke_num=0, pen_down=True):
         time_abs = datetime.now().strftime("%M:%S:%f")[:-2]
@@ -82,8 +83,14 @@ class Trajectory:
     def reset_start_time(self):
         self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
-"""------------------------------------------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------------------------------------
 
+
+def is_windows():
+    return os.name == 'nt'
+
+
+#-------------------------------------------------------------------------------------------------------------
 
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
     newPoint = pyqtSignal(QPoint)
@@ -154,6 +161,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
         self.init_ui()
 
+    #----------------------------------------------------------------------------
+    def show_info_msg(self, title, msg):
+
+        if is_windows():
+            QMessageBox().about(self, title, msg)
+
+        else:
+            msgbox = QMessageBox()
+            msgbox.setWindowTitle(title)
+            msgbox.setText(msg)
+            msgbox.exec()
+
+    #----------------------------------------------------------------------------
     # Read from recorder_ui.ui and connect each button to function
     def init_ui(self):
         # general window settings
@@ -227,7 +247,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 # This function loads previous session status, and continues it
     def f_btn_continue_ssn(self):
-        QMessageBox().about(self, "Continuing an existing session", "Choose the an existing results folder")
+        self.show_info_msg("Continuing an existing session", "Choose the an existing results folder")
         while True:
             if self.pop_folder_selector():
                 if self.choose_targets_file(continue_session=True):
@@ -242,6 +262,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                             continue
                         else:
                             return True
+
                     self.parse_data_dataframe(df)
                     self.pop_config_menu()
                     self.session_started = True
@@ -251,12 +272,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                     self.stats_update()
                     self.read_next_target()  # read first target
                     return True
-            else: return False
+            else:
+                return False
+
+
     def f_btn_start_ssn(self):
-        QMessageBox().about(self, "Starting a new session", "In the first dialog, choose the targets file"
-                                                            "(excel or .csv File)\nIn the second dialog, choose the "
-                                                            "results folder, where all the raw"
-                                                            " trajectories will be saved")
+        self.show_info_msg("Starting a new session",
+                           "In the first dialog, choose the targets file (excel or .csv File)\n"
+                           "In the second dialog, choose the results folder, where all the raw"
+                           " trajectories will be saved")
+
         if self.choose_targets_file():
             if self.pop_folder_selector():
                 self.pop_config_menu()
@@ -548,7 +573,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     #----------------------------------------------------------------------------------
     #todo: move to "io" package
     def save_trials_file(self):
-        with open(self.results_folder_path + "\\" + "trials.csv", mode='w') as trials_file:
+        with open(self.results_folder_path + os.sep + "trials.csv", mode='w') as trials_file:
             trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
                                                            'session_time', 'session_number', 'absolute_time',
                                                            'file_name'], lineterminator='\n')
@@ -567,7 +592,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     #----------------------------------------------------------------------------------
     #todo: move to "io" package
     def save_remaining_targets_file(self):
-        with open(self.results_folder_path + "\\" + "remaining_targets.csv", mode='w') as targets_file:
+        with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w') as targets_file:
             targets_file = csv.DictWriter(targets_file, ['target_id', 'target'], lineterminator='\n')
             targets_file.writeheader()
             for target in self.targets:
@@ -661,11 +686,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         file_type = name.split('.')[1]
         if file_type != "csv":
             # Remaining targets/Original Targets files should in any be converted to csv because we might use it later.
-            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path+"\\Remaining_targets.csv", index=False)
-            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path+"\\Original_targets_file_copy.csv", index=False)
+            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path + os.sep + "Remaining_targets.csv", index=False)
+            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path + os.sep + "Original_targets_file_copy.csv", index=False)
         else:
-            copyfile(self.targets_file.name, self.results_folder_path+"\\Original_targets_file_copy.csv")
-            copyfile(self.targets_file.name, self.results_folder_path+"\\Remaining_targets.csv")
+            copyfile(self.targets_file.name, self.results_folder_path + os.sep + "Original_targets_file_copy.csv")
+            copyfile(self.targets_file.name, self.results_folder_path + os.sep + "Remaining_targets.csv")
 
     #----------------------------------------------------------------------------------
     def open_trajectory(self, unique_id):
@@ -729,10 +754,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.curr_target_index = self.targets.index(target)
                 current_target = self.targets[self.curr_target_index]
                 self.update_target_textfields(current_target.value, current_target.id)
-                break;
+                break
         else:   # No more error targets.
-            QMessageBox().about(self, "End of targets",
-                                      'All the targets has been marked as OK. For target navigation, use "goto"')
+            self.show_info_msg("End of targets",
+                               'All the targets has been marked as OK. For target navigation, use "goto"')
             self.update_target_textfields("All targets marked OK", "")
 
     #----------------------------------------------------------------------------------
@@ -763,9 +788,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.skip_ok_targets = True
             self.read_next_error_target()
         else:
-            QMessageBox().about(self, "End of targets",
-                                      'Reached the end of the targets file\n you can go back '
-                                      '(using \'prev\' or \'goto\' buttons), or finish using exit button')
+            self.show_info_msg("End of targets",
+                               'Reached the end of the targets file.\nClick "exit" to finish, or go back '+
+                               'using the "prev" or "goto" buttons')
+            #todo: must the user click END SESSION?
+
             self.update_target_textfields("*End of targets*", "")
 
 

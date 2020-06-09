@@ -7,21 +7,26 @@ from PyQt5.QtGui import *        # The core classes common to widget and OpenGL 
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
 from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5 import uic
-from shutil import copyfile
 from datetime import datetime, date, timedelta
-import pandas as pd             # read excel file input
+from shutil import copyfile
+from mutagen.mp3 import MP3     # get mp3 length
+from pygame import error as pgerr # handle pygame errors as exceptions
+from pygame import mixer        # handle sound files
+import pandas as pd             # read excel file input, reloading session
 
 
 #-------------------------------------------------------------------------------------------------------------
 #todo: move these classes to recorder.io module
 
 class Target:
-    def __init__(self, target_id, target_value, next_trial_id=1):
+    def __init__(self, target_id, target_value, sound_file_name="", next_trial_id=1):
         self.id = target_id
         self.value = target_value
         self.trials = []
         self.next_trial_id = next_trial_id      # this is actually the INDEX of the next trial in trials array
         self.rc_code = ""                       # Target RC code equals the last evaluated trial RC code.
+        self.sound_file_name = sound_file_name
+        self.sound_file_length = ""
 
     def __str__(self):
         trial_arr = ""
@@ -34,7 +39,8 @@ class Target:
 
 
 class Trial:
-    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S")):
+    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=str(date.today()),
+                 abs_time=datetime.now().strftime("%H:%M:%S"), sound_file_length=""):
         self.id = trial_id                      # unique ID, defined in the main exec loop
         self.target_id = target_id
         self.target_value = target_value
@@ -43,6 +49,7 @@ class Trial:
         self.session_num = session_num
         self.traj_file_name = traj_file_name
         self.abs_time = abs_time
+        self.sound_file_length = sound_file_length
 
     def __str__(self):
         return "Trial: " + str(self.id) + "|" + str(self.target_id) + "/" + str(self.target_value) + "|" \
@@ -114,7 +121,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.trials_file = None             # keeps track of each trajectory file
         self.trial_unique_id = 1
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
-        self.results_folder_path = None        # unique, using date and time
+        self.results_folder_path = None        # Folder for the output files.
+        self.sounds_folder_path = None         # Folder containing input sound files.
         self.path = QPainterPath()
         self.targets = []
         self.stats = {}                     # session stats values, total/completed/remaining targets
@@ -124,6 +132,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
         # Config options:
         self.cyclic_remaining_targets = True    # Controls whether ERROR target returns to end of the targets line
+        self.allow_sound_play = False
 
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
@@ -133,6 +142,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_continue_ssn = self.findChild(QPushButton, 'continue_ssn_btn')
         self.btn_end_ssn = self.findChild(QPushButton, 'end_ssn_btn')
         self.btn_next = self.findChild(QPushButton, 'next_btn')
+        self.btn_play = self.findChild(QPushButton, 'play_btn')
         self.btn_prv = self.findChild(QPushButton, 'prv_btn')
         self.btn_reset = self.findChild(QPushButton, 'reset_btn')
         self.btn_goto = self.findChild(QPushButton, 'goto_btn')
@@ -186,6 +196,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_continue_ssn.clicked.connect(self.f_btn_continue_ssn)
         self.btn_end_ssn.clicked.connect(self.f_btn_end_ssn)
         self.btn_next.clicked.connect(self.f_btn_next)
+        self.btn_play.clicked.connect(self.f_btn_play)
         self.btn_prv.clicked.connect(self.f_btn_prv)
         self.btn_reset.clicked.connect(self.f_btn_reset)
         self.btn_goto.clicked.connect(self.f_btn_goto)
@@ -214,10 +225,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # mark Trial started flag, but only if the ok/error are not checked.
         # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
         if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False:
-            if not self.trial_started:
-                print("Writracker: Starting new trial\n")
-                self.trial_started = True
-                self.set_recording_on()
+            # When we the user chose to play sounds, the trial will start when pressing play, and not when touching the tablet.
+            if not self.trial_started and self.sounds_folder_path is None:
+                self.start_trial()
 
         # write to traj file:
         if self.current_active_trajectory is not None:
@@ -300,6 +310,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             print("Writracker: trajectory file deleted, " + str(self.current_active_trajectory))
             os.remove(str(self.current_active_trajectory))
             self.set_recording_on()
+            if  self.allow_sound_play:
+                self.btn_play.setEnabled(True)
             self.current_active_trajectory.reset_start_time()
             return
         else:
@@ -315,6 +327,24 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.read_next_error_target(read_backwards=False)
         else:
             self.read_next_target()
+        if  self.allow_sound_play:
+            self.btn_play.setEnabled(True)
+
+    def f_btn_play(self):
+        print("play")
+        self.btn_play.setEnabled(False)
+        current_target = self.targets[self.curr_target_index]
+        try:
+            soundfile = os.path.join(self.sounds_folder_path, current_target.sound_file_name)
+            mixer.music.load(soundfile)
+            self.start_trial()
+            mixer.music.play(0)
+            self.targets[self.curr_target_index].sound_file_length = round(MP3(soundfile).info.length, 2)
+        except TypeError:
+            self.show_info_msg("Error!", "Error when trying to access sound file.")
+        except pgerr as message:
+            self.show_info_msg("Error!", "Error when trying to play sound file.")
+
 
     def f_btn_prv(self):
         self.clean_display()
@@ -326,6 +356,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.read_next_error_target(read_backwards=True)
         else:
             self.read_prev_target()
+        if  self.allow_sound_play:
+            self.btn_play.setEnabled(True)
 
     # when pressing any of the radio buttons
     def f_btn_rb(self):
@@ -406,6 +438,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                         return False
 
     #----------------------------------------------------------------------------------
+    # For results folder
     def pop_folder_selector(self):
         while True:
             folder = str(QFileDialog.getExistingDirectory(self, "Select results directory"))
@@ -424,6 +457,26 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 return False
 
     #----------------------------------------------------------------------------------
+    # Show file dialog and choose folder conatining the sound files to be played for each target.
+    def pop_soundfiles_folder(self):
+        while True:
+            folder = str(QFileDialog.getExistingDirectory(self, "Select sound files directory"))
+            if folder:
+                path_ok = os.access(folder, os.W_OK | os.X_OK)
+                if path_ok:
+                    self.sounds_folder_path = folder
+                    self.cfg_window.findChild(QLabel, "label_chosen_folder").setText(self.sounds_folder_path)
+                    return True
+            msg = QMessageBox()
+            answer = msg.question(self, "Error", "The chosen folder is not valid, or doesn't have write permissions \n"
+                                                 "would you like to try another folder?",
+                                  msg.Yes | msg.No, msg.Yes)
+            if answer == msg.Yes:
+                continue
+            else:
+                return False
+
+    # ----------------------------------------------------------------------------------
     # Read the text input in the config window and inserts the values into the combox
     def fill_combox_errors(self):
         errors_input = self.cfg_window.findChild(QLineEdit, "lineedit_error_types").text()
@@ -443,6 +496,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             # Reset, otherwise left for the next time a session is started in the current run:
             self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path: ")
             self.create_dir_copy_targets()
+            if self.sounds_folder_path is not None and self.allow_sound_play:
+                mixer.init()            # must initialize once before playing sound files
+                self.btn_play.setEnabled(True)
+            else:
+                self.allow_sound_play = False
+
         else:
             QMessageBox.about(self, "Configuration error", "Please choose another results folder")
 
@@ -455,7 +514,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         ok_btn = QPushButton("OK")
         ok_btn.clicked.connect(self.check_cfg_before_exit)
         choose_folder_btn = QPushButton("Choose folder")
-        choose_folder_btn.clicked.connect(self.pop_folder_selector)
+        choose_folder_btn.clicked.connect(self.pop_soundfiles_folder)
         label_chosen_folder = QLabel(objectName="label_chosen_folder")
         rbtn = QRadioButton("Yes")
         rbtn.setChecked(True)
@@ -464,7 +523,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         rbtn = QRadioButton("No")
         rbtn.clicked.connect(self.cfg_set_cyclic_targets_off)
         layout_h.addWidget(rbtn)
-        label_results = QLabel("Results files folder:")
+        label_sound_folder = QLabel("Sound files folder (not mandatory):")
         label_cyclic_cfg = QLabel("Continue displaying targets until all the targets were marked as OK?")
         label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
                                    " errors list. \nInsert Error types, divided by commas(',') "
@@ -472,7 +531,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         lineedit_error_types = QLineEdit(objectName="lineedit_error_types")
         lineedit_error_types.setPlaceholderText("Error_Example, Error_example_writing, Error_example_typo, Error_42")
         # Add everything to the the main layout, layout_v (vertical)
-        layout_v.addWidget(label_results)
+        layout_v.addWidget(label_sound_folder)
         layout_v.addWidget(choose_folder_btn)
         layout_v.addWidget(label_chosen_folder)
         layout_v.addWidget(label_cyclic_cfg)
@@ -480,6 +539,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         layout_v.addWidget(label_error_types)
         layout_v.addWidget(lineedit_error_types)
         layout_v.addWidget(ok_btn)
+        if not self.allow_sound_play:
+            choose_folder_btn.setEnabled(False)
+            label_sound_folder.setText("No 'sound_file_name' column in targets file. Sound playing is disabled")
+
         self.cfg_window.setLayout(layout_v)
         self.cfg_window.setGeometry(QRect(100, 200, 100, 100))
         self.cfg_window.setWindowModality(Qt.ApplicationModal)  # Block main windows until OK is pressed
@@ -489,8 +552,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         sc_gm = app.desktop().screenGeometry().center()
         fr_gm.moveCenter(sc_gm)
         self.cfg_window.move(fr_gm.topLeft())
-        self.cfg_window.findChild(QLabel, "label_chosen_folder").setText(
-                                                                 "Path ok: '" + self.results_folder_path + "'\n\n")
 
     #----------------------------------------------------------------------------------
     def cfg_set_cyclic_targets_off(self):
@@ -502,6 +563,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 
     #               -------------------------- rest of the Functions --------------------------
+
+    # start logging data from the tablet. The trigger might come from play button, or tabletEvent
+    def start_trial(self):
+        print("Writracker: Starting new trial\n")
+        self.trial_started = True
+        self.set_recording_on()
 
     #----------------------------------------------------------------------------------
     #todo: move to "io" package
@@ -550,6 +617,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.toggle_buttons(False)
         self.btn_reset.setEnabled(False)
         self.btn_start_ssn.setEnabled(True)
+        self.cfg_window = QWidget()
         # Save files before resetting
         self.save_remaining_targets_file()
         self.save_trials_file()
@@ -576,7 +644,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         with open(self.results_folder_path + os.sep + "trials.csv", mode='w') as trials_file:
             trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
                                                            'session_time', 'session_number', 'absolute_time',
-                                                           'file_name'], lineterminator='\n')
+                                                           'file_name', 'sound_file_length'], lineterminator='\n')
             trials_csv_file.writeheader()
             sorted_trials = []
             for target in self.targets:
@@ -586,18 +654,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             for trial in sorted_trials:
                 row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
                            rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
-                           absolute_time=trial.abs_time, file_name=trial.traj_file_name)
+                           absolute_time=trial.abs_time, file_name=trial.traj_file_name,
+                           sound_file_length=trial.sound_file_length)
                 trials_csv_file.writerow(row)
 
     #----------------------------------------------------------------------------------
     #todo: move to "io" package
     def save_remaining_targets_file(self):
         with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w') as targets_file:
-            targets_file = csv.DictWriter(targets_file, ['target_id', 'target'], lineterminator='\n')
+            targets_file = csv.DictWriter(targets_file, ['target_id', 'target', 'sound_file_name'], lineterminator='\n')
             targets_file.writeheader()
             for target in self.targets:
                 if target.rc_code is not "OK":
-                    row = dict(target_id=target.id, target=target.value)
+                    row = dict(target_id=target.id, target=target.value, sound_file_name=target.sound_file_name)
                     targets_file.writerow(row)
 
     #----------------------------------------------------------------------------------
@@ -610,7 +679,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             rc_code = self.combox_errors.currentText()
         traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
         current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code, 0,
-                              traj_filename, str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S"))  # need to Add current session time value here <---
+                              traj_filename, str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S"),
+                              sound_file_length=current_target.sound_file_length)  # need to Add current session time value here <---
         current_target.trials.append(current_trial)
         current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1
@@ -650,8 +720,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         else:  # read as csv
             df = pd.read_csv(targets_file_path)
         for index, row in df.iterrows():
-            self.targets.append(Target(row["target ID"], row["target value"].strip()))
-            self.combox_targets.addItem(str(row["target ID"])+"-"+str(row["target value"]))
+            if "sound_file_name" in df.columns:
+                self.targets.append(Target(row["target_ID"], row["target_value"].strip(), row["sound_file_name"]))
+                self.allow_sound_play = True
+            else:
+                self.targets.append(Target(row["target_ID"], row["target_value"].strip()))
+                self.allow_sound_play = False # when no sound_file_column, the user is not allowed to choose sounds folder
+            self.combox_targets.addItem(str(row["target_ID"])+"-"+str(row["target_value"]))
 
     #----------------------------------------------------------------------------------
     # toggle radio buttons

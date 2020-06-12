@@ -112,28 +112,31 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_ytilt = 0
         self.pen_y = 0
         self.pen_pressure = 0
-        self.recording_on = False           # used in PaintEvent to catch events and draw
-        self.session_started = False        # Flag - ignore events before session started
-        self.targets_dict = {}              # holds trajectory counter for each target
-        # All files:
+        # All files & paths
         self.targets_file = None            # loaded by user, holds the targets.
         self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
         self.trials_file = None             # keeps track of each trajectory file
-        self.trial_unique_id = 1
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
         self.results_folder_path = None        # Folder for the output files.
         self.sounds_folder_path = None         # Folder containing input sound files.
-        self.path = QPainterPath()
+        # Data structures
         self.targets = []
         self.stats = {}                     # session stats values, total/completed/remaining targets
+        self.targets_dict = {}              # holds trajectory counter for each target
         self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
+        # Counters and settings
+        self.trial_unique_id = 1
+        self.session_start_time = None      # Value assigned when starting a session (f_btn_start_ssn)
         self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
-        self.skip_ok_targets = False        # Controls viewing mode: when True, skip targets where RC = "ok".
-
+        self.recording_on = False           # used in PaintEvent to catch events and draw
+        self.session_started = False        # Flag - ignore events before session started
+        self.current_trial_start_time = None
         # Config options:
         self.cyclic_remaining_targets = True    # Controls whether ERROR target returns to end of the targets line
         self.allow_sound_play = False
+        self.skip_ok_targets = False        # Controls viewing mode: when True, skip targets where RC = "ok".
 
+        self.path = QPainterPath()
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
         self.cfg_window = QWidget()
@@ -274,6 +277,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                             return True
 
                     self.parse_data_dataframe(df)
+                    self.session_start_time = datetime.now().strftime("%H:%M:%S")
                     self.pop_config_menu()
                     self.session_started = True
                     self.toggle_buttons(True)
@@ -295,6 +299,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         if self.choose_targets_file():
             if self.pop_folder_selector():
                 self.pop_config_menu()
+                self.session_start_time = datetime.now().strftime("%H:%M:%S")
                 self.session_started = True
                 self.toggle_buttons(True)
                 self.btn_start_ssn.setEnabled(False)
@@ -568,6 +573,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def start_trial(self):
         print("Writracker: Starting new trial\n")
         self.trial_started = True
+        self.current_trial_start_time = datetime.now().strftime("%H:%M:%S")
         self.set_recording_on()
 
     #----------------------------------------------------------------------------------
@@ -678,9 +684,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         elif self.btn_radio_err.isChecked() is True:
             rc_code = self.combox_errors.currentText()
         traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
-        current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code, 0,
-                              traj_filename, str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S"),
-                              sound_file_length=current_target.sound_file_length)  # need to Add current session time value here <---
+        time_rel = datetime.strptime(self.current_trial_start_time, "%H:%M:%S") - \
+                   datetime.strptime(self.session_start_time,"%H:%M:%S")
+        current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
+                              session_time=time_rel, traj_file_name=traj_filename, session_num=str(date.today()),
+                              abs_time=datetime.now().strftime("%H:%M:%S"),
+                              sound_file_length=current_target.sound_file_length)
         current_target.trials.append(current_trial)
         current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1

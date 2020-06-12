@@ -282,6 +282,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                     self.session_started = True
                     self.toggle_buttons(True)
                     self.btn_start_ssn.setEnabled(False)
+                    self.btn_continue_ssn.setEnabled(False)
                     self.stats_reset()
                     self.stats_update()
                     self.read_next_target()  # read first target
@@ -303,6 +304,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.session_started = True
                 self.toggle_buttons(True)
                 self.btn_start_ssn.setEnabled(False)
+                self.btn_continue_ssn.setEnabled(False)
                 self.stats_reset()
                 self.stats_update()
                 self.read_next_target()  # read first target
@@ -427,20 +429,22 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             if targets_file_path:
                 try:
                     with open(targets_file_path) as self.targets_file:
-                        self.parse_targets(targets_file_path)
+                        if not self.parse_targets(targets_file_path):
+                            raise IOError # bad targets file format
                         self.lbl_targetsfile.setText("<strong> Current targets file Path: </strong><div align=left>"
                                                      + targets_file_path +"</div>")
                         self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path))
                         return True
                 except IOError:
-                    msg = QMessageBox()
-                    answer = msg.question(self, "Error", "Load targets file in order to start the session \n"
-                                                         "would you like to try another file?",
-                                          msg.Yes | msg.No, msg.Yes)
-                    if answer == msg.Yes:
-                        continue
-                    else:
-                        return False
+                    pass  # Handle IOError as general error, like closing the file selector.
+            msg = QMessageBox()
+            answer = msg.question(self, "Error", "Load targets file in order to start the session \n"
+                                                 "would you like to try another file?",
+                                  msg.Yes | msg.No, msg.Yes)
+            if answer == msg.Yes:
+                continue
+            else:
+                return False
 
     #----------------------------------------------------------------------------------
     # For results folder
@@ -584,7 +588,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         df['target'] = df.target.str.strip()  # remove space, might be added by pandas when converted to CSV
         # -- Fill targets list --
         for target in self.targets:  # fill in targets' rc property.
-            if target.value in df.set_index('target').to_dict().keys():
+            if target.value in df.set_index('target').T.to_dict().keys():
                 if target.value in df.set_index('target').query('rc=="OK"', inplace=False).T.to_dict():
                     target.rc_code = "OK"
                 # If the target wasn't marked as OK even once, it's some kind of error. use it's value.
@@ -623,6 +627,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.toggle_buttons(False)
         self.btn_reset.setEnabled(False)
         self.btn_start_ssn.setEnabled(True)
+        self.btn_continue_ssn.setEnabled(True)
         self.cfg_window = QWidget()
         # Save files before resetting
         self.save_remaining_targets_file()
@@ -728,6 +733,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             df = pd.read_excel(targets_file_path)
         else:  # read as csv
             df = pd.read_csv(targets_file_path)
+        if not {'target_ID', 'target_value'}.issubset(set(list(df))): # Check targets file format
+            QMessageBox().warning(None, "Wrong targets file format",
+                                  "targets file must contain the following fields:"
+                                  "'target_ID', 'target_value'.\nOptional field: 'sound_file_name'")
+            return False
         for index, row in df.iterrows():
             if "sound_file_name" in df.columns:
                 self.targets.append(Target(row["target_ID"], row["target_value"].strip(), row["sound_file_name"]))
@@ -736,7 +746,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.targets.append(Target(row["target_ID"], row["target_value"].strip()))
                 self.allow_sound_play = False # when no sound_file_column, the user is not allowed to choose sounds folder
             self.combox_targets.addItem(str(row["target_ID"])+"-"+str(row["target_value"]))
-
+        return True
     #----------------------------------------------------------------------------------
     # toggle radio buttons
     def toggle_rb(self, state):

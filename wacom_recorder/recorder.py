@@ -387,20 +387,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def f_btn_quit(self):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
-        answer = msg.question(self, 'Wait!', "Are you sure you want to quit? ", msg.Yes | msg.No, msg.No)
+        answer = msg.question(self, 'Wait!', "Are you sure you want to quit? \n Opened session will be saved.",
+                              msg.Yes | msg.No, msg.No)
         if answer == msg.Yes:
-            self.save_trials_file()
-            self.save_remaining_targets_file()
-            try:
-                self.targets_file.close()
-            except EnvironmentError:
-                print("Not targets file was closed")
-            try:
-                self.remaining_targets_file.close()
-            except EnvironmentError:
-                print("No remaining targets file was closed")
-            finally:
-                self.close()
+            if self.trial_started is True:
+                self.close_current_trial()
+                self.save_trials_file()
+                self.save_remaining_targets_file()
+            self.close()
 
     def f_btn_end_ssn(self):
         msg = QMessageBox()

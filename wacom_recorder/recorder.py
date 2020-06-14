@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
         self.btn_plus = self.findChild(QPushButton, 'plus_btn')
         self.btn_minus = self.findChild(QPushButton, 'minus_btn')
-        self.menu_choose_targets = self.findChild(QAction, 'actionChoose_start_ssn')
+        self.menu_online_help = self.findChild(QAction, 'actionOnline_help')
         self.menu_quit = self.findChild(QAction, 'actionQuit')
         self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
         self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
@@ -209,8 +209,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_rotate.clicked.connect(self.f_btn_rotate)
         self.btn_plus.clicked.connect(self.f_btn_plus)
         self.btn_minus.clicked.connect(self.f_btn_minus)
-        # self.menu_choose_targets.triggered.connect(self.f_btn_start_ssn)  # not necessary now
         self.menu_quit.triggered.connect(self.f_menu_quit)
+        self.menu_online_help.triggered.connect(self.f_menu_online_help)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
         self.target_id_textedit.setStyleSheet("QTextEdit {color:black}")
         self.tablet_paint_area.fitInView(800, 600, 0, 0, Qt.KeepAspectRatio)  # reset the graphicsView scaling
@@ -257,6 +257,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def f_menu_quit(self):
         self.f_btn_quit()
+
+    def f_menu_online_help(self):
+        qmbox = QMessageBox()
+        qmbox.setWindowTitle("Online help")
+        qmbox.setTextFormat(Qt.RichText)
+        qmbox.setText("<a href='http://mathinklab.org/writracker-recorder/'>"
+                      "Press here to visit WriTracker Recorder website</a>")
+        qmbox.exec()
 
 # This function loads previous session status, and continues it
     def f_btn_continue_ssn(self):

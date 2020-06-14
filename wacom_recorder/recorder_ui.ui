@@ -579,7 +579,7 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
              </size>
             </property>
             <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Starts the session&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Rotate the graphics display view.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string/>
@@ -724,7 +724,6 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
     <property name="title">
      <string>Options</string>
     </property>
-    <addaction name="actionChoose_start_ssn"/>
     <addaction name="actionQuit"/>
     <addaction name="separator"/>
    </widget>

@@ -56,9 +56,7 @@ class Trial:
                + str(self.rc_code) + "|" + self.traj_file_name + str(self.session_time)+"|"+str(self.session_num)+"|"+str(self.abs_time)+"|"
 
 
-#-------------------------------------------------------------------------------------------------------------
-
-
+# -------------------------------------------------------------------------------------------------------------
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
@@ -78,8 +76,12 @@ class Trajectory:
                     self.file_handle.writeheader()
                 else:
                     self.file_handle.writerow(row)
-        except IOError:
-            raise Exception("Error writing trajectory file in:" + self.filepath + os.sep + self.filename+".csv")
+        except (IOError, FileNotFoundError):
+            QMessageBox().critical(None, "Warning! file access error",
+                                   "WriTracker couldn't save Trajectory file. Last trial trajectory"
+                                   " wasn't saved. If the problem repeats, restart the session.",
+                                   QMessageBox.Ok)
+            raise Exception("Error writing trajectory file in:" + self.filepath + os.sep + self.filename + ".csv")
 
     def add_row(self, x_cord, y_cord, pressure, char_num=0, stroke_num=0, pen_down=True):
         time_abs = datetime.now().strftime("%M:%S:%f")[:-2]
@@ -651,38 +653,51 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.skip_ok_targets = False
         self.cyclic_remaining_targets = True
 
-    #----------------------------------------------------------------------------------
-    #todo: move to "io" package
+    # ----------------------------------------------------------------------------------
+    # todo: move to "io" package
+
     def save_trials_file(self):
-        with open(self.results_folder_path + os.sep + "trials.csv", mode='w') as trials_file:
-            trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
-                                                           'session_time', 'session_number', 'absolute_time',
-                                                           'file_name', 'sound_file_length'], lineterminator='\n')
-            trials_csv_file.writeheader()
-            sorted_trials = []
-            for target in self.targets:
-                for trial in target.trials:
-                    sorted_trials.append(trial)
-            sorted_trials.sort(key=lambda x: x.id)    # sort by unique trial ID
-            for trial in sorted_trials:
-                row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
-                           rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
-                           absolute_time=trial.abs_time, file_name=trial.traj_file_name,
-                           sound_file_length=trial.sound_file_length)
-                trials_csv_file.writerow(row)
+        try:
+            with open(self.results_folder_path + os.sep + "trials.csv", mode='w') as trials_file:
+                trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
+                                                               'session_time', 'session_number', 'absolute_time',
+                                                               'file_name', 'sound_file_length'], lineterminator='\n')
+                trials_csv_file.writeheader()
+                sorted_trials = []
+                for target in self.targets:
+                    for trial in target.trials:
+                        sorted_trials.append(trial)
+                sorted_trials.sort(key=lambda x: x.id)    # sort by unique trial ID
+                for trial in sorted_trials:
+                    row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
+                               rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
+                               absolute_time=trial.abs_time, file_name=trial.traj_file_name,
+                               sound_file_length=trial.sound_file_length)
+                    trials_csv_file.writerow(row)
+        except (IOError, FileNotFoundError):
+            QMessageBox().critical(self, "Warning! file access error",
+                                   "WriTracker couldn't save trials file. Last trial information"
+                                   " wasn't saved. If the problem repeats, restart the session.", QMessageBox.Ok)
+    # ----------------------------------------------------------------------------------
+    # todo: move to "io" package
 
-    #----------------------------------------------------------------------------------
-    #todo: move to "io" package
     def save_remaining_targets_file(self):
-        with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w') as targets_file:
-            targets_file = csv.DictWriter(targets_file, ['target_id', 'target', 'sound_file_name'], lineterminator='\n')
-            targets_file.writeheader()
-            for target in self.targets:
-                if target.rc_code is not "OK":
-                    row = dict(target_id=target.id, target=target.value, sound_file_name=target.sound_file_name)
-                    targets_file.writerow(row)
+        try:
+            with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w') as targets_file:
+                targets_file = csv.DictWriter(targets_file, ['target_id', 'target', 'sound_file_name'],
+                                              lineterminator='\n')
+                targets_file.writeheader()
+                for target in self.targets:
+                    if target.rc_code is not "OK":
+                        row = dict(target_id=target.id, target=target.value, sound_file_name=target.sound_file_name)
+                        targets_file.writerow(row)
+        except (IOError, FileNotFoundError):
+            QMessageBox().critical(self, "Warning! file access error",
+                                   "WriTracker couldn't save remaining targets file. Last trial information"
+                                   "wasn't saved. If the problem repeats, restart the session.", QMessageBox.Ok)
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
+
     def close_current_trial(self):
         current_target = self.targets[self.curr_target_index]
         rc_code = "noValue"

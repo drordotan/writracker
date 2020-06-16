@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>500</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>500</width>
+    <height>500</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Writracker Plotter</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <layout class="QVBoxLayout" name="main_v_layout">
+      <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+       <widget class="QLabel" name="logo">
+        <property name="minimumSize">
+         <size>
+          <width>190</width>
+          <height>120</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>190</width>
+          <height>120</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;http://mathinklab.org/writracker/&quot;&gt;&lt;img src=&quot;../img/writracker_logo.png&quot; width=&quot;175&quot; height=&quot;116&quot;/&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+        <property name="openExternalLinks">
+         <bool>true</bool>
+        </property>
+        <property name="textInteractionFlags">
+         <set>Qt::TextBrowserInteraction</set>
+        </property>
+       </widget>
+      </item>
+      <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+       <widget class="QComboBox" name="combox_trials">
+        <property name="minimumSize">
+         <size>
+          <width>350</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>350</width>
+          <height>25</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+         <widget class="QPushButton" name="btn_play">
+          <property name="minimumSize">
+           <size>
+            <width>130</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>130</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>Live play of the chosen trial</string>
+          </property>
+          <property name="text">
+           <string>Play trial</string>
+          </property>
+         </widget>
+        </item>
+        <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+         <widget class="QPushButton" name="btn_convert_gif">
+          <property name="minimumSize">
+           <size>
+            <width>130</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>130</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>Choose output folder, and save the animation to gif (might take up to a minute)</string>
+          </property>
+          <property name="text">
+           <string>Convert to GIF</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeType">
+         <enum>QSizePolicy::Fixed</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>150</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item alignment="Qt::AlignHCenter">
+       <widget class="QPushButton" name="btn_quit">
+        <property name="minimumSize">
+         <size>
+          <width>130</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>130</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Exit Plotter</string>
+        </property>
+        <property name="text">
+         <string>Quit</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>500</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuhelp">
+    <property name="title">
+     <string>help</string>
+    </property>
+    <addaction name="actionOnline_help"/>
+   </widget>
+   <addaction name="menuhelp"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionOnline_help">
+   <property name="text">
+    <string>Online help</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

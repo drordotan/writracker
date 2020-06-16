@@ -10,7 +10,7 @@ setup(name='writracker',
       author_email='dotandro@mail.tau.ac.il',
       license='GPL',
       packages=find_packages(),
-      install_requires=['numpy', 'matplotlib', 'tkinter', 'PySimpleGUI', 'pandas'],
+      install_requires=['numpy', 'matplotlib', 'tkinter', 'PySimpleGUI', 'pandas', 'PyQt5', 'mutagen', 'pygame'],
       classifiers=[
           'Development Status :: 4 - Beta',
           'Intended Audience :: Science/Research',

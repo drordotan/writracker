@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1114</width>
-    <height>837</height>
+    <height>845</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -347,7 +347,7 @@ border-color: rgb(255, 0, 0);</string>
            <string>Discard current trajectory and repeat current target</string>
           </property>
           <property name="text">
-           <string>Reset current target</string>
+           <string>Reset trial</string>
           </property>
           <property name="icon">
            <iconset>
@@ -717,7 +717,7 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
      <x>0</x>
      <y>0</y>
      <width>1114</width>
-     <height>21</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuChoose_targets_file">

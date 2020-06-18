@@ -526,7 +526,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         layout_h = QHBoxLayout()
         ok_btn = QPushButton("OK")
         ok_btn.clicked.connect(self.check_cfg_before_exit)
-        choose_folder_btn = QPushButton("Choose folder")
+        choose_folder_btn = QPushButton("Press here to choose Mp3 files folder")
         choose_folder_btn.clicked.connect(self.pop_soundfiles_folder)
         label_chosen_folder = QLabel(objectName="label_chosen_folder")
         rbtn = QRadioButton("Yes")
@@ -540,9 +540,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         label_cyclic_cfg = QLabel("Continue displaying targets until all the targets were marked as OK?")
         label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
                                    " errors list. \nInsert Error types, divided by commas(',') "
-                                   "or leave empty to tag as 'Error'")
+                                   "or leave empty to use default error types")
         lineedit_error_types = QLineEdit(objectName="lineedit_error_types")
-        lineedit_error_types.setPlaceholderText("Error_Example, Error_example_writing, Error_example_typo, Error_42")
+        lineedit_error_types.setPlaceholderText("Spelling, Motor, Incomplete")
         # Add everything to the the main layout, layout_v (vertical)
         layout_v.addWidget(label_sound_folder)
         layout_v.addWidget(choose_folder_btn)

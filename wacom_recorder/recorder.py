@@ -105,8 +105,6 @@ def _null_converter(v):
 #-------------------------------------------------------------------------------------------------------------
 
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
-    newPoint = pyqtSignal(QPoint)
-
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.title = "WriTracker Recorder"
@@ -225,7 +223,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         if self.session_started is False:
             tabletEvent.accept()
             return  # ignore events before session started
-        self.pen_x = tabletEvent.globalX()
+        self.pen_x = app.desktop().screenGeometry().right() - tabletEvent.globalX()  # Fix tablet mirroring-flip X axis
         self.pen_y = tabletEvent.globalY()
         self.pen_pressure = int(tabletEvent.pressure() * 100)
         self.pen_xtilt = tabletEvent.xTilt()
@@ -233,7 +231,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # mark Trial started flag, but only if the ok/error are not checked.
         # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
         if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False:
-            # When we the user chose to play sounds, the trial will start when pressing play, and not when touching the tablet.
+            # When we the user chose to play sounds
+            # the trial will start when pressing play, and not when touching the tablet.
             if not self.trial_started and self.sounds_folder_path is None:
                 self.start_trial()
 
@@ -246,7 +245,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         elif tabletEvent.type() == QTabletEvent.TabletMove:
             self.pen_is_down = True
             self.path.lineTo(tabletEvent.pos())
-            self.newPoint.emit(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletRelease:
             self.pen_is_down = False
         tabletEvent.accept()

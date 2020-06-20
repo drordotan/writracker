@@ -487,6 +487,9 @@ border-color: rgb(255, 0, 0);</string>
         </property>
         <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
          <widget class="QPushButton" name="end_ssn_btn">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="minimumSize">
            <size>
             <width>175</width>

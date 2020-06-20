@@ -295,6 +295,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                     self.session_started = True
                     self.toggle_buttons(True)
                     self.menu_add_error.setEnabled(True)
+                    self.btn_end_ssn.setEnabled(True)
                     self.btn_start_ssn.setEnabled(False)
                     self.btn_continue_ssn.setEnabled(False)
                     self.stats_reset()
@@ -318,6 +319,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.session_started = True
                 self.toggle_buttons(True)
                 self.menu_add_error.setEnabled(True)
+                self.btn_end_ssn.setEnabled(True)
                 self.btn_start_ssn.setEnabled(False)
                 self.btn_continue_ssn.setEnabled(False)
                 self.stats_reset()
@@ -523,7 +525,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         else:
             QMessageBox.about(self, "Configuration error", "Please choose another results folder")
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # This function creates & shows the configuration window, before starting a session.
     def pop_config_menu(self):
         self.cfg_window.setWindowTitle("Session configuration")
@@ -534,15 +536,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         choose_folder_btn = QPushButton("Press here to choose Mp3 files folder")
         choose_folder_btn.clicked.connect(self.pop_soundfiles_folder)
         label_chosen_folder = QLabel(objectName="label_chosen_folder")
-        rbtn = QRadioButton("Yes")
+        rbtn = QRadioButton("Display them again at the end of the list.\nContinue until all targets are marked as OK.")
         rbtn.setChecked(True)
         rbtn.clicked.connect(self.cfg_set_cyclic_targets_on)
         layout_h.addWidget(rbtn)
-        rbtn = QRadioButton("No")
+        layout_h.addStretch()
+        rbtn = QRadioButton("Don't display error trials again")
         rbtn.clicked.connect(self.cfg_set_cyclic_targets_off)
         layout_h.addWidget(rbtn)
         label_sound_folder = QLabel("Sound files folder (not mandatory):")
-        label_cyclic_cfg = QLabel("Continue displaying targets until all the targets were marked as OK?")
+        label_cyclic_cfg = QLabel("What should I do with targets marked as errors?")
         label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
                                    " errors list. \nInsert Error types, divided by commas(',') "
                                    "or leave empty to use default error types")
@@ -571,7 +574,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         fr_gm.moveCenter(sc_gm)
         self.cfg_window.move(fr_gm.topLeft())
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def cfg_set_cyclic_targets_off(self):
         self.cyclic_remaining_targets = False
 
@@ -636,6 +639,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.toggle_buttons(False)
         self.btn_reset.setEnabled(False)
         self.menu_add_error.setEnabled(False)
+        self.btn_end_ssn.setEnabled(False)
         self.btn_start_ssn.setEnabled(True)
         self.btn_continue_ssn.setEnabled(True)
         self.cfg_window = QWidget()

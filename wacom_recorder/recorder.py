@@ -944,19 +944,25 @@ def check_if_tablet_connected_mac():
 # Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
 # The check isn't blocking the program from running - for the case the device status is not 100% reliable.
 def check_if_tablet_connected_windows():
-    device_list = subprocess.getoutput(
-        "PowerShell -Command \"& {Get-PnpDevice | Select-Object Status,FriendlyName | ConvertTo-Json}\"")
-    devices_parsed = json.loads(device_list)
-    for dev in devices_parsed:
-        if str(dev['FriendlyName']).find("Wacom") == 0:
-            if str(dev['Status']) != "OK":
-                QMessageBox().critical(None, "No Tablet Detected", "Could not verify a connection to a Wacom tablet.\n"
-                                                                   "Please make sure a tablet is connected.\n"
-                                                                   "You may proceed, but unexpected errors may occur")
-                return False
-            else:
-                return True
-
+    try:
+        device_list = subprocess.getoutput(
+            "PowerShell -Command \"& {Get-PnpDevice | Select-Object Status,FriendlyName | ConvertTo-Json}\"")
+        devices_parsed = json.loads(device_list)
+        for dev in devices_parsed:
+            if str(dev['FriendlyName']).find("Wacom") == 0:
+                if str(dev['Status']) != "OK":
+                    QMessageBox().critical(None, "No Tablet Detected",
+                                           "Could not verify a connection to a Wacom tablet."
+                                           "\nPlease make sure a tablet is connected.\n"
+                                           "You may proceed, but unexpected errors may occur")
+                    return False
+                else:
+                    return True
+    except (UnicodeDecodeError, KeyError, TimeoutError):
+        QMessageBox.about(None, "Could not check if tablet is connected",
+                          "The program could not perform the tablet connection check.\n"
+                          "Make sure the tablet is connected")
+        return False
 
 #---------------------------------------------------------------------------------------------------------
 

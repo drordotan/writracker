@@ -70,7 +70,7 @@ class Trajectory:
 
     def open_traj_file(self, row):
         try:
-            with open(self.full_path, mode='a+') as traj_file:
+            with open(self.full_path, mode='a+', encoding='utf-8') as traj_file:
                 self.file_handle = csv.DictWriter(traj_file, ['x', 'y', 'pressure', 'time'], lineterminator='\n')
                 if row == "header":
                     self.file_handle.writeheader()
@@ -658,7 +658,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def save_trials_file(self):
         try:
-            with open(self.results_folder_path + os.sep + "trials.csv", mode='w') as trials_file:
+            with open(self.results_folder_path + os.sep + "trials.csv", mode='w', encoding='utf-8') as trials_file:
                 trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
                                                                'session_time', 'session_number', 'absolute_time',
                                                                'file_name', 'sound_file_length'], lineterminator='\n')
@@ -683,7 +683,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     def save_remaining_targets_file(self):
         try:
-            with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w') as targets_file:
+            with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w', encoding='utf-8') as targets_file:
                 targets_file = csv.DictWriter(targets_file, ['target_id', 'target', 'sound_file_name'],
                                               lineterminator='\n')
                 targets_file.writeheader()

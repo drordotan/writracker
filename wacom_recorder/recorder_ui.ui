@@ -364,6 +364,22 @@ border-color: rgb(255, 0, 0);</string>
            <enum>QLayout::SetDefaultConstraint</enum>
           </property>
           <item>
+           <widget class="QComboBox" name="combobox_targets">
+            <property name="minimumSize">
+             <size>
+              <width>75</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>75</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="goto_btn">
             <property name="enabled">
              <bool>false</bool>
@@ -385,22 +401,6 @@ border-color: rgb(255, 0, 0);</string>
             </property>
             <property name="text">
              <string>Go to</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="combobox_targets">
-            <property name="minimumSize">
-             <size>
-              <width>75</width>
-              <height>25</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>75</width>
-              <height>16777215</height>
-             </size>
             </property>
            </widget>
           </item>
@@ -717,7 +717,7 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
      <x>0</x>
      <y>0</y>
      <width>1114</width>
-     <height>26</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuChoose_targets_file">

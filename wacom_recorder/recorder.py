@@ -381,7 +381,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.toggle_buttons(True)
 
     def f_btn_goto(self):
-        target_id = int(self.combox_targets.currentText().split("-")[0])
+        target_id = self.combox_targets.currentText().split("-")[0]
         target_index = 0
         self.clean_display()
         if self.trial_started is True:
@@ -389,7 +389,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.trial_started = False
         self.toggle_rb(False)
         for target in self.targets: # searching for the correct Array index matching the target id
-            if int(target.id) == target_id:
+            if target.id == target_id:
                 break
             target_index += 1
         self.read_next_target(from_goto=True, goto_index=int(target_index))

@@ -724,7 +724,7 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
     <property name="title">
      <string>Options</string>
     </property>
-    <addaction name="actionQuit"/>
+    <addaction name="actionAddError"/>
     <addaction name="separator"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
@@ -742,9 +742,12 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
     <string>Start Session</string>
    </property>
   </action>
-  <action name="actionQuit">
+  <action name="actionAddError">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
-    <string>Quit</string>
+    <string>Add Error type</string>
    </property>
   </action>
   <action name="actionOnline_help">

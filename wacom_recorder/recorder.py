@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_plus = self.findChild(QPushButton, 'plus_btn')
         self.btn_minus = self.findChild(QPushButton, 'minus_btn')
         self.menu_online_help = self.findChild(QAction, 'actionOnline_help')
-        self.menu_quit = self.findChild(QAction, 'actionQuit')
+        self.menu_add_error = self.findChild(QAction, 'actionAddError')
         self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
         self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
         self.combox_errors = self.findChild(QComboBox, 'combobox_errortype')
@@ -211,7 +211,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_rotate.clicked.connect(self.f_btn_rotate)
         self.btn_plus.clicked.connect(self.f_btn_plus)
         self.btn_minus.clicked.connect(self.f_btn_minus)
-        self.menu_quit.triggered.connect(self.f_menu_quit)
+        self.menu_add_error.triggered.connect(self.f_menu_add_error)
         self.menu_online_help.triggered.connect(self.f_menu_online_help)
         self.target_textedit.setStyleSheet("QTextEdit {color:red}")
         self.target_id_textedit.setStyleSheet("QTextEdit {color:black}")
@@ -257,8 +257,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def f_btn_rotate(self):
         self.tablet_paint_area.rotate(90)
 
-    def f_menu_quit(self):
-        self.f_btn_quit()
+    def f_menu_add_error(self):
+        new_error, ok = QInputDialog.getText(self, "Insert new error type", "Type the new error and press OK \n"
+                                                                            "The new error will be added to the list")
+        if ok:
+            self.combox_errors.addItem(new_error.strip())
 
     def f_menu_online_help(self):
         qmbox = QMessageBox()
@@ -291,6 +294,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                     self.pop_config_menu()
                     self.session_started = True
                     self.toggle_buttons(True)
+                    self.menu_add_error.setEnabled(True)
                     self.btn_start_ssn.setEnabled(False)
                     self.btn_continue_ssn.setEnabled(False)
                     self.stats_reset()
@@ -313,6 +317,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.session_start_time = datetime.now().strftime("%H:%M:%S")
                 self.session_started = True
                 self.toggle_buttons(True)
+                self.menu_add_error.setEnabled(True)
                 self.btn_start_ssn.setEnabled(False)
                 self.btn_continue_ssn.setEnabled(False)
                 self.stats_reset()
@@ -630,6 +635,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.lbl_targetsfile.clear()
         self.toggle_buttons(False)
         self.btn_reset.setEnabled(False)
+        self.menu_add_error.setEnabled(False)
         self.btn_start_ssn.setEnabled(True)
         self.btn_continue_ssn.setEnabled(True)
         self.cfg_window = QWidget()

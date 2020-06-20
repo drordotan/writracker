@@ -99,6 +99,9 @@ def is_windows():
     return os.name == 'nt'
 
 
+def _null_converter(v):
+    return str(v)
+
 #-------------------------------------------------------------------------------------------------------------
 
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
@@ -533,19 +536,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         layout_h = QHBoxLayout()
         ok_btn = QPushButton("OK")
         ok_btn.clicked.connect(self.check_cfg_before_exit)
-        choose_folder_btn = QPushButton("Press here to choose Mp3 files folder")
+        choose_folder_btn = QPushButton("Choose folder with MP3 files")
         choose_folder_btn.clicked.connect(self.pop_soundfiles_folder)
         label_chosen_folder = QLabel(objectName="label_chosen_folder")
-        rbtn = QRadioButton("Display them again at the end of the list.\nContinue until all targets are marked as OK.")
+        rbtn = QRadioButton("Only trials that were coded as 'OK'.")
         rbtn.setChecked(True)
         rbtn.clicked.connect(self.cfg_set_cyclic_targets_on)
         layout_h.addWidget(rbtn)
         layout_h.addStretch()
-        rbtn = QRadioButton("Don't display error trials again")
+        rbtn = QRadioButton("Any trial that was presented and coded (including errors)")
         rbtn.clicked.connect(self.cfg_set_cyclic_targets_off)
         layout_h.addWidget(rbtn)
         label_sound_folder = QLabel("Sound files folder (not mandatory):")
-        label_cyclic_cfg = QLabel("What should I do with targets marked as errors?")
+        label_cyclic_cfg = QLabel("Which trials should be considered as completed (and not displayed again by default)?")
         label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
                                    " errors list. \nInsert Error types, divided by commas(',') "
                                    "or leave empty to use default error types")
@@ -756,15 +759,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     #todo: move to "io" package
     # Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
     def parse_targets(self, targets_file_path):
-        if targets_file_path.split('.')[1] != "csv":    # read as excel file
-            df = pd.read_excel(targets_file_path)
+        converters = dict(target_id=_null_converter, target=_null_converter, sound_file_name=_null_converter)
+        if targets_file_path.lower().split('.')[-1] != "csv":    # read as excel file
+            df = pd.read_excel(targets_file_path, converters=converters)
         else:  # read as csv
-            df = pd.read_csv(targets_file_path)
+            df = pd.read_csv(targets_file_path, converters=converters)
+
         if not {'target_id', 'target'}.issubset(set(list(df))): # Check targets file format
             QMessageBox().warning(None, "Wrong targets file format",
                                   "targets file must contain the following fields:"
                                   "'target_id', 'target'.\nOptional field: 'sound_file_name'")
             return False
+
         for index, row in df.iterrows():
             if "sound_file_name" in df.columns:
                 self.targets.append(Target(row["target_id"], row["target"].strip(), row["sound_file_name"]))
@@ -773,6 +779,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.targets.append(Target(row["target_id"], row["target"].strip()))
                 self.allow_sound_play = False # when no sound_file_column, the user is not allowed to choose sounds folder
             self.combox_targets.addItem(str(row["target_id"])+"-"+str(row["target"]))
+
         return True
     #----------------------------------------------------------------------------------
     # toggle radio buttons

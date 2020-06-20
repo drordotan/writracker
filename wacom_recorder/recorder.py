@@ -19,9 +19,9 @@ import pandas as pd             # read excel file input, reloading session
 #todo: move these classes to recorder.io module
 
 class Target:
-    def __init__(self, target_id, target_value, sound_file_name="", next_trial_id=1):
+    def __init__(self, target_id, target, sound_file_name="", next_trial_id=1):
         self.id = target_id
-        self.value = target_value
+        self.value = target
         self.trials = []
         self.next_trial_id = next_trial_id      # this is actually the INDEX of the next trial in trials array
         self.rc_code = ""                       # Target RC code equals the last evaluated trial RC code.
@@ -39,21 +39,21 @@ class Target:
 
 
 class Trial:
-    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=str(date.today()),
+    def __init__(self, trial_id, target_id, target, rc_code, time_in_session, traj_file_name, date=str(date.today()),
                  abs_time=datetime.now().strftime("%H:%M:%S"), sound_file_length=""):
         self.id = trial_id                      # unique ID, defined in the main exec loop
         self.target_id = target_id
-        self.target_value = target_value
+        self.target = target
         self.rc_code = rc_code
-        self.session_time = session_time
-        self.session_num = session_num
+        self.time_in_session = time_in_session
+        self.date = date
         self.traj_file_name = traj_file_name
         self.abs_time = abs_time
         self.sound_file_length = sound_file_length
 
     def __str__(self):
-        return "Trial: " + str(self.id) + "|" + str(self.target_id) + "/" + str(self.target_value) + "|" \
-               + str(self.rc_code) + "|" + self.traj_file_name + str(self.session_time)+"|"+str(self.session_num)+"|"+str(self.abs_time)+"|"
+        return "Trial: " + str(self.id) + "|" + str(self.target_id) + "/" + str(self.target) + "|" \
+               + str(self.rc_code) + "|" + self.traj_file_name + str(self.time_in_session)+"|"+str(self.date)+"|"+str(self.abs_time)+"|"
 
 
 # -------------------------------------------------------------------------------------------------------------
@@ -607,12 +607,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 trials_dict = df.set_index('trial_id').query('target==' + "'" + str(target.value) + "'",
                                                              inplace=False).T.to_dict()
                 for key in trials_dict.keys():
-                    tmp_trial = Trial(trial_id=key, target_id=target.id, target_value=target.value,
+                    tmp_trial = Trial(trial_id=key, target_id=target.id, target=target.value,
                                       rc_code=trials_dict[key]['rc'],
-                                      session_time=trials_dict[key]['session_time'],
-                                      session_num=trials_dict[key]['session_number'],
+                                      time_in_session=trials_dict[key]['time_in_session'],
+                                      date=trials_dict[key]['date'],
                                       traj_file_name=trials_dict[key]['file_name'],
-                                      abs_time=trials_dict[key]['absolute_time'])
+                                      abs_time=trials_dict[key]['time_in_day'])
                     target.trials.append(tmp_trial)
         return True
 
@@ -660,7 +660,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         try:
             with open(self.results_folder_path + os.sep + "trials.csv", mode='w', encoding='utf-8') as trials_file:
                 trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
-                                                               'session_time', 'session_number', 'absolute_time',
+                                                               'time_in_session', 'date', 'time_in_day',
                                                                'file_name', 'sound_file_length'], lineterminator='\n')
                 trials_csv_file.writeheader()
                 sorted_trials = []
@@ -669,9 +669,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                         sorted_trials.append(trial)
                 sorted_trials.sort(key=lambda x: x.id)    # sort by unique trial ID
                 for trial in sorted_trials:
-                    row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
-                               rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
-                               absolute_time=trial.abs_time, file_name=trial.traj_file_name,
+                    row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,
+                               rc=trial.rc_code, time_in_session=trial.time_in_session, date=trial.date,
+                               time_in_day=trial.abs_time, file_name=trial.traj_file_name,
                                sound_file_length=trial.sound_file_length)
                     trials_csv_file.writerow(row)
         except (IOError, FileNotFoundError):
@@ -709,7 +709,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         time_rel = datetime.strptime(self.current_trial_start_time, "%H:%M:%S") - \
                    datetime.strptime(self.session_start_time,"%H:%M:%S")
         current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
-                              session_time=time_rel, traj_file_name=traj_filename, session_num=str(date.today()),
+                              time_in_session=time_rel, traj_file_name=traj_filename, date=str(date.today()),
                               abs_time=datetime.now().strftime("%H:%M:%S"),
                               sound_file_length=current_target.sound_file_length)
         current_target.trials.append(current_trial)
@@ -750,19 +750,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             df = pd.read_excel(targets_file_path)
         else:  # read as csv
             df = pd.read_csv(targets_file_path)
-        if not {'target_ID', 'target_value'}.issubset(set(list(df))): # Check targets file format
+        if not {'target_id', 'target'}.issubset(set(list(df))): # Check targets file format
             QMessageBox().warning(None, "Wrong targets file format",
                                   "targets file must contain the following fields:"
-                                  "'target_ID', 'target_value'.\nOptional field: 'sound_file_name'")
+                                  "'target_id', 'target'.\nOptional field: 'sound_file_name'")
             return False
         for index, row in df.iterrows():
             if "sound_file_name" in df.columns:
-                self.targets.append(Target(row["target_ID"], row["target_value"].strip(), row["sound_file_name"]))
+                self.targets.append(Target(row["target_id"], row["target"].strip(), row["sound_file_name"]))
                 self.allow_sound_play = True
             else:
-                self.targets.append(Target(row["target_ID"], row["target_value"].strip()))
+                self.targets.append(Target(row["target_id"], row["target"].strip()))
                 self.allow_sound_play = False # when no sound_file_column, the user is not allowed to choose sounds folder
-            self.combox_targets.addItem(str(row["target_ID"])+"-"+str(row["target_value"]))
+            self.combox_targets.addItem(str(row["target_id"])+"-"+str(row["target"]))
         return True
     #----------------------------------------------------------------------------------
     # toggle radio buttons
@@ -832,11 +832,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.update()               # update view after re-declare
 
     #----------------------------------------------------------------------------------
-    def update_target_textfields(self, target_value, target_id):
+    def update_target_textfields(self, target, target_id):
         self.target_textedit.clear()
         self.target_id_textedit.clear()
         self.target_textedit.setAlignment(Qt.AlignCenter)  # Must set the alignment right before appending text
-        self.target_textedit.insertPlainText(target_value)
+        self.target_textedit.insertPlainText(target)
         self.target_id_textedit.setAlignment(Qt.AlignCenter)  # Must set the alignment right before appending text
         self.target_id_textedit.insertPlainText(str(target_id))
 

@@ -7,7 +7,8 @@ import os
 import numpy as np
 from collections import namedtuple
 import data
-#import dataiooldrecorder
+from encoder import dataiooldrecorder
+from encoder import trialcoder
 
 # noinspection PyProtectedMember
 from encoder.dataiooldrecorder import _parse_config_int_value, _parse_config_float_value
@@ -47,6 +48,11 @@ def load_experiment(dir_name):
 
 
 #-------------------------------------------------------------------------------------
+
+"""
+***Unused!
+
+
 def save_experiment(exp, dir_name):
 
     dataiooldrecorder.reset_trial_info_file(dir_name)
@@ -56,7 +62,7 @@ def save_experiment(exp, dir_name):
                               trial.response, trial.session_time, trial.rc, trial.self_correction)
         _set_char_num_in_each_stroke(trial)
         save_trajectory(trial.strokes, trial.trial_id, trial.sub_trial_num, dir_name)
-
+"""
 
 #-------------------------------------------------
 def _set_char_num_in_each_stroke(trial):
@@ -92,13 +98,54 @@ def save_trajectory(strokes, trial_id, sub_trial_num, out_dir, trial):
             stroke_num += 1
             for dot in stroke.trajectory:
                 row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down='1' if stroke.on_paper else '0',
-                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t), correction = trial.self_correction)
+                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t), correction = stroke.correction)
                 writer.writerow(row)
 
     return filename
 
 
 #-------------------------------------------------------------------------------------
+
+def save_strokes_file(strokes, trial_id, sub_trial_num, out_dir, trial):
+
+    filename = "{:}/Encoded_Strokes.csv".format(out_dir)
+    index_fn = out_dir + os.sep + 'Encoded_Strokes.csv'
+    file_exists = os.path.isfile(index_fn)
+
+    with open(filename, 'a' if file_exists else 'w') as fp:
+        writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'stroke', 'correction'], lineterminator='\n')
+        if not file_exists:
+            writer.writeheader()
+        stroke_num = 0
+        for stroke in strokes:
+            stroke_num += 1
+            row = dict(trial_id = trial_id, char_num=stroke.char_num, stroke=stroke_num, correction=stroke.correction)
+            writer.writerow(row)
+    return filename
+
+
+# -------------------------------------------------------------------------------------
+
+def save_characters_file(characters, strokes, trial_id, sub_trial_num, out_dir, trial):
+
+
+    index_fn = out_dir + os.sep + 'encoded_characters.csv'
+    file_exists = os.path.isfile(index_fn)
+
+    filename = "{:}/encoded_characters.csv".format(out_dir)
+    with open(filename, 'a' if file_exists else 'w') as fp:
+        writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'correction'], lineterminator='\n')
+        if not file_exists:
+            writer.writeheader()
+        char_num = 0
+        for c in characters:
+            char_num += 1
+            row = dict(trial_id = trial_id, char_num=c.char_num, correction= c.correction)
+            writer.writerow(row)
+    return filename
+
+#-------------------------------------------------------------------------------------
+
 def _load_trajectory_filenames(dir_name):
     """ Load the names of all trajectory files in the given directory """
 

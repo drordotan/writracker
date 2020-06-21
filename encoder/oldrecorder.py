@@ -61,7 +61,7 @@ def run():
             messagebox.showinfo('Please choose another output directory or rename the file')
             return
 
-        dataiooldrecorder.reset_trial_info_file(out_dir)
+        twio.reset_trial_info_file(out_dir)
 
     record(targets, out_dir, start_acquisition_on=config['start_acquisition_on'], beep_on_start=config['beep_on_start'])
 

@@ -176,6 +176,8 @@ class Stroke(object):
         self.on_paper = on_paper
         self.char_num = char_num
         self.trajectory = trajectory
+        self.correction = 0
+
 
 
     @property

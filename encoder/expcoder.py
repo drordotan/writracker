@@ -6,7 +6,7 @@ import PySimpleGUI as sg
 from tkinter import messagebox
 import tkinter as tk
 import traceback
-import data
+from encoder import dataiooldrecorder
 from encoder import *
 from encoder.trialcoder import encode_one_trial as _markup_one_trial
 import uiutil as uiu
@@ -24,17 +24,22 @@ def run():
     raw_exp = _load_raw_exp_ui()
     if raw_exp is None:
         return
-    results_dir = uiu.choose_directory('Select the directory for the results (coded data) hello')
+
+    results_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
+    #results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
     if results_dir is None or results_dir == '':
         return
 
     which_trials_to_code = _trials_to_code(raw_exp, results_dir)
 
     if isinstance(which_trials_to_code, int):
-        trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
+        trial_to_start_from = which_trials_to_code-2
+        trials_to_code = raw_exp.trials
+        # trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
 
     elif which_trials_to_code:
         trials_to_code = raw_exp.trials
+        trial_to_start_from = 0
 
     else:
         return
@@ -46,10 +51,17 @@ def run():
 
 
 #-------------------------------------------------------------------------------------
+
+def current_trial_index(trials, trial_to_start_from):
+    return trials, trial_to_start_from
+
+
+#-------------------------------------------------------------------------------------
 def _load_raw_exp_ui():
 
     while True:
-        raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
+        raw_dir = r'C:\Users\Ron\Documents\GitHub\new\raw'
+        #raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
         if raw_dir is None or raw_dir == '':
             return None
 
@@ -80,9 +92,6 @@ def _trials_to_code(raw_exp, coded_dir):
     raw_trial_nums = tuple(sorted([t.trial_id for t in raw_exp.trials]))
 
 
-    print("coded dir is: " + str(coded_dir))
-    print(raw_exp)
-
     if not os.path.isfile(dataio.trial_index_filename(coded_dir)):
         #-- There is no index file - coding has not started yet
         print("no index file")
@@ -90,11 +99,7 @@ def _trials_to_code(raw_exp, coded_dir):
 
     coded_trials = dataio.load_trials_index(coded_dir)
     coded_trial_nums = tuple(sorted(set([t['trial_id'] for t in coded_trials])))
-    print(coded_trial_nums)
-    print(coded_trials)
-    print("value error")
     max_coded = max(coded_trial_nums)
-    print("max coded: " + str(max_coded))
 
     #-- All trials were already coded
     if raw_trial_nums == coded_trial_nums:
@@ -141,98 +146,9 @@ def _trials_to_code(raw_exp, coded_dir):
 
 
 #-------------------------------------------------------------------------------------
-def run_mccloskey():
-    """
-    Run the app with full UI. Ask the user for any relevant info.
-    Input files are in McCloskey's format.
-    """
-    root = tk.Tk()
-    root.withdraw()
-
-    raw_dir = uiu.choose_directory('Select the directory with the experiment raw data')
-    print("raw dir is: " + str(raw_dir))
-    #raw_dir = "C:\Users\Ron\Documents\GitHub\new\raw"
-    if raw_dir is None:
-
-        return
-
-    prefixes = _get_mccloskey_prefixes(raw_dir)
-
-    if prefixes is None:
-        return
-
-    results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
-    #results_dir = "C:\Users\Ron\Documents\GitHub\new\results"
-    if results_dir is None:
-        return
-    rc = messagebox.askokcancel('Validate',
-                                'Input directory: ' + raw_dir +
-                                '\nResults directory: ' + results_dir +
-                                '\nPlease double-check this. Any existing data in the results directory may be overriden.')
-    if not rc:
-        return
-
-    raw_exp = mccloskey.rawreader.load_experiment(raw_dir, prefixes)
-
-    which_trials_to_code = _trials_to_code(raw_exp, results_dir)
-    if isinstance(which_trials_to_code, int):
-        trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
-
-    elif which_trials_to_code:
-        trials_to_code = raw_exp.trials
-
-    else:
-        return
-
-    try:
-        code_experiment(trials_to_code, results_dir)
-    except Exception as e:
-        traceback.print_exc()
-        messagebox.showerror('Error in coding app', str(e))
 
 
 
-#-------------------------------------------------------------------------------------
-def _get_mccloskey_prefixes(dir_name):
-
-    all_prefixes = mccloskey.rawreader.get_existing_prefixes(dir_name)
-    if len(all_prefixes) == 0:
-        messagebox.showerror('Invalid directory', 'No raw data was found in the selected directory')
-        return None
-
-    all_prefixes = list(all_prefixes)
-
-    layout = [
-        [sg.Text('Choose the file prefixes you want to include, in order:', font=('Arial', 18))],
-    ]
-
-    for i, prefix in enumerate(all_prefixes):
-        desc = sg.Text("{:}. ".format(i + 1), font=('Arial', 18))
-        selection = sg.DropDown(['-'] + all_prefixes, readonly=True)
-        layout.append([desc, selection])
-
-    layout.append([sg.Button('OK'), sg.Button('Cancel')])
-
-    while True:
-        window = sg.Window('Choose sessions for markup', layout)
-        event, values = window.Read()
-
-        window.Close()
-
-        if event is None or event == 'Cancel':
-            return None
-
-        selected_prefixes = [v for v in values.values() if v is not None and v != '-']
-        print(selected_prefixes)
-
-        if len(selected_prefixes) == len(set(selected_prefixes)):
-            #-- OK, no duplicates
-            return selected_prefixes
-
-        messagebox.showerror('Invalid selection', 'Please do not selecte the same file prefix twice')
-
-
-#-------------------------------------------------------------------------------------
 def code_experiment(trials, out_dir):
 
     print("trials are: " + str(trials))
@@ -251,8 +167,8 @@ def code_experiment(trials, out_dir):
             break
 
         elif rc == 'next':
-            if i == (len(trials)-1):
-                continue
+            # f i == (len(trials)-1):
+            #     continue
             i += 1
 
 
@@ -322,3 +238,98 @@ def _open_choose_trial(curr_trial, all_trials):
 
         else:
             return curr_trial
+
+
+'''def run_mccloskey():
+    """
+    Run the app with full UI. Ask the user for any relevant info.
+    Input files are in McCloskey's format.
+    """
+    root = tk.Tk()
+    root.withdraw()
+
+    raw_dir = uiu.choose_directory('Select the directory with the experiment raw data')
+    print("raw dir is: " + str(raw_dir))
+    if raw_dir is None:
+
+        return
+
+    prefixes = _get_mccloskey_prefixes(raw_dir)
+
+    if prefixes is None:
+        return
+
+    results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
+    if results_dir is None:
+        return
+    rc = messagebox.askokcancel('Validate',
+                                'Input directory: ' + raw_dir +
+                                '\nResults directory: ' + results_dir +
+                                '\nPlease double-check this. Any existing data in the results directory may be overriden.')
+    if not rc:
+        return
+
+    raw_exp = mccloskey.rawreader.load_experiment(raw_dir, prefixes)
+
+    which_trials_to_code = _trials_to_code(raw_exp, results_dir)
+    if isinstance(which_trials_to_code, int):
+        trial_to_start_from = which_trials_to_code
+        trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
+
+
+    elif which_trials_to_code:
+        trials_to_code = raw_exp.trials
+
+    else:
+        return
+
+    try:
+        code_experiment(trials_to_code, results_dir,trial_to_start_from )
+    except Exception as e:
+        traceback.print_exc()
+        messagebox.showerror('Error in coding app', str(e))'''
+
+
+
+#-------------------------------------------------------------------------------------
+'''def _get_mccloskey_prefixes(dir_name):
+
+    all_prefixes = mccloskey.rawreader.get_existing_prefixes(dir_name)
+    if len(all_prefixes) == 0:
+        messagebox.showerror('Invalid directory', 'No raw data was found in the selected directory')
+        return None
+
+    all_prefixes = list(all_prefixes)
+
+    layout = [
+        [sg.Text('Choose the file prefixes you want to include, in order:', font=('Arial', 18))],
+    ]
+
+    for i, prefix in enumerate(all_prefixes):
+        desc = sg.Text("{:}. ".format(i + 1), font=('Arial', 18))
+        selection = sg.DropDown(['-'] + all_prefixes, readonly=True)
+        layout.append([desc, selection])
+
+    layout.append([sg.Button('OK'), sg.Button('Cancel')])
+
+    while True:
+        window = sg.Window('Choose sessions for markup', layout)
+        event, values = window.Read()
+
+        window.Close()
+
+        if event is None or event == 'Cancel':
+            return None
+
+        selected_prefixes = [v for v in values.values() if v is not None and v != '-']
+        print(selected_prefixes)
+
+        if len(selected_prefixes) == len(set(selected_prefixes)):
+            #-- OK, no duplicates
+            return selected_prefixes
+
+        messagebox.showerror('Invalid selection', 'Please do not selecte the same file prefix twice')'''
+
+
+#-------------------------------------------------------------------------------------
+

@@ -7,7 +7,6 @@ import utils as u
 import pandas as pd
 
 
-
 trials_csv_filename = 'trials.csv'
 
 #-------------------------------------------------------------------------------------------------
@@ -34,7 +33,7 @@ def load_experiment(dir_name):
         if trial_id not in traj_filenames:
             raise Exception('Invalid experiment directory {:}: there is no file for trial #{:} 6'.format(dir_name, trial_id))
 
-        points = load_trajectory(traj_filenames[trial_id])
+        points = load_trajectory(dir_name+"/"+traj_filenames[trial_id])
 
         trial = data.RawTrial(trial_id, trial_spec['target_id'], trial_spec['target'], points,
                                  session_time=trial_spec['session_time'], rc=trial_spec['rc'])
@@ -69,7 +68,6 @@ def _traj_filename_per_trial(dir_name):
 
         trial_id = int(m.group(1))
         result[trial_id] = filename'''
-        print("m is: {:}, trial id is: {:}, result[trial_id] is: {:}, result is: {:}".format(m, trial_id, result[trial_id], result))
 
     return result
 
@@ -204,13 +202,9 @@ def load_trials_index(dir_name):
              'absolute_time', 'date', 'self_correction', 'sound_file_length'])))
 
         if tuple(sorted(reader.fieldnames)) != coded_trial:
-            print("coded")
             already_coded = False
             if tuple(sorted(reader.fieldnames)) != uncoded_raw_trial:
-                print("uncoded")
                 raise Exception('Unexpected CSV format for trials file {:} 1.2'.format(index_fn))
-
-        print("got here")
 
         #, 'self_correction', 'response'
 
@@ -318,7 +312,6 @@ def _parse_config_bool_value(arg_name, arg_value, err_location='configuration fi
 
 #------------------------------------------
 def _parse_config_int_value(arg_name, arg_value, err_location='configuration file', allow_empty=False):
-    print(arg_value)
     arg_value = arg_value.strip()
     if arg_value == '' and allow_empty:
         return None
@@ -358,9 +351,7 @@ def is_invalid_data_directory(dir_name):
         coded_trial = (tuple(sorted(['trial_id', 'target_id', 'sub_trial_num', 'target', 'response', 'session_time', 'rc','raw_file_name', 'absolute_time', 'date', 'self_correction', 'sound_file_length'])))
 
         if tuple(sorted(reader.fieldnames)) != coded_trial:
-            print("coded")
             if tuple(sorted(reader.fieldnames)) != uncoded_raw_trial:
-                print("uncoded")
                 return "Invalid directory - bad format of {:} ".format(trials_csv_filename)
 
 

@@ -53,12 +53,12 @@ class RawTrial(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trial_id, target_id, stimulus, traj_points, session_time=None, rc=None, source=None, self_correction = None,sound_file_length = None):
+    def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None, self_correction = None,sound_file_length = None):
         self.target_id = target_id
         self.trial_id = trial_id
         self.stimulus = stimulus
         self.traj_points = traj_points
-        self.session_time = session_time
+        self.time_in_session = time_in_session
         self.rc = rc
         self.source = source
         self.response = ''
@@ -90,7 +90,7 @@ class CodedTrial(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trial_num, target_id, stimulus, response, characters, strokes, sub_trial_num=1, session_time=None, rc=None,self_correction = None, sound_file_length = None):
+    def __init__(self, trial_num, target_id, stimulus, response, characters, strokes, sub_trial_num=1, time_in_session=None, rc=None,self_correction = None, sound_file_length = None):
         self.trial_num = trial_num
         self.sub_trial_num = sub_trial_num
         self.target_id = target_id
@@ -98,7 +98,7 @@ class CodedTrial(object):
         self.response = response
         self.characters = characters
         self.strokes = strokes
-        self.session_time = session_time
+        self.time_in_session = time_in_session
         self.rc = rc
         self.self_correction = self_correction
         self.sound_file_length = sound_file_length

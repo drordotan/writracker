@@ -607,8 +607,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 # If the target wasn't marked as OK even once, it's some kind of error. use it's value.
                 else:
                     target.rc_code = df.set_index('target')['rc'].to_dict()[target.value]
-                last_trial_file_name = df.set_index('target')['file_name'].to_dict()[target.value]
-                num_idx = df.set_index('target')['file_name'].to_dict()[target.value].rfind('l')
+                last_trial_file_name = df.set_index('target')['raw_file_name'].to_dict()[target.value]
+                num_idx = df.set_index('target')['raw_file_name'].to_dict()[target.value].rfind('l')
                 target.next_trial_id = int(last_trial_file_name[num_idx + 1:]) + 1
 
                 # -- Fill trials list per target --
@@ -620,7 +620,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                       rc_code=trials_dict[key]['rc'],
                                       time_in_session=trials_dict[key]['time_in_session'],
                                       date=trials_dict[key]['date'],
-                                      traj_file_name=trials_dict[key]['file_name'],
+                                      traj_file_name=trials_dict[key]['raw_file_name'],
                                       abs_time=trials_dict[key]['time_in_day'])
                     target.trials.append(tmp_trial)
         return True
@@ -672,7 +672,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             with open(self.results_folder_path + os.sep + "trials.csv", mode='w', encoding='utf-8') as trials_file:
                 trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
                                                                'time_in_session', 'date', 'time_in_day',
-                                                               'file_name', 'sound_file_length'], lineterminator='\n')
+                                                               'raw_file_name', 'sound_file_length'], lineterminator='\n')
                 trials_csv_file.writeheader()
                 sorted_trials = []
                 for target in self.targets:
@@ -682,7 +682,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 for trial in sorted_trials:
                     row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,
                                rc=trial.rc_code, time_in_session=trial.time_in_session, date=trial.date,
-                               time_in_day=trial.abs_time, file_name=trial.traj_file_name,
+                               time_in_day=trial.abs_time, raw_file_name=trial.traj_file_name,
                                sound_file_length=trial.sound_file_length)
                     trials_csv_file.writerow(row)
         except (IOError, FileNotFoundError):
@@ -771,7 +771,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
         for index, row in df.iterrows():
             if "sound_file_name" in df.columns:
-                self.targets.append(Target(row["target_id"], row["target"].strip(), row["sound_file_name"]))
+                self.targets.append(Target(row["target_id"], row["target"].strip(), row["sound_file_name"] if str(row["sound_file_name"]) != 'nan' else "" ))
                 self.allow_sound_play = True
             else:
                 self.targets.append(Target(row["target_id"], row["target"].strip()))

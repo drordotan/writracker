@@ -59,6 +59,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             trial_queue = [_create_default_characters(trial.traj_points, markup_config['max_within_char_overlap'])]
             dataio.remove_from_trial_index(out_dir, trial.trial_id)
             sub_trial_num = 0
+            trial.self_correction = "0"
 
         elif rc == 'split_trial':
             # noinspection PyUnboundLocalVariable
@@ -169,7 +170,7 @@ def _open_settings(config):
 
 
 #-------------------------------------------------------------------------------------
-def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, screen_size, margin, last_selection_handler, show_command):
+def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, screen_size, margin, last_selection_handler, show_checkbox):
     """"
     returns in this order: rc, characters, extra_info
     """
@@ -221,18 +222,17 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     else:
         window['self_correction'].update(disabled=False)
 
+
     while True:
 
 
         event, values = window.Read()
 
-        #window['show_correction'].update(value=True)
-        #window['show_correction'].enable_events=True
-
-        '''if (show_command == True):
-            window.FindElement('show_correction').update(disabled=False)'''
 
         print(event)
+
+
+
 
         #-- Enables Error button only if an error is selected
         if (values[0] not in markup_config["error_codes"]):
@@ -241,13 +241,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             window['accept_error'].update(disabled=False)
 
         #-- Enables self correction checkbox
-
-        '''if (current_command == 'self_correction' or 'show_correction'):
-            window['show_correction'].update(True)'''
-            #values['show_correction']) == True
-
-
-
+        if trial.self_correction == "1":
+            window['show_correction'].update(disabled = False)
 
 
 
@@ -278,27 +273,41 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- OK - Accept current coding
         if event in ('a', 'A', 'accept'):
             trial.rc = trial.stimulus
-            save_trial(trial, characters, sub_trial_num, out_dir)
-            #curr_trial_index= expcoder.current_trial_index()
-            window.Close()
-            return 'next_trial', None, None
+            if trial.response == (None or ""):
+                sg.Popup('No response entered', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
+            elif len(trial.response)!= len(on_paper_chars):
+                sg.Popup('Unmatch number of characters', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
+            else:
+                save_trial(trial, characters, sub_trial_num, out_dir)
+                window.Close()
+                return 'next_trial', None, None
+
+
+            '''if trial.response == (None or ""):
+                text = sg.popup_get_text('Response', 'Please enter response:')
+                if type(text) != None:
+                    if len(text) != len(on_paper_chars):
+                        sg.Popup('Unmatch number of characters', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
+                    else:
+                        trial.response = text
+                        window.Close()
+                        return 'next_trial', None, None'''
+
 
 
         #-- Clicked on DropDown error
-        """"
-        if event == 'error_codes':
-            if selection_handler is not None:
-                selection_handler.clicked(values)
-                window['accept_error'].update(disabled=False)
-        """
+
 
 
         #-- Error - Accept current coding, set trial as error
         if event in ('o', 'O', 'accept_error'):
             trial.rc = values[0]
             save_trial(trial, characters, sub_trial_num, out_dir)
-            window.Close()
-            return 'next_trial', None, None
+            if trial.response == (None or ""):
+                sg.Popup('No response entered', 'Please enter a response')
+            else:
+                window.Close()
+                return 'next_trial', None, None
 
         #-- Skip this trial
         elif event in ('k', 'K', 'skip_trial'):
@@ -315,7 +324,11 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             if current_command is None:
                 instructions.Update('Select the characters to merge. ENTER=confirm, ESC=abort')
                 current_command = 'merge_chars'
-                selection_handler = _CharSelector(graph, characters, 'pair')
+                if selection_handler is not None:
+                    selection_handler = _CharSelector(graph, characters, 'any', selection_handler.selected)
+                else:
+                    selection_handler = _CharSelector(graph, characters, 'any', [])
+
 
 
         #-- Split a stroke into 2 characters
@@ -337,7 +350,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             if current_command is None:
                 instructions.Update('Select the last character of trial#1. ENTER=confirm, ESC=abort')
                 current_command = 'split_trial'
-                selection_handler = _CharSelector(graph, characters, 'series')
+                selection_handler = _CharSelector(graph, characters, 'series', None)
+
 
         #-- Self correction
         elif event in ('f', 'F', 'self_correction'):
@@ -353,17 +367,29 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         # -- Show Self correction
         elif event == 'show_correction':
             #window['show_correction'].enable_events=True
-            print("values are 2 : " + str(values))
             current_command = 'show_correction'
             chars1 = _self_correction(characters, last_selection_handler, window['show_correction'], current_command, values, graph)
-            if (window['show_correction']) == False:
-                window['show_correction'].update(value=True)
+
+            if (window['show_correction']).Get():
+                window['show_correction'].Update(value=True)
             else:
-                if (window['show_correction']) == True:
-                    window['show_correction'].update(value=False)
-            print("values are 3 : " + str(values))
+                window['show_correction'].Update(value=False)
             window.Close()
             return 'show_correction', chars1, last_selection_handler
+
+
+        # elif event == 'radio':
+        #     current_command = 'show_correction'
+        #     chars1 = _self_correction(characters, last_selection_handler, window['radio'], current_command, values, graph)
+        #     window.Close()
+        #     return 'show_correction', chars1, last_selection_handler
+        #
+        # elif event == 'radio2':
+        #     current_command = 'show_correction'
+        #     chars1 = _self_correction(characters, last_selection_handler, window['radio2'], current_command, values, graph)
+        #     window.Close()
+        #     return 'show_correction', chars1, last_selection_handler
+
 
         elif event == 'delete_stroke':
             if current_command is None:
@@ -390,9 +416,12 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 return 'continue', characters, None
 
             elif current_command == 'merge_chars':
-                characters = _apply_merge_characters(characters, selection_handler)
-                window.Close()
-                return 'continue', characters, None
+                if len(selection_handler.selected) < 2:
+                    sg.Popup("Merge error", "Please select 2 or more characters")
+                else:
+                    characters = _apply_merge_characters_updated(characters, selection_handler)
+                    window.Close()
+                    return 'continue', characters, None
 
             elif current_command == 'split_stroke':
                 window.Close()
@@ -405,6 +434,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
             elif current_command == 'self_correction':
                 chars1 = _self_correction(characters, selection_handler, window['self_correction'], current_command,values, graph)
+                _set_stroke_color(last_selection_handler.selected, 'yellow', graph)
                 window.Close()
                 return 'self_correction', chars1, last_selection_handler
 
@@ -444,8 +474,10 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('(M)erge 2 characters', key='merge_chars'),
         sg.Button('(R)eset current trial', key='reset_trial'),
         sg.Button('Sel(f) correction', key='self_correction'),
-        sg.Checkbox('Show correction', default=True, key='show_correction', enable_events= True, disabled = False),
+        sg.Checkbox('Show correction', key='show_correction', enable_events= True, disabled = True),
         sg.Button('Delete stroke', key='delete_stroke'),
+        #sg.Radio('Show radio', key = 'radio', default=True, disabled= False,group_id=1,enable_events = True),
+        #sg.Radio('Show radio2', key='radio2', default=True, disabled=False, group_id=1,enable_events = True),
     ]
 
     commands_nav = [
@@ -457,6 +489,8 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('(P)revious trial', key='prev_trial'),
         sg.Button('(G)o to specific trial', key='choose_trial'),
         sg.Button('Enter response', key='response'),
+        #sg.Txt('Enter response:'),
+        #sg.Input(key = 'text_response', enable_events= True),
     ]
 
     commands_general = [
@@ -796,19 +830,20 @@ class _MultiStrokeSelector(object):
         for c in self.strokes:
             _set_stroke_color(c, None, self.graph)
 
-
 #-------------------------------------------------------------------------------------
+
+
 class _CharSelector(object):
     """
     Handles click to select one character
     """
 
-    def __init__(self, graph, characters, mode):
-        assert mode in ('pair', 'series')
+    def __init__(self, graph, characters, mode, selected):
+        assert mode in ('pair', 'series', 'any')
         self.graph = graph
         self.characters = [c for c in characters if len(c.on_paper_dots) > 0]
         self.mode = mode
-        self.selected = None
+        self.selected = selected
 
 
     def clicked(self, values):
@@ -817,20 +852,32 @@ class _CharSelector(object):
             return
 
         clicked_char = _find_clicked_char(self.characters, click_coord)
-        if clicked_char == self.characters[-1]:
-            clicked_char = self.characters[-2]
 
-        self.cleanup()
-        self.selected = clicked_char
-        self.highlight_selected()
+
+        if self.mode == 'any':
+            if clicked_char in self.selected:
+                self.unselect_cleanup(clicked_char)
+                self.selected.remove(clicked_char)
+            else:
+                self.selected.append(clicked_char)
+                self.highlight_selected()
+        else:
+            if clicked_char == self.characters[-1]:
+                clicked_char = self.characters[-2]
+            self.cleanup()
+            self.selected = clicked_char
+            self.highlight_selected()
 
 
     def highlight_selected(self):
-        selected_num = self.selected.char_num
         if self.mode == 'series':
+            selected_num = self.selected.char_num
             chars_to_highlight = [c for c in self.characters if c.char_num <= selected_num]
         elif self.mode == 'pair':
+            selected_num = self.selected.char_num
             chars_to_highlight = [c for c in self.characters if selected_num <= c.char_num <= selected_num + 1]
+        elif self.mode == 'any':
+            chars_to_highlight = [c for c in self.characters if c in self.selected]
         else:
             raise Exception('Bug')
 
@@ -841,9 +888,12 @@ class _CharSelector(object):
     def cleanup(self):
         if self.selected is None:
             return
-
         for c in self.characters:
             _set_char_color(c, None, self.graph)
+
+    def unselect_cleanup(self, clicked_char):
+        if clicked_char is not None:
+            _set_char_color(clicked_char, None, self.graph)
 
 
 #-------------------------------------------------------------------------------------
@@ -1052,9 +1102,38 @@ def _renumber_chars_and_strokes(characters):
         for j in range(len(char.strokes)):
             char.strokes[j].stroke_num = j + 1
 
+#-------------------------------------------------------------------------------------
+def _apply_merge_characters_updated(characters, selection_handler):
+
+    on_pen_chars = [c for c in characters if len(c.trajectory) > 0]
+    char1 = selection_handler.selected[0]
+    char1_ind = on_pen_chars.index(char1)
+
+    if char1_ind == len(on_pen_chars) - 1:
+        char1_ind -= 1
+        char1 = on_pen_chars[char1_ind]
+
+    for i in range(1, len(selection_handler.selected)):
+        selected_char_index = on_pen_chars.index(selection_handler.selected[i])
+        selected_char = selection_handler.selected[i]
+
+        correction = max(char1.correction, selected_char.correction)
+
+        merged_char = _Character(char1_ind, char1.strokes + selected_char.strokes, correction)
+
+        char1_ind = characters.index(char1)
+        characters[char1_ind] = merged_char
+        char1 = merged_char
+        characters.remove(on_pen_chars[selected_char_index])
+
+    _renumber_chars_and_strokes(characters)
+
+    return characters
+
+
 
 #-------------------------------------------------------------------------------------
-def _apply_merge_characters(characters, selection_handler):
+def _apply_merge_characters_old(characters, selection_handler):
 
     on_pen_chars = [c for c in characters if len(c.trajectory) > 0]
     char1 = selection_handler.selected
@@ -1142,7 +1221,7 @@ def _apply_split_stroke(characters, stroke, dot):
 def save_trial(trial, characters, sub_trial_num, out_dir):
 
     dataio.append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
-                                            trial.response, trial.session_time, trial.rc, trial.self_correction, trial.sound_file_length)
+                                            trial.response, trial.time_in_session, trial.rc, trial.self_correction, trial.sound_file_length)
 
     strokes = []
     for c in characters:
@@ -1168,43 +1247,33 @@ def save_trial(trial, characters, sub_trial_num, out_dir):
 
 def _self_correction(characters, selection_handler, checkbox, current_command, values, graph):
     test_char = characters
-    if checkbox:
-        if(current_command == 'show_correction'):
-            #checkbox.update(enable_events=True)
+    if current_command == 'show_correction':
+        if(checkbox.Get()):                               #Checkbox function
+        #if values['radio'] == True:
             if(values['show_correction'] == False):
-                #values['show_correction'] = True
-                #checkbox.update(value=True)
                 for c in test_char:
                     for s in c.strokes:
                         if s == selection_handler.selected:
                             s.on_paper = True
-                            s.correction = 0
-                            c.correction = 0
-                            #checkbox.update(enable_events=False)
-            else:
-                #values['show_correction'] = False
-                #checkbox.update(value=False)
-                test_char = characters
-                for c in test_char:
-                    for s in c.strokes:
-                        if s == selection_handler.selected:
-                            s.on_paper = False
-                            s.correction = 1
-                            c.correction = 1
         else:
-            #checkbox.update(enable_events=True)
+            #if values['radio2'] == True:
             for c in test_char:
                 for s in c.strokes:
                     if s == selection_handler.selected:
-                        s.on_paper = True
-                        _set_stroke_color(s, 'yellow', graph)
-                        s.correction = 1
-                        c.correction = 1
+                        s.on_paper = False
+
+    else:                                                   #Self correction button function
+        for c in test_char:
+            for s in c.strokes:
+                if s == selection_handler.selected:
+                    s.on_paper = True
+                    #_set_stroke_color(s, 'yellow', graph)
+                    s.correction = 1
+                    c.correction = 1
 
     return test_char
 
 def _delete_stroke(characters, selection_handler):
-
     test_char = characters
     #updated_characters = test_char
     for c in test_char:

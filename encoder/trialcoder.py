@@ -480,7 +480,7 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('(P)revious trial', key='prev_trial'),
         sg.Button('(G)o to specific trial', key='choose_trial'),
         sg.Button('Enter response', key='response'),
-        #6jsg.Txt('Enter response:'),
+        #sg.Txt('Enter response:'),
         #sg.Input(key = 'text_response', enable_events= True),
     ]
 
@@ -501,7 +501,7 @@ def _create_window_for_markup(screen_size, title):
     label = tk.Label(text="Hello, Tkinter", fg="white", bg="yellow")
     label.pack()
 
-    window = sg.Window(title, layout, return_keyboard_events=False)
+    window = sg.Window(title, layout, return_keyboard_events=True)
     window.Finalize()
 
     return window
@@ -821,8 +821,56 @@ class _MultiStrokeSelector(object):
         for c in self.strokes:
             _set_stroke_color(c, None, self.graph)
 
-
 #-------------------------------------------------------------------------------------
+class _CharSelector(object):
+    """
+    Handles click to select one character
+    """
+
+    def __init__(self, graph, characters, mode):
+        assert mode in ('pair', 'series')
+        self.graph = graph
+        self.characters = [c for c in characters if len(c.on_paper_dots) > 0]
+        self.mode = mode
+        self.selected = None
+
+
+    def clicked(self, values):
+        click_coord = values['graph']
+        if click_coord[0] is None:
+            return
+
+        clicked_char = _find_clicked_char(self.characters, click_coord)
+        if clicked_char == self.characters[-1]:
+            clicked_char = self.characters[-2]
+
+        self.cleanup()
+        self.selected = clicked_char
+        self.highlight_selected()
+
+
+    def highlight_selected(self):
+        selected_num = self.selected.char_num
+        if self.mode == 'series':
+            chars_to_highlight = [c for c in self.characters if c.char_num <= selected_num]
+        elif self.mode == 'pair':
+            chars_to_highlight = [c for c in self.characters if selected_num <= c.char_num <= selected_num + 1]
+        else:
+            raise Exception('Bug')
+
+        for c in chars_to_highlight:
+            _set_char_color(c, "#00FF00", self.graph)
+
+
+    def cleanup(self):
+        if self.selected is None:
+            return
+
+        for c in self.characters:
+            _set_char_color(c, None, self.graph)
+#-------------------------------------------------------------------------------------
+
+
 class _CharSelector(object):
     """
     Handles click to select one character

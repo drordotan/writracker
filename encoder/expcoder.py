@@ -25,8 +25,8 @@ def run():
     if raw_exp is None:
         return
 
-    results_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
-    #results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
+    #results_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
+    results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
     if results_dir is None or results_dir == '':
         return
 
@@ -60,8 +60,10 @@ def current_trial_index(trials, trial_to_start_from):
 def _load_raw_exp_ui():
 
     while True:
-        raw_dir = r'C:\Users\Ron\Documents\GitHub\new\raw'
-        #raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\raw'
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\for_ron'
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\updated_fields_new'
+        raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
         if raw_dir is None or raw_dir == '':
             return None
 

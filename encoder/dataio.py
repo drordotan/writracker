@@ -18,12 +18,12 @@ StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 
 #-------------------------------------------------------------------------------------
 
-trials_index_fields = 'trial_id','target_id','sub_trial_num','target','response','session_time',\
-                      'rc','raw_file_name','absolute_time','date','self_correction', 'sound_file_length'
+trials_index_fields = 'trial_id','target_id','sub_trial_num','target','response','time_in_session',\
+                      'rc','raw_file_name','time_in_day','date','self_correction', 'sound_file_length'
 
 
 #-------------------------------------------------------------------------------------
-def load_experiment(dir_name):
+def encoder(dir_name):
 
     traj_filenames = _load_trajectory_filenames(dir_name)
     index = load_trials_index(dir_name)
@@ -32,7 +32,7 @@ def load_experiment(dir_name):
     for t in index:
         trial = data.EncoderTrial(trial_id=t['trial_id'], target_id=t['target_id'], stimulus=t['target'],
                                      response=t['response'], characters=[], strokes=[], sub_trial_num=t['sub_trial_num'],
-                                     session_time=t['session_time'], rc=t['rc'], self_correction = 'self_correction')
+                                     time_in_session=t['time_in_session'], rc=t['rc'], self_correction = 'self_correction')
 
         trial_key = trial.trial_id, trial.sub_trial_num
         if trial_key not in traj_filenames:
@@ -59,7 +59,7 @@ def save_experiment(exp, dir_name):
 
     for trial in exp.trials:
         append_to_trial_index(dir_name, trial.trial_id, trial.sub_trial_num, trial.target_id, trial.stimulus,
-                              trial.response, trial.session_time, trial.rc, trial.self_correction)
+                              trial.response, trial.time_in_session, trial.rc, trial.self_correction)
         _set_char_num_in_each_stroke(trial)
         save_trajectory(trial.strokes, trial.trial_id, trial.sub_trial_num, dir_name)
 """
@@ -331,14 +331,14 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  target_id=target_id,
                  target=target,
                  response=response,
-                 session_time=trial_start_time,
+                 time_in_session=trial_start_time,
                  rc='' if rc is None else rc,
                  self_correction=self_correction,
                  sound_file_length = sound_file_length
                  )
 
 
-    with open(index_fn, 'a' if file_exists else 'w') as fp:
+    with open(index_fn, 'a' if file_exists else 'w', encoding="cp437", errors='ignore') as fp:
         writer = csv.DictWriter(fp, trials_index_fields, lineterminator='\n')
         if not file_exists:
             writer.writeheader()
@@ -359,7 +359,7 @@ def remove_from_trial_index(dir_name, trial_id, sub_trial_num=None):
 
     index = load_trials_index(dir_name)
 
-    with open(index_fn, 'w') as fp:
+    with open(index_fn, 'w', encoding="cp437", errors='ignore') as fp:
         writer = csv.DictWriter(fp, trials_index_fields, lineterminator='\n')
         writer.writeheader()
         for entry in index:
@@ -382,7 +382,7 @@ def load_trials_index(dir_name):
     if not os.path.isfile(index_fn):
         return []
 
-    with open(index_fn, 'r') as fp:
+    with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
         reader = csv.DictReader(fp)
         _validate_csv_format(index_fn, reader, trials_index_fields)
 
@@ -391,19 +391,21 @@ def load_trials_index(dir_name):
             location = 'line {:} in {:}'.format(reader.line_num, index_fn)
             trial_id = _parse_config_int_value('trial_id', row['trial_id'], location)
             sub_trial_num = _parse_config_int_value('sub_trial_num', row['sub_trial_num'], location)
-            target_id = _parse_config_int_value('target_id', row['target_id'], location, allow_empty=True)
-            session_time = _parse_config_float_value('session_time', row['session_time'], location, allow_empty=True)
+            target_id = row['target_id']
+            #target_id = _parse_config_int_value('target_id', row['target_id'], location, allow_empty=True)
+            time_in_session = row['time_in_session']
+            #time_in_session = _parse_config_float_value('time_in_session', row['time_in_session'], location, allow_empty=True)
             rc = None if row['rc'] == '' else row['rc']
             target = row['target']
             response = row['response']
             raw_file_name = row['raw_file_name']
-            absolute_time = row['absolute_time']
+            time_in_day = row['time_in_day']
             date= row['date']
             self_correction = row['self_correction']
             sound_file_length = row['sound_file_length']
 
 
             result.append(dict(trial_id=trial_id,target_id=target_id,sub_trial_num=sub_trial_num,target=target,response=response
-                               ,session_time=session_time,rc=rc,raw_file_name=raw_file_name,absolute_time=absolute_time,date=date,self_correction = self_correction, sound_file_length = sound_file_length))
+                               ,time_in_session=time_in_session,rc=rc,raw_file_name=raw_file_name,time_in_day=time_in_day,date=date,self_correction = self_correction, sound_file_length = sound_file_length))
 
     return result

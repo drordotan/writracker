@@ -59,6 +59,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             trial_queue = [_create_default_characters(trial.traj_points, markup_config['max_within_char_overlap'])]
             dataio.remove_from_trial_index(out_dir, trial.trial_id)
             sub_trial_num = 0
+            trial.self_correction = "0"
 
         elif rc == 'split_trial':
             # noinspection PyUnboundLocalVariable
@@ -272,12 +273,12 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- OK - Accept current coding
         if event in ('a', 'A', 'accept'):
             trial.rc = trial.stimulus
-            save_trial(trial, characters, sub_trial_num, out_dir)
             if trial.response == (None or ""):
                 sg.Popup('No response entered', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
             elif len(trial.response)!= len(on_paper_chars):
                 sg.Popup('Unmatch number of characters', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
             else:
+                save_trial(trial, characters, sub_trial_num, out_dir)
                 window.Close()
                 return 'next_trial', None, None
 
@@ -323,7 +324,11 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             if current_command is None:
                 instructions.Update('Select the characters to merge. ENTER=confirm, ESC=abort')
                 current_command = 'merge_chars'
-                selection_handler = _CharSelector(graph, characters, 'pair')
+                if selection_handler is not None:
+                    selection_handler = _CharSelector(graph, characters, 'any', selection_handler.selected)
+                else:
+                    selection_handler = _CharSelector(graph, characters, 'any', [])
+
 
 
         #-- Split a stroke into 2 characters
@@ -345,7 +350,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             if current_command is None:
                 instructions.Update('Select the last character of trial#1. ENTER=confirm, ESC=abort')
                 current_command = 'split_trial'
-                selection_handler = _CharSelector(graph, characters, 'series')
+                selection_handler = _CharSelector(graph, characters, 'series', None)
+
 
         #-- Self correction
         elif event in ('f', 'F', 'self_correction'):
@@ -410,9 +416,12 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 return 'continue', characters, None
 
             elif current_command == 'merge_chars':
-                characters = _apply_merge_characters(characters, selection_handler)
-                window.Close()
-                return 'continue', characters, None
+                if len(selection_handler.selected) < 2:
+                    sg.Popup("Merge error", "Please select 2 or more characters")
+                else:
+                    characters = _apply_merge_characters_updated(characters, selection_handler)
+                    window.Close()
+                    return 'continue', characters, None
 
             elif current_command == 'split_stroke':
                 window.Close()
@@ -822,17 +831,19 @@ class _MultiStrokeSelector(object):
             _set_stroke_color(c, None, self.graph)
 
 #-------------------------------------------------------------------------------------
+
+
 class _CharSelector(object):
     """
     Handles click to select one character
     """
 
-    def __init__(self, graph, characters, mode):
-        assert mode in ('pair', 'series')
+    def __init__(self, graph, characters, mode, selected):
+        assert mode in ('pair', 'series', 'any')
         self.graph = graph
         self.characters = [c for c in characters if len(c.on_paper_dots) > 0]
         self.mode = mode
-        self.selected = None
+        self.selected = selected
 
 
     def clicked(self, values):
@@ -841,20 +852,32 @@ class _CharSelector(object):
             return
 
         clicked_char = _find_clicked_char(self.characters, click_coord)
-        if clicked_char == self.characters[-1]:
-            clicked_char = self.characters[-2]
 
-        self.cleanup()
-        self.selected = clicked_char
-        self.highlight_selected()
+
+        if self.mode == 'any':
+            if clicked_char in self.selected:
+                self.unselect_cleanup(clicked_char)
+                self.selected.remove(clicked_char)
+            else:
+                self.selected.append(clicked_char)
+                self.highlight_selected()
+        else:
+            if clicked_char == self.characters[-1]:
+                clicked_char = self.characters[-2]
+            self.cleanup()
+            self.selected = clicked_char
+            self.highlight_selected()
 
 
     def highlight_selected(self):
-        selected_num = self.selected.char_num
         if self.mode == 'series':
+            selected_num = self.selected.char_num
             chars_to_highlight = [c for c in self.characters if c.char_num <= selected_num]
         elif self.mode == 'pair':
+            selected_num = self.selected.char_num
             chars_to_highlight = [c for c in self.characters if selected_num <= c.char_num <= selected_num + 1]
+        elif self.mode == 'any':
+            chars_to_highlight = [c for c in self.characters if c in self.selected]
         else:
             raise Exception('Bug')
 
@@ -865,58 +888,12 @@ class _CharSelector(object):
     def cleanup(self):
         if self.selected is None:
             return
-
         for c in self.characters:
             _set_char_color(c, None, self.graph)
-#-------------------------------------------------------------------------------------
 
-
-class _CharSelector(object):
-    """
-    Handles click to select one character
-    """
-
-    def __init__(self, graph, characters, mode):
-        assert mode in ('pair', 'series')
-        self.graph = graph
-        self.characters = [c for c in characters if len(c.on_paper_dots) > 0]
-        self.mode = mode
-        self.selected = None
-
-
-    def clicked(self, values):
-        click_coord = values['graph']
-        if click_coord[0] is None:
-            return
-
-        clicked_char = _find_clicked_char(self.characters, click_coord)
-        if clicked_char == self.characters[-1]:
-            clicked_char = self.characters[-2]
-
-        self.cleanup()
-        self.selected = clicked_char
-        self.highlight_selected()
-
-
-    def highlight_selected(self):
-        selected_num = self.selected.char_num
-        if self.mode == 'series':
-            chars_to_highlight = [c for c in self.characters if c.char_num <= selected_num]
-        elif self.mode == 'pair':
-            chars_to_highlight = [c for c in self.characters if selected_num <= c.char_num <= selected_num + 1]
-        else:
-            raise Exception('Bug')
-
-        for c in chars_to_highlight:
-            _set_char_color(c, "#00FF00", self.graph)
-
-
-    def cleanup(self):
-        if self.selected is None:
-            return
-
-        for c in self.characters:
-            _set_char_color(c, None, self.graph)
+    def unselect_cleanup(self, clicked_char):
+        if clicked_char is not None:
+            _set_char_color(clicked_char, None, self.graph)
 
 
 #-------------------------------------------------------------------------------------
@@ -1125,9 +1102,38 @@ def _renumber_chars_and_strokes(characters):
         for j in range(len(char.strokes)):
             char.strokes[j].stroke_num = j + 1
 
+#-------------------------------------------------------------------------------------
+def _apply_merge_characters_updated(characters, selection_handler):
+
+    on_pen_chars = [c for c in characters if len(c.trajectory) > 0]
+    char1 = selection_handler.selected[0]
+    char1_ind = on_pen_chars.index(char1)
+
+    if char1_ind == len(on_pen_chars) - 1:
+        char1_ind -= 1
+        char1 = on_pen_chars[char1_ind]
+
+    for i in range(1, len(selection_handler.selected)):
+        selected_char_index = on_pen_chars.index(selection_handler.selected[i])
+        selected_char = selection_handler.selected[i]
+
+        correction = max(char1.correction, selected_char.correction)
+
+        merged_char = _Character(char1_ind, char1.strokes + selected_char.strokes, correction)
+
+        char1_ind = characters.index(char1)
+        characters[char1_ind] = merged_char
+        char1 = merged_char
+        characters.remove(on_pen_chars[selected_char_index])
+
+    _renumber_chars_and_strokes(characters)
+
+    return characters
+
+
 
 #-------------------------------------------------------------------------------------
-def _apply_merge_characters(characters, selection_handler):
+def _apply_merge_characters_old(characters, selection_handler):
 
     on_pen_chars = [c for c in characters if len(c.trajectory) > 0]
     char1 = selection_handler.selected

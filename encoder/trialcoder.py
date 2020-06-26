@@ -188,7 +188,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
     expand_ratio, offset, screen_size = _get_expand_ratio(all_markup_dots, screen_size, margin)
 
-    title = 'Trial #{:}, target={:} ({:} characters, {:} strokes) ronronron'\
+    title = 'Trial #{:}, target={:} ({:} characters, {:} strokes) '\
         .format(trial.trial_id, trial.stimulus, len(on_paper_chars), len(on_paper_strokes))
     window = _create_window_for_markup(screen_size, title)
 
@@ -282,8 +282,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 window.Close()
                 return 'next_trial', None, None
 
-
-            '''if trial.response == (None or ""):
+            '''
+                        if trial.response == (None or ""):
                 text = sg.popup_get_text('Response', 'Please enter response:')
                 if type(text) != None:
                     if len(text) != len(on_paper_chars):
@@ -291,7 +291,9 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                     else:
                         trial.response = text
                         window.Close()
-                        return 'next_trial', None, None'''
+                        return 'next_trial', None, None
+            '''
+
 
 
 
@@ -539,9 +541,7 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
                 dot.screen_y = y
                 dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill=stroke.color)
                 dot_num = dot_num + 1
-                #print("x is: " + str(x))
-                #print("y is: " + str(y))
-                #print("i is: " + str(i))
+
 
 
             graph.TKCanvas.create_text(x+2 , y+2 , fill='yellow', text=str(char_index) + "." + str(i+1), anchor = NW)
@@ -1221,7 +1221,8 @@ def _apply_split_stroke(characters, stroke, dot):
 def save_trial(trial, characters, sub_trial_num, out_dir):
 
     dataio.append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
-                                            trial.response, trial.time_in_session, trial.rc, trial.self_correction, trial.sound_file_length)
+                                            trial.response, trial.time_in_session, trial.rc, trial.self_correction, trial.sound_file_length, trial.raw_file_name, trial.time_in_day, trial.date)
+
 
     strokes = []
     for c in characters:
@@ -1236,7 +1237,6 @@ def save_trial(trial, characters, sub_trial_num, out_dir):
             c.strokes[-1].char_num = 0
 
         strokes.extend(c.strokes)
-
 
     dataio.save_trajectory(strokes, trial.trial_id, sub_trial_num, out_dir, trial)
     dataio.save_strokes_file(strokes, trial.trial_id, sub_trial_num, out_dir, trial)

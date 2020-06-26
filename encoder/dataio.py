@@ -1,3 +1,4 @@
+
 """
 Load and save coded files
 """
@@ -12,6 +13,7 @@ from encoder import trialcoder
 
 # noinspection PyProtectedMember
 from encoder.dataiooldrecorder import _parse_config_int_value, _parse_config_float_value
+from encoder import extract_aggregate_measures
 
 StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 
@@ -23,7 +25,7 @@ trials_index_fields = 'trial_id','target_id','sub_trial_num','target','response'
 
 
 #-------------------------------------------------------------------------------------
-def encoder(dir_name):
+def encoder(dir_name, trials):
 
     traj_filenames = _load_trajectory_filenames(dir_name)
     index = load_trials_index(dir_name)
@@ -129,20 +131,22 @@ def save_strokes_file(strokes, trial_id, sub_trial_num, out_dir, trial):
 def save_characters_file(characters, strokes, trial_id, sub_trial_num, out_dir, trial):
 
 
+    '''
     index_fn = out_dir + os.sep + 'encoded_characters.csv'
-    file_exists = os.path.isfile(index_fn)
+        file_exists = os.path.isfile(index_fn)
 
-    filename = "{:}/encoded_characters.csv".format(out_dir)
-    with open(filename, 'a' if file_exists else 'w') as fp:
-        writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'correction'], lineterminator='\n')
-        if not file_exists:
-            writer.writeheader()
-        char_num = 0
-        for c in characters:
-            char_num += 1
-            row = dict(trial_id = trial_id, char_num=c.char_num, correction= c.correction)
-            writer.writerow(row)
-    return filename
+        filename = "{:}/encoded_characters.csv".format(out_dir)
+        with open(filename, 'a' if file_exists else 'w') as fp:
+            writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'correction'], lineterminator='\n')
+            if not file_exists:
+                writer.writeheader()
+            char_num = 0
+            for c in characters:
+                char_num += 1
+                row = dict(trial_id = trial_id, char_num=c.char_num, correction= c.correction)
+                writer.writerow(row)
+    '''
+    #extract_aggregate_measures.execute_agg_measures(out_dir)
 
 #-------------------------------------------------------------------------------------
 
@@ -152,6 +156,7 @@ def _load_trajectory_filenames(dir_name):
     filenames = dict()
 
     for fn in os.listdir(dir_name):
+    #for traj_name in trials.raw_file_name:
         m = re.match('trajectory_(\\d+)(_part(\\d+))?.csv', fn)
         if m is None:
             continue
@@ -316,7 +321,7 @@ def reset_trial_info_file(dir_name):
 
 
 #-------------------------------------------------------------------------------------------------
-def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc,self_correction, sound_file_length):
+def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc,self_correction, sound_file_length,raw_file_name,time_in_day,date):
     """
     Append a line to the trials.csv file
     """
@@ -334,7 +339,10 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  time_in_session=trial_start_time,
                  rc='' if rc is None else rc,
                  self_correction=self_correction,
-                 sound_file_length = sound_file_length
+                 sound_file_length = sound_file_length,
+                 raw_file_name = raw_file_name,
+                 time_in_day=time_in_day,
+                 date=date
                  )
 
 

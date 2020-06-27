@@ -53,7 +53,8 @@ class RawTrial(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None, self_correction = None,sound_file_length = None):
+    def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None, self_correction = None,
+                 sound_file_length = None,raw_file_name = None, time_in_day = None, date = None):
         self.target_id = target_id
         self.trial_id = trial_id
         self.stimulus = stimulus
@@ -64,7 +65,9 @@ class RawTrial(object):
         self.response = ''
         self.self_correction = self_correction
         self.sound_file_length = sound_file_length
-
+        self.raw_file_name = raw_file_name
+        self.time_in_day = time_in_day
+        self.date = date
 
     #-----------------------------------------------------------------
     @property

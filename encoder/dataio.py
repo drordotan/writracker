@@ -121,7 +121,7 @@ def save_strokes_file(strokes, trial_id, sub_trial_num, out_dir, trial):
         stroke_num = 0
         for stroke in strokes:
             stroke_num += 1
-            row = dict(trial_id = trial_id, char_num=stroke.char_num, stroke=stroke_num, correction=stroke.correction)
+            row = dict(trial_id = trial_id, char_num=stroke.char_num+1, stroke=stroke_num, correction=stroke.correction)
             writer.writerow(row)
     return filename
 

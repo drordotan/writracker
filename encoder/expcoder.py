@@ -74,6 +74,7 @@ def _load_raw_exp_ui():
         #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\raw'
         #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\for_ron'
         #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\updated_fields_new1'
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\maya_resultes2'
         raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
         if raw_dir is None or raw_dir == '':
             return None

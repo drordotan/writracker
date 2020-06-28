@@ -1067,6 +1067,17 @@ def _apply_merge_characters_updated(characters, selection_handler):
 
     on_pen_chars = [c for c in characters if len(c.trajectory) > 0]
     char1 = selection_handler.selected[0]
+    smallest_char = char1.char_num
+    smallest_char_list_index = 0
+    for i in range(len(selection_handler.selected)):
+        cur_char = selection_handler.selected[i].char_num
+        if cur_char < smallest_char:
+            smallest_char = cur_char
+            smallest_char_list_index = i
+            temp = selection_handler.selected[0]
+            selection_handler.selected[0] = selection_handler.selected[i]
+            selection_handler.selected[i] = temp
+    char1 = selection_handler.selected[smallest_char_list_index]
     char1_ind = on_pen_chars.index(char1)
 
     if char1_ind == len(on_pen_chars) - 1:

@@ -275,7 +275,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def f_btn_continue_ssn(self):
         self.show_info_msg("Continuing an existing session", "Choose the an existing results folder")
         while True:
-            if self.pop_folder_selector():
+            if self.pop_folder_selector(continue_session=True):
                 if self.choose_targets_file(continue_session=True):
                     try:
                         df = pd.read_csv(str(self.results_folder_path)+"/trials.csv")
@@ -429,10 +429,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     #               -------------------------- GUI/messages Functions --------------------------
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def choose_targets_file(self, continue_session=False):
         while True:
-            if continue_session == False:
+            if not continue_session:
                 targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
                 targets_file_path = targets_file_path_raw[0]
             else:
@@ -457,13 +457,22 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             else:
                 return False
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # For results folder
-    def pop_folder_selector(self):
+    def pop_folder_selector(self, continue_session=False):
+        error_str = ""
         while True:
             folder = str(QFileDialog.getExistingDirectory(self, "Select results directory"))
             if folder:
                 path_ok = os.access(folder, os.W_OK | os.X_OK)
+                if os.access(folder+"\\trials.csv", os.W_OK):
+                    error_str = "It already contains a 'trials.csv' file from an older session\n"
+                if not continue_session:
+                    if os.listdir(folder):  # verify the chosen folder is empty for a new session
+                        QMessageBox.warning(self, "Folder is not empty",
+                                            "Warning, The chosen folder is not empty \n " + error_str +
+                                            "Please make sure no old session files are stored in this folder \n"
+                                            "otherwise, use 'continue session' option instead")
                 if path_ok:
                     self.results_folder_path = folder
                     return True
@@ -476,7 +485,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             else:
                 return False
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # Show file dialog and choose folder conatining the sound files to be played for each target.
     def pop_soundfiles_folder(self):
         while True:

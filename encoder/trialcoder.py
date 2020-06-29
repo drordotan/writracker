@@ -228,7 +228,13 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
     while True:
 
+
+
         event, values = window.Read()
+
+        print("event is: "+str(event))
+        print("values are: "+str(values))
+
 
         #-- Enables self correction checkbox
         if trial.self_correction == "1":
@@ -276,7 +282,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         elif event == 'error':
             if (values['error'] in markup_config["error_codes"]):
                 window['accept_error'].update(disabled=False)
-                window['accept'].update(disabled=True)
+                #window['accept'].update(disabled=True)
 
             # else:
             #     window['accept_error'].update(disabled=True)
@@ -412,7 +418,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
         #-- ESC clicked: cancel the currently-running command
         #elif len(event) == 1 and ord(event) == 27:                         #Original line!!!
-        if current_command is not None and len(event) == 1 and ord(event) == 27:
+        #if current_command is not None and len(event) == 1 and ord(event) == 27:
+        if current_command is not None and event == 'Escape:27':
             instructions.Update('')
             current_command = None
             #if selection_handler is not None:
@@ -421,11 +428,12 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
 
         #-- Just for debug
-        else:
+        '''
+                else:
             if len(event) == 1:
                 print("Clicked #{:}".format(ord(event)))
             instructions.Update('UNKNOWN COMMAND')
-
+        '''
 
 #-------------------------------------------------------------------------------------
 def _create_window_for_markup(screen_size, title):
@@ -903,7 +911,7 @@ def _split_dots_into_strokes(dots):
 
     for dot in dots:
 
-        on_paper = dot.z > 0
+        on_paper = dot.z > 5
 
         if prev_on_paper != on_paper:
             #-- Pen lifted from paper or put on it
@@ -1245,11 +1253,13 @@ def _delete_stroke(characters, selection_handler):
     for c in test_char:
         for s in c.strokes:
             if s == selection_handler.selected:
-                if len(c.on_paper_strokes) > 1:                  #Check if the character has more than 1 stroke. Else error.
+                c.strokes.remove(s)
+
+                '''if len(c.on_paper_strokes) > 1:                  #Check if the character has more than 1 stroke. Else error.
                     c.strokes.remove(s)
                 else:
                     sg.Popup('Char has only 1 stroke', 'Choose a Character with more than 1 stroke')
-                    break
+                    break'''
 
     return test_char
 

@@ -113,7 +113,11 @@ def _trials_to_code(raw_exp, coded_dir):
 
     coded_trials = dataio.load_trials_index(coded_dir)
     coded_trial_nums = tuple(sorted(set([t['trial_id'] for t in coded_trials])))
-    max_coded = max(coded_trial_nums)
+    try:
+        max_coded = max(coded_trial_nums)
+    except:
+        messagebox.showerror('Experiment was already coded','Please delete all files from the results directory and re-run the program')
+        return False
 
     #-- All trials were already coded
     if raw_trial_nums == coded_trial_nums:

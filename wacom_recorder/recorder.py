@@ -109,7 +109,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         super(MainWindow, self).__init__(parent)
         self.title = "WriTracker Recorder"
         # pen settings & variables
-        self.pen_is_down = False
         self.pen_x = 0
         self.pen_xtilt = 0
         self.pen_ytilt = 0
@@ -189,7 +188,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             msgbox.setText(msg)
             msgbox.exec()
 
-    #----------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------
     # Read from recorder_ui.ui and connect each button to function
     def init_ui(self):
         # general window settings
@@ -240,13 +239,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         if self.current_active_trajectory is not None:
             self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
         if tabletEvent.type() == QTabletEvent.TabletPress:
-            self.pen_is_down = True
             self.path.moveTo(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletMove:
-            self.pen_is_down = True
             self.path.lineTo(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletRelease:
-            self.pen_is_down = False
+            if self.pen_pressure != 0:
+                # When the pen leaves the surface, add a sample point with zero pressure
+                self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
         tabletEvent.accept()
         self.update()                   # calls paintEvent behind the scenes
 

@@ -1,18 +1,17 @@
-import sys, os, csv
 import subprocess, json         # This originally used only to check if WACOM tablet is connected
-
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtCore import *       # core core of QT classes
-from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
-from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
-from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
-from PyQt5 import uic
+import sys, os, csv
 from datetime import datetime, date, timedelta
 from shutil import copyfile
-from mutagen.mp3 import MP3     # get mp3 length
+import pandas as pd
+from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
+from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
+from PyQt5.QtCore import *       # core core of QT classes
+from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
+from PyQt5 import uic
 from pygame import error as pgerr # handle pygame errors as exceptions
+from mutagen.mp3 import MP3     # get mp3 length
 from pygame import mixer        # handle sound files
-import pandas as pd             # read excel file input, reloading session
+from math import cos, sin, radians       # rotate trajectory file
 
 
 #-------------------------------------------------------------------------------------------------------------
@@ -92,7 +91,46 @@ class Trajectory:
     def reset_start_time(self):
         self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
-#-------------------------------------------------------------------------------------------------------------
+    # This function rotates trajectory file by angle degrees. Angle must be one of the following: 0, 90, 270.
+    # Angle of 0 will cause 180 degrees rotation. This is due to mismatch between the tablet & PyQt Coordinate system.
+    def rotate_trajectory_file(self, angle):
+        # Hard coded sin/cos values
+        if angle == 90:
+            cos_ang = 0
+            sin_ang = 1
+        elif angle == 0:    # user rotation angle 0 is file rotation angle 180
+            cos_ang = -1
+            sin_ang = 0
+        elif angle == 270:
+            cos_ang = 0
+            sin_ang = -1
+
+        fields = ['x', 'y', 'pressure', 'time']
+        try:
+            raw_points = pd.read_csv(self.full_path, usecols=fields)
+        except (IOError, FileNotFoundError):
+            QMessageBox().critical(None, "Warning! file access error",
+                                   "WriTracker couldn't load the trajectory file.", QMessageBox.Ok)
+            return False
+        # Applying rotation transformation
+        new_points = raw_points.copy()
+        new_points['x'] = round(cos_ang*raw_points['x']-sin_ang*raw_points['y'])
+        new_points['y'] = round(sin_ang*raw_points['x']+cos_ang*raw_points['y'])
+        # Moving back to the first quadrant to keep positive coordinates
+        min_x = new_points.x.min()
+        min_y = new_points.y.min()
+        if min_x < 0:
+            new_points['x'] = new_points['x'] + abs(min_x)
+        if min_y < 0:
+            new_points['y'] = new_points['y'] + abs(min_y)
+        try:
+            new_points.to_csv(self.full_path, index=False)
+        except (IOError, FileNotFoundError):
+            QMessageBox().critical(None, "Warning! file access error",
+                                   "Rotation was not applied to active trajectory", QMessageBox.Ok)
+            return False
+
+# -------------------------------------------------------------------------------------------------------------
 
 
 def is_windows():
@@ -102,7 +140,7 @@ def is_windows():
 def _null_converter(v):
     return str(v)
 
-#-------------------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------------------
 
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
     def __init__(self, parent=None):
@@ -114,6 +152,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.pen_ytilt = 0
         self.pen_y = 0
         self.pen_pressure = 0
+        self.rotation_angle = 0             # Each rotate button press adds 90. used for rotating the traj file.
+        self.x_resolution = app.desktop().screenGeometry().right()  # this value is for mirroring X coordinates
         # All files & paths
         self.targets_file = None            # loaded by user, holds the targets.
         self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
@@ -219,43 +259,41 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.show()
 
     def tabletEvent(self, tabletEvent):
-        if self.session_started is False:
-            tabletEvent.accept()
-            return  # ignore events before session started
-        self.pen_x = app.desktop().screenGeometry().right() - tabletEvent.globalX()  # Fix tablet mirroring-flip X axis
+        self.pen_x = self.x_resolution - tabletEvent.globalX()  # Fix tablet mirroring-flip X axis
         self.pen_y = tabletEvent.globalY()
         self.pen_pressure = int(tabletEvent.pressure() * 100)
         self.pen_xtilt = tabletEvent.xTilt()
         self.pen_ytilt = tabletEvent.yTilt()
         # mark Trial started flag, but only if the ok/error are not checked.
         # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
-        if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False:
+        if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
             # When we the user chose to play sounds
             # the trial will start when pressing play, and not when touching the tablet.
             if not self.trial_started and self.sounds_folder_path is None:
                 self.start_trial()
 
         # write to traj file:
-        if self.current_active_trajectory is not None:
+        if self.current_active_trajectory is not None and self.session_started:
             self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
         if tabletEvent.type() == QTabletEvent.TabletPress:
             self.path.moveTo(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletMove:
             self.path.lineTo(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletRelease:
-            if self.pen_pressure != 0:
+            if self.pen_pressure != 0 and self.session_started:
                 # When the pen leaves the surface, add a sample point with zero pressure
                 self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
         tabletEvent.accept()
         self.update()                   # calls paintEvent behind the scenes
 
     def paintEvent(self, event):
-        if self.recording_on:
-            self.scene.addPath(self.path)
+        self.scene.addPath(self.path)
 
     #               -------------------------- Button/Menu Functions --------------------------
+    # This function rotates the graphicsView, then calculates the rotation factor for the points in the traj file.
     def f_btn_rotate(self):
         self.tablet_paint_area.rotate(90)
+        self.rotation_angle = (self.rotation_angle+90) % 360  # allowed angles: 0,90,180,270
 
     def f_menu_add_error(self):
         new_error, ok = QInputDialog.getText(self, "Insert new error type", "Type the new error and press OK \n"
@@ -273,6 +311,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 # This function loads previous session status, and continues it
     def f_btn_continue_ssn(self):
+        self.clean_display()
         self.show_info_msg("Continuing an existing session", "Choose the an existing results folder")
         while True:
             if self.pop_folder_selector(continue_session=True):
@@ -307,11 +346,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 
     def f_btn_start_ssn(self):
+        self.clean_display()
         self.show_info_msg("Starting a new session",
                            "In the first dialog, choose the targets file (excel or .csv File)\n"
                            "In the second dialog, choose the results folder, where all the raw"
                            " trajectories will be saved")
-
         if self.choose_targets_file():
             if self.pop_folder_selector():
                 self.pop_config_menu()
@@ -334,7 +373,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             print("Writracker: trajectory file deleted, " + str(self.current_active_trajectory))
             os.remove(str(self.current_active_trajectory))
             self.set_recording_on()
-            if  self.allow_sound_play:
+            if self.allow_sound_play:
                 self.btn_play.setEnabled(True)
             self.current_active_trajectory.reset_start_time()
             return
@@ -718,12 +757,17 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # ----------------------------------------------------------------------------------
 
     def close_current_trial(self):
-        current_target = self.targets[self.curr_target_index]
+        # Rotate trajectory file if a rotation was applied during the writing
+        if self.rotation_angle != 180:
+            self.current_active_trajectory.rotate_trajectory_file(self.rotation_angle)
+        # Handle RC code: Read radio buttons & read value from the combo box error list
         rc_code = "noValue"
         if self.btn_radio_ok.isChecked() is True:
             rc_code = "OK"
         elif self.btn_radio_err.isChecked() is True:
             rc_code = self.combox_errors.currentText()
+        # Add new a new completed Trial inside the current Target
+        current_target = self.targets[self.curr_target_index]
         traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
         time_rel = datetime.strptime(self.current_trial_start_time, "%H:%M:%S") - \
                    datetime.strptime(self.session_start_time,"%H:%M:%S")

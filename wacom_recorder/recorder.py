@@ -109,7 +109,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         super(MainWindow, self).__init__(parent)
         self.title = "WriTracker Recorder"
         # pen settings & variables
-        self.pen_is_down = False
         self.pen_x = 0
         self.pen_xtilt = 0
         self.pen_ytilt = 0
@@ -189,7 +188,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             msgbox.setText(msg)
             msgbox.exec()
 
-    #----------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------
     # Read from recorder_ui.ui and connect each button to function
     def init_ui(self):
         # general window settings
@@ -240,13 +239,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         if self.current_active_trajectory is not None:
             self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
         if tabletEvent.type() == QTabletEvent.TabletPress:
-            self.pen_is_down = True
             self.path.moveTo(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletMove:
-            self.pen_is_down = True
             self.path.lineTo(tabletEvent.pos())
         elif tabletEvent.type() == QTabletEvent.TabletRelease:
-            self.pen_is_down = False
+            if self.pen_pressure != 0:
+                # When the pen leaves the surface, add a sample point with zero pressure
+                self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
         tabletEvent.accept()
         self.update()                   # calls paintEvent behind the scenes
 
@@ -276,7 +275,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def f_btn_continue_ssn(self):
         self.show_info_msg("Continuing an existing session", "Choose the an existing results folder")
         while True:
-            if self.pop_folder_selector():
+            if self.pop_folder_selector(continue_session=True):
                 if self.choose_targets_file(continue_session=True):
                     try:
                         df = pd.read_csv(str(self.results_folder_path)+"/trials.csv")
@@ -430,10 +429,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     #               -------------------------- GUI/messages Functions --------------------------
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def choose_targets_file(self, continue_session=False):
         while True:
-            if continue_session == False:
+            if not continue_session:
                 targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
                 targets_file_path = targets_file_path_raw[0]
             else:
@@ -458,13 +457,22 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             else:
                 return False
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # For results folder
-    def pop_folder_selector(self):
+    def pop_folder_selector(self, continue_session=False):
+        error_str = ""
         while True:
             folder = str(QFileDialog.getExistingDirectory(self, "Select results directory"))
             if folder:
                 path_ok = os.access(folder, os.W_OK | os.X_OK)
+                if os.access(folder+"\\trials.csv", os.W_OK):
+                    error_str = "It already contains a 'trials.csv' file from an older session\n"
+                if not continue_session:
+                    if os.listdir(folder):  # verify the chosen folder is empty for a new session
+                        QMessageBox.warning(self, "Folder is not empty",
+                                            "Warning, The chosen folder is not empty \n " + error_str +
+                                            "Please make sure no old session files are stored in this folder \n"
+                                            "otherwise, use 'continue session' option instead")
                 if path_ok:
                     self.results_folder_path = folder
                     return True
@@ -477,7 +485,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             else:
                 return False
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # Show file dialog and choose folder conatining the sound files to be played for each target.
     def pop_soundfiles_folder(self):
         while True:
@@ -607,8 +615,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 # If the target wasn't marked as OK even once, it's some kind of error. use it's value.
                 else:
                     target.rc_code = df.set_index('target')['rc'].to_dict()[target.value]
-                last_trial_file_name = df.set_index('target')['file_name'].to_dict()[target.value]
-                num_idx = df.set_index('target')['file_name'].to_dict()[target.value].rfind('l')
+                last_trial_file_name = df.set_index('target')['raw_file_name'].to_dict()[target.value]
+                num_idx = df.set_index('target')['raw_file_name'].to_dict()[target.value].rfind('l')
                 target.next_trial_id = int(last_trial_file_name[num_idx + 1:]) + 1
 
                 # -- Fill trials list per target --
@@ -620,7 +628,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                       rc_code=trials_dict[key]['rc'],
                                       time_in_session=trials_dict[key]['time_in_session'],
                                       date=trials_dict[key]['date'],
-                                      traj_file_name=trials_dict[key]['file_name'],
+                                      traj_file_name=trials_dict[key]['raw_file_name'],
                                       abs_time=trials_dict[key]['time_in_day'])
                     target.trials.append(tmp_trial)
         return True
@@ -672,7 +680,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             with open(self.results_folder_path + os.sep + "trials.csv", mode='w', encoding='utf-8') as trials_file:
                 trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
                                                                'time_in_session', 'date', 'time_in_day',
-                                                               'file_name', 'sound_file_length'], lineterminator='\n')
+                                                               'raw_file_name', 'sound_file_length'], lineterminator='\n')
                 trials_csv_file.writeheader()
                 sorted_trials = []
                 for target in self.targets:
@@ -682,7 +690,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 for trial in sorted_trials:
                     row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,
                                rc=trial.rc_code, time_in_session=trial.time_in_session, date=trial.date,
-                               time_in_day=trial.abs_time, file_name=trial.traj_file_name,
+                               time_in_day=trial.abs_time, raw_file_name=trial.traj_file_name,
                                sound_file_length=trial.sound_file_length)
                     trials_csv_file.writerow(row)
         except (IOError, FileNotFoundError):
@@ -771,7 +779,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
         for index, row in df.iterrows():
             if "sound_file_name" in df.columns:
-                self.targets.append(Target(row["target_id"], row["target"].strip(), row["sound_file_name"]))
+                self.targets.append(Target(row["target_id"], row["target"].strip(), row["sound_file_name"] if str(row["sound_file_name"]) != 'nan' else "" ))
                 self.allow_sound_play = True
             else:
                 self.targets.append(Target(row["target_id"], row["target"].strip()))

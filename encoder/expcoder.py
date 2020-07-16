@@ -25,8 +25,8 @@ def run():
     if raw_exp is None:
         return
 
-    results_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
-    #results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
+    #results_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
+    results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
     if results_dir is None or results_dir == '':
         return
 
@@ -46,11 +46,22 @@ def run():
 
     # try:
     code_experiment(trials_to_code, results_dir)
+
     # except Exception as e:
     #     messagebox.showerror('Error in coding app', str(e))
 
+#-------------------------------------------------------------------------------------
+
+def working_directories(raw_input_dir, output_dir):
+
+    input_dir = raw_input_dir
+    results_dir = output_dir
+    return input_dir, results_dir
+
+
 
 #-------------------------------------------------------------------------------------
+
 
 def current_trial_index(trials, trial_to_start_from):
     return trials, trial_to_start_from
@@ -60,19 +71,22 @@ def current_trial_index(trials, trial_to_start_from):
 def _load_raw_exp_ui():
 
     while True:
-        raw_dir = r'C:\Users\Ron\Documents\GitHub\new\raw'
-        #raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\raw'
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\for_ron'
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\updated_fields_new1'
+        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\maya_resultes2'
+        raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
         if raw_dir is None or raw_dir == '':
             return None
 
         err_msg = dataiooldrecorder.is_invalid_data_directory(raw_dir)
         if err_msg is not None:                                         #check if there suppose to be "not" before None
-            print("Invalid raw-data directory 11")
-            messagebox.showerror("Invalid raw-data directory 1", err_msg)
+            print("Invalid raw-data directory")
+            messagebox.showerror("Invalid raw-data directory", err_msg)
             return None
 
         #try:
-        exp = dataiooldrecorder.load_experiment(raw_dir)
+        exp =dataiooldrecorder.load_experiment(raw_dir)
         print("try")
         return exp
 
@@ -99,7 +113,11 @@ def _trials_to_code(raw_exp, coded_dir):
 
     coded_trials = dataio.load_trials_index(coded_dir)
     coded_trial_nums = tuple(sorted(set([t['trial_id'] for t in coded_trials])))
-    max_coded = max(coded_trial_nums)
+    try:
+        max_coded = max(coded_trial_nums)
+    except:
+        messagebox.showerror('Experiment was already coded','Please delete all files from the results directory and re-run the program')
+        return False
 
     #-- All trials were already coded
     if raw_trial_nums == coded_trial_nums:
@@ -151,7 +169,6 @@ def _trials_to_code(raw_exp, coded_dir):
 
 def code_experiment(trials, out_dir):
 
-    print("trials are: " + str(trials))
     i = 0
     while i < len(trials):
 

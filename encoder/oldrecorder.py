@@ -12,6 +12,7 @@ import uiutil as uiu
 import utils as u
 import data
 
+
 #----------------------------------------------------------
 
 RecordedPoint = namedtuple('RecordedPoint', ['x', 'y', 'pressure', 'time'])

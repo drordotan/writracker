@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.path = QPainterPath()
         # UI settings
         uic.loadUi('recorder_ui.ui', self)
-        self.cfg_window = QWidget()
+        self.cfg_window = QDialog()
         # UI - Button
         self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')
         self.btn_continue_ssn = self.findChild(QPushButton, 'continue_ssn_btn')
@@ -344,7 +344,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             else:
                 return False
 
-
     def f_btn_start_ssn(self):
         self.clean_display()
         self.show_info_msg("Starting a new session",
@@ -364,6 +363,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.stats_reset()
                 self.stats_update()
                 self.read_next_target()  # read first target
+        mixer.init()            # must initialize once before playing sound files
+        try:
+            mixer.music.load("sounds/beep_sound.mp3")
+            mixer.music.play(0)
+        except TypeError:
+            self.show_info_msg("Error!", "Error when trying to access sound file.")
+        except pgerr as message:
+            self.show_info_msg("Error!", "Error when trying to play sound file.")
 
     def f_btn_reset(self):
         msg = QMessageBox()
@@ -565,7 +572,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path: ")
             self.create_dir_copy_targets()
             if self.sounds_folder_path is not None and self.allow_sound_play:
-                mixer.init()            # must initialize once before playing sound files
                 self.btn_play.setEnabled(True)
             else:
                 self.allow_sound_play = False
@@ -580,6 +586,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         layout_v = QVBoxLayout()
         layout_h = QHBoxLayout()
         ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
         ok_btn.clicked.connect(self.check_cfg_before_exit)
         choose_folder_btn = QPushButton("Choose folder with MP3 files")
         choose_folder_btn.clicked.connect(self.pop_soundfiles_folder)
@@ -615,12 +622,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.cfg_window.setLayout(layout_v)
         self.cfg_window.setGeometry(QRect(100, 200, 100, 100))
         self.cfg_window.setWindowModality(Qt.ApplicationModal)  # Block main windows until OK is pressed
-        self.cfg_window.show()
         # Center the window in the middle of the screen:
         fr_gm = self.cfg_window.frameGeometry()
         sc_gm = app.desktop().screenGeometry().center()
         fr_gm.moveCenter(sc_gm)
         self.cfg_window.move(fr_gm.topLeft())
+        self.cfg_window.exec()
 
     # ----------------------------------------------------------------------------------
     def cfg_set_cyclic_targets_off(self):

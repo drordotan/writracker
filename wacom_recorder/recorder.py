@@ -917,14 +917,13 @@ def check_if_tablet_connected_windows():
                           "Make sure the tablet is connected")
         return False
 
+
 # ---------------------------------------------------------------------------------------------------------
-
-#todo: move all this to a main() function, and call it from a separate script.
-
-
-app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv
-app.setStyle('Fusion')
-mainform = MainWindow()
-mainform.show()
-check_if_tablet_connected()
-sys.exit(app.exec_())                 # set exit code ass the app exit code
+def main():
+    global app
+    app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv
+    app.setStyle('Fusion')
+    mainform = MainWindow()
+    mainform.show()
+    check_if_tablet_connected()
+    sys.exit(app.exec_())                 # set exit code ass the app exit code

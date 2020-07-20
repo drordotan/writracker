@@ -1,0 +1,3 @@
+import recorder
+
+recorder.main()

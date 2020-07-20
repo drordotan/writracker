@@ -1,137 +1,22 @@
-import subprocess, json         # This originally used only to check if WACOM tablet is connected
-import sys, os, csv
-from datetime import datetime, date, timedelta
-from shutil import copyfile
-import pandas as pd
 from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
 from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5 import uic
-from pygame import error as pgerr # handle pygame errors as exceptions
-from mutagen.mp3 import MP3     # get mp3 length
-from pygame import mixer        # handle sound files
-from math import cos, sin, radians       # rotate trajectory file
-
-
-#-------------------------------------------------------------------------------------------------------------
-#todo: move these classes to recorder.io module
-
-class Target:
-    def __init__(self, target_id, target, sound_file_name="", next_trial_id=1):
-        self.id = target_id
-        self.value = target
-        self.trials = []
-        self.next_trial_id = next_trial_id      # this is actually the INDEX of the next trial in trials array
-        self.rc_code = ""                       # Target RC code equals the last evaluated trial RC code.
-        self.sound_file_name = sound_file_name
-        self.sound_file_length = ""
-
-    def __str__(self):
-        trial_arr = ""
-        for trial in self.trials:
-            trial_arr += str(trial)
-        return "id " + str(self.id) + " value:" + self.value + "| trials: [" + trial_arr + "]" + " | rc: " + self.rc_code + " | next trial ID: " + str(self.next_trial_id)
-
-
-#-------------------------------------------------------------------------------------------------------------
-
-
-class Trial:
-    def __init__(self, trial_id, target_id, target, rc_code, time_in_session, traj_file_name, date=str(date.today()),
-                 abs_time=datetime.now().strftime("%H:%M:%S"), sound_file_length=""):
-        self.id = trial_id                      # unique ID, defined in the main exec loop
-        self.target_id = target_id
-        self.target = target
-        self.rc_code = rc_code
-        self.time_in_session = time_in_session
-        self.date = date
-        self.traj_file_name = traj_file_name
-        self.abs_time = abs_time
-        self.sound_file_length = sound_file_length
-
-    def __str__(self):
-        return "Trial: " + str(self.id) + "|" + str(self.target_id) + "/" + str(self.target) + "|" \
-               + str(self.rc_code) + "|" + self.traj_file_name + str(self.time_in_session)+"|"+str(self.date)+"|"+str(self.abs_time)+"|"
+from recorder_io import Target, Trial, Trajectory
+from datetime import datetime, date, timedelta
+from pygame import error as pgerr  # handle pygame errors as exceptions
+from mutagen.mp3 import MP3        # get mp3 length
+from shutil import copyfile
+from pygame import mixer           # handle sound files
+import subprocess, json            # This originally used only to check if WACOM tablet is connected
+import pandas as pd
+import sys
+import csv
+import os
 
 
 # -------------------------------------------------------------------------------------------------------------
-class Trajectory:
-    def __init__(self, filename, filepath):
-        self.filename = filename
-        self.filepath = filepath
-        self.full_path = self.filepath + os.sep + self.filename + ".csv"
-        self.file_handle = None
-        self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
-
-    def __str__(self):
-        return self.full_path
-
-    def open_traj_file(self, row):
-        try:
-            with open(self.full_path, mode='a+', encoding='utf-8') as traj_file:
-                self.file_handle = csv.DictWriter(traj_file, ['x', 'y', 'pressure', 'time'], lineterminator='\n')
-                if row == "header":
-                    self.file_handle.writeheader()
-                else:
-                    self.file_handle.writerow(row)
-        except (IOError, FileNotFoundError):
-            QMessageBox().critical(None, "Warning! file access error",
-                                   "WriTracker couldn't save Trajectory file. Last trial trajectory"
-                                   " wasn't saved. If the problem repeats, restart the session.",
-                                   QMessageBox.Ok)
-            raise Exception("Error writing trajectory file in:" + self.filepath + os.sep + self.filename + ".csv")
-
-    def add_row(self, x_cord, y_cord, pressure, char_num=0, stroke_num=0, pen_down=True):
-        time_abs = datetime.now().strftime("%M:%S:%f")[:-2]
-        time_relative = datetime.strptime(time_abs, "%M:%S:%f") - datetime.strptime(self.start_time, "%M:%S:%f")
-        row = dict(x=x_cord, y=y_cord, pressure=pressure, time=time_relative.total_seconds())
-        self.open_traj_file(row)
-
-    def reset_start_time(self):
-        self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
-
-    # This function rotates trajectory file by angle degrees. Angle must be one of the following: 0, 90, 270.
-    # Angle of 0 will cause 180 degrees rotation. This is due to mismatch between the tablet & PyQt Coordinate system.
-    def rotate_trajectory_file(self, angle):
-        # Hard coded sin/cos values
-        if angle == 90:
-            cos_ang = 0
-            sin_ang = 1
-        elif angle == 0:    # user rotation angle 0 is file rotation angle 180
-            cos_ang = -1
-            sin_ang = 0
-        elif angle == 270:
-            cos_ang = 0
-            sin_ang = -1
-
-        fields = ['x', 'y', 'pressure', 'time']
-        try:
-            raw_points = pd.read_csv(self.full_path, usecols=fields)
-        except (IOError, FileNotFoundError):
-            QMessageBox().critical(None, "Warning! file access error",
-                                   "WriTracker couldn't load the trajectory file.", QMessageBox.Ok)
-            return False
-        # Applying rotation transformation
-        new_points = raw_points.copy()
-        new_points['x'] = round(cos_ang*raw_points['x']-sin_ang*raw_points['y'])
-        new_points['y'] = round(sin_ang*raw_points['x']+cos_ang*raw_points['y'])
-        # Moving back to the first quadrant to keep positive coordinates
-        min_x = new_points.x.min()
-        min_y = new_points.y.min()
-        if min_x < 0:
-            new_points['x'] = new_points['x'] + abs(min_x)
-        if min_y < 0:
-            new_points['y'] = new_points['y'] + abs(min_y)
-        try:
-            new_points.to_csv(self.full_path, index=False)
-        except (IOError, FileNotFoundError):
-            QMessageBox().critical(None, "Warning! file access error",
-                                   "Rotation was not applied to active trajectory", QMessageBox.Ok)
-            return False
-
-# -------------------------------------------------------------------------------------------------------------
-
 
 def is_windows():
     return os.name == 'nt'
@@ -140,8 +25,8 @@ def is_windows():
 def _null_converter(v):
     return str(v)
 
-# -------------------------------------------------------------------------------------------------------------
 
+# -------------------------------------------------------------------------------------------------------------
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -216,7 +101,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
         self.init_ui()
 
-    #----------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------
     def show_info_msg(self, title, msg):
 
         if is_windows():
@@ -415,7 +300,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         except pgerr as message:
             self.show_info_msg("Error!", "Error when trying to play sound file.")
 
-
     def f_btn_prv(self):
         self.clean_display()
         if self.trial_started is True:
@@ -532,7 +416,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 return False
 
     # ----------------------------------------------------------------------------------
-    # Show file dialog and choose folder conatining the sound files to be played for each target.
+    # Show file dialog and choose folder containing the sound files to be played for each target.
     def pop_soundfiles_folder(self):
         while True:
             folder = str(QFileDialog.getExistingDirectory(self, "Select sound files directory"))
@@ -563,7 +447,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             if error_type.strip() != "":
                 self.combox_errors.addItem(error_type.strip())
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def check_cfg_before_exit(self):
         if os.path.isdir(self.results_folder_path):
             self.fill_combox_errors()
@@ -633,10 +517,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def cfg_set_cyclic_targets_off(self):
         self.cyclic_remaining_targets = False
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def cfg_set_cyclic_targets_on(self):
         self.cyclic_remaining_targets = True
-
 
     #               -------------------------- rest of the Functions --------------------------
 
@@ -647,7 +530,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.current_trial_start_time = datetime.now().strftime("%H:%M:%S")
         self.set_recording_on()
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     #todo: move to "io" package
     # Input: Pandas dataframe. functionality: reads the database and restores session status
     def parse_data_dataframe(self, df):
@@ -679,7 +562,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                     target.trials.append(tmp_trial)
         return True
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # Resets all the session variables. Saves working files before closing. Resets configuration options.
     def reset_session(self):
         if self.trial_started is True:
@@ -786,14 +669,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def stats_reset(self):
         self.stats['total_targets'] = 0
         self.stats['completed_ok'] = 0
         self.stats['completed_error'] = 0
         self.stats['remaining'] = 0
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # Calculate stats based on the the current working mode, and update QLabel fields
     def stats_update(self):
         self.stats_reset()
@@ -812,7 +695,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                    str(self.stats['completed_error']) + " Error")
         self.lbl_remaining.setText("Remaining targets: " + str(self.stats['remaining']))
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     #todo: move to "io" package
     # Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
     def parse_targets(self, targets_file_path):
@@ -838,7 +721,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.combox_targets.addItem(str(row["target_id"])+"-"+str(row["target"]))
 
         return True
-    #----------------------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------------------
     # toggle radio buttons
     def toggle_rb(self, state):
         if state is False:
@@ -851,7 +735,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_radio_ok.setEnabled(state)
         self.btn_radio_err.setEnabled(state)
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # buttons effected by this action: next, prev, reset, goto, start session
     def toggle_buttons(self, state):
         self.btn_next.setEnabled(state)
@@ -859,7 +743,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_goto.setEnabled(state)
         self.btn_reset.setEnabled(not state)    # reset always in opposite mode to navigation buttons
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     #todo: move to "io" package
     def create_dir_copy_targets(self):
         # If the file already exists, we assume the user chose "continue existing session". no need to create copies.
@@ -877,13 +761,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             copyfile(self.targets_file.name, self.results_folder_path + os.sep + "Original_targets_file_copy.csv")
             copyfile(self.targets_file.name, self.results_folder_path + os.sep + "Remaining_targets.csv")
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def open_trajectory(self, unique_id):
         name = "trajectory_"+unique_id
         self.current_active_trajectory = Trajectory(name, self.results_folder_path)
         self.current_active_trajectory.open_traj_file("header")
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def set_recording_on(self):
         print("Writracker: rec_on()")
         self.recording_on = True
@@ -893,19 +777,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.clean_display()
         self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # ends recording and closes file
     def set_recording_off(self):
         self.recording_on = False
         self.clean_display()
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def clean_display(self):
         self.scene.clear()
         self.path = QPainterPath()  # Re-declare path for a fresh start
         self.update()               # update view after re-declare
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def update_target_textfields(self, target, target_id):
         self.target_textedit.clear()
         self.target_id_textedit.clear()
@@ -914,14 +798,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.target_id_textedit.setAlignment(Qt.AlignCenter)  # Must set the alignment right before appending text
         self.target_id_textedit.insertPlainText(str(target_id))
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def save_trial_record_off(self):
         self.recording_on = False
         self.save_trials_file()
         self.save_remaining_targets_file()
         self.stats_update()
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # Read next with rc_code not "OK".
     def read_next_error_target(self, read_backwards=False):
         if self.recording_on:
@@ -945,7 +829,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                'All the targets has been marked as OK. For target navigation, use "goto"')
             self.update_target_textfields("All targets marked OK", "")
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     def read_prev_target(self):
         if self.recording_on:
             self.save_trial_record_off()  # save files, set recording off
@@ -955,7 +839,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             current_target = self.targets[self.curr_target_index]
             self.update_target_textfields(current_target.value, current_target.id)
 
-    #----------------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------
     # the goto parameters allow goto button to use this function when jumping instead of duplicating most of the code
     # if from_goto is True, we also expects goto_index which is the index in targets[] to jump into.
     def read_next_target(self, from_goto=False, goto_index=0):
@@ -981,7 +865,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.update_target_textfields("*End of targets*", "")
 
 
-#---------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------
 #todo: move the tablet-related functions to another package
 # Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
 # The check isn't blocking the program from running - for the case the device status is not 100% reliable.
@@ -996,7 +880,8 @@ def check_if_tablet_connected():
         QMessageBox().critical(None, "Unsupported system", "WriTracker can only run on Windows or Mac")
         return False
 
-#---------------------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------------------
 def check_if_tablet_connected_mac():
     output = subprocess.getoutput("system_profiler SPUSBDataType")
     if 'WACOM' in output.upper():
@@ -1008,7 +893,7 @@ def check_if_tablet_connected_mac():
         return False
 
 
-#---------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------
 # Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
 # The check isn't blocking the program from running - for the case the device status is not 100% reliable.
 def check_if_tablet_connected_windows():
@@ -1032,9 +917,10 @@ def check_if_tablet_connected_windows():
                           "Make sure the tablet is connected")
         return False
 
-#---------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------
 
 #todo: move all this to a main() function, and call it from a separate script.
+
 
 app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv
 app.setStyle('Fusion')

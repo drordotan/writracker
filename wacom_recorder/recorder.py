@@ -697,7 +697,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.btn_end_ssn.setEnabled(False)
         self.btn_start_ssn.setEnabled(True)
         self.btn_continue_ssn.setEnabled(True)
-        self.cfg_window = QWidget()
+        self.cfg_window = QDialog()
         # Save files before resetting
         self.save_remaining_targets_file()
         self.save_trials_file()

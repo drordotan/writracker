@@ -228,13 +228,13 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
     while True:
 
-
-
         event, values = window.Read()
+        #print("event is: "+str(event))
+        #print("values are: "+str(values))
 
-        print("event is: "+str(event))
-        print("values are: "+str(values))
-
+        m = re.match('.+:(\\d+)', event)
+        if m is not None:
+            event = int(m.group(1))
 
         #-- Enables self correction checkbox
         if trial.self_correction == "1":
@@ -245,28 +245,28 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             return 'reset_trial', None, None
 
         #-- Reset the trial
-        elif event in ('r', 'R', 'reset_trial'):
+        elif event in ('r', 'R', 'reset_trial', 82):
             window.FindElement('show_correction').Update(disabled=True)
             window.Close()
             return 'reset_trial', None, None
 
         #-- Quit the app
-        elif event in ('q', 'Q', 'quit'):
+        elif event in ('q', 'Q', 'quit', '/'):
             window.Close()
             return 'quit', None, None
 
         #-- Select trial
-        elif event in ('g', 'G', 'choose_trial'):
+        elif event in ('g', 'G', 'choose_trial', 71):
             window.Close()
             return 'choose_trial', None, None
 
         #-- Open settings window
-        elif event in ('e', 'E', 'settings'):
+        elif event in ('e', 'E', 'settings', 69):
             window.Close()
             return 'settings', None, None
 
         #-- OK - Accept current coding
-        if event in ('a', 'A', 'accept'):
+        if event in ('a', 'A', 'accept', 65):
             trial.rc = trial.stimulus
             res = trial.response
             if res is None or (res == "" or ''):
@@ -288,7 +288,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             #     window['accept_error'].update(disabled=True)
 
         #-- Error - Accept current coding, set trial as error
-        if event in ('o', 'O', 'accept_error'):
+        if event in ('o', 'O', 'accept_error', 79):
             trial.rc = values['error']
             res = trial.response
             if res is None or (res == "" or ''):
@@ -299,17 +299,17 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 return 'next_trial', None, None
 
         #-- Skip this trial
-        elif event in ('k', 'K', 'skip_trial'):
+        elif event in ('k', 'K', 'skip_trial', 75):
             window.Close()
             return 'next_trial', None, None
 
         #-- Return to previous trial
-        elif event in ('p', 'P', 'prev_trial'):
+        elif event in ('p', 'P', 'prev_trial', 80):
             window.Close()
             return 'prev_trial', None, None
 
         #-- Merge 2 characters
-        elif event in ('m', 'M', 'merge_chars'):
+        elif event in ('m', 'M', 'merge_chars', 77):
             if current_command is None:
                 instructions.Update('Select the characters to merge. ENTER=confirm, ESC=abort')
                 current_command = 'merge_chars'
@@ -319,21 +319,21 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                     selection_handler = _CharSelector(graph, characters, 'any', [])
 
         #-- Split a stroke into 2 characters
-        elif event in ('s', 'S', 'split_stroke'):
+        elif event in ('s', 'S', 'split_stroke', 83):
             if current_command is None:
                 instructions.Update('Select a stroke to split. ENTER=confirm, ESC=abort')
                 current_command = 'split_stroke'
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
         #-- Split a character
-        elif event in ('c', 'C', 'split_char'):
+        elif event in ('c', 'C', 'split_char', 67):
             if current_command is None:
                 instructions.Update('Select a character to split to 2 different characters. ENTER=confirm, ESC=abort')
                 current_command = 'split_char'
                 selection_handler = _MultiStrokeSelector(graph, characters)
 
         #-- Split the trial into 2 trials
-        elif event in ('t', 'T', 'split_trial'):
+        elif event in ('t', 'T', 'split_trial', 84):
             if current_command is None:
                 instructions.Update('Select the last character of trial#1. ENTER=confirm, ESC=abort')
                 current_command = 'split_trial'
@@ -341,7 +341,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
 
         #-- Self correction
-        elif event in ('f', 'F', 'self_correction'):
+        elif event in ('f', 'F', 'self_correction', 70):
             if current_command is None:
                 instructions.Update('Select the correct character. ENTER=confirm, ESC=abort')
                 #window['show_correction'].update(disabled=False)
@@ -360,7 +360,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             window.Close()
             return 'show_correction', chars1, last_selection_handler
 
-        elif event == 'delete_stroke':
+        elif event in ('d', 'D', 'delete_stroke', 68):
             if current_command is None:
                 instructions.Update('Select a stroke to delete. ENTER=confirm, ESC=abort')
                 current_command = 'delete_stroke'
@@ -447,7 +447,7 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('(R)eset current trial', key='reset_trial'),
         sg.Button('Sel(f) correction', key='self_correction'),
         sg.Checkbox('Show correction', key='show_correction', enable_events=True, disabled=True),
-        sg.Button('Delete stroke', key='delete_stroke'),
+        sg.Button('(D)elete stroke', key='delete_stroke'),
 
     ]
 
@@ -466,7 +466,7 @@ def _create_window_for_markup(screen_size, title):
 
     commands_general = [
         sg.Button('S(E)ttings', key='settings'),
-        sg.Button('(Q)uit encoder', key='quit'),
+        sg.Button('(Q)uit WEncoder', key='quit'),
     ]
 
     layout = [

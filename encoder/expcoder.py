@@ -26,7 +26,7 @@ def run():
         return
 
     #results_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
-    results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
+    results_dir = uiu.choose_directory('Select the encoded-data (results) folder')
     if results_dir is None or results_dir == '':
         return
 
@@ -75,7 +75,7 @@ def _load_raw_exp_ui():
         #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\for_ron'
         #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\updated_fields_new1'
         #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\maya_resultes2'
-        raw_dir = uiu.choose_directory("Select the directory of the experiment's raw results")
+        raw_dir = uiu.choose_directory("Select the raw-data folder (where WRecorder saved the handwriting)")
         if raw_dir is None or raw_dir == '':
             return None
 
@@ -116,35 +116,35 @@ def _trials_to_code(raw_exp, coded_dir):
     try:
         max_coded = max(coded_trial_nums)
     except:
-        messagebox.showerror('Experiment was already coded','Please delete all files from the results directory and re-run the program')
+        messagebox.showerror('Session was already coded', 'Please delete all files from the encoded-data folder and re-run WEncoder')
         return False
 
     #-- All trials were already coded
     if raw_trial_nums == coded_trial_nums:
-        messagebox.showerror('Experiment was already coded',
-                             'The results directory seems to contains the coding of all trials. ' +
-                             'To recode the experiment, delete all files from the results directory and re-run the program')
+        messagebox.showerror('Session was already coded',
+                             'The encoded-data folder seems to contains the coding of all trials. ' +
+                             'To encode the session again, delete all files from the encoded-data folder and re-run WEncoder)')
         return False
 
 
     #-- Coding has reached the last trial, but some trials are missing along the way
     elif max_coded == max(raw_trial_nums):
-        messagebox.showerror('Experiment was already coded',
-                             'The results directory contains the experiment''s coding, but the coding has skipped some trials. ')
+        messagebox.showerror('Session was already coded',
+                             'The encoded-data folder contains the session''s coding, but the coding has skipped some trials. ')
         return False
 
     #-- More coded than raw trials
     elif max_coded > max(raw_trial_nums):
-        messagebox.showerror('Experiment was already coded',
-                             'The results directory contains the coding of MORE trials than exist in the raw experiment. ' +
+        messagebox.showerror('Session was already coded',
+                             'The encoded-data folder contains the coding of MORE trials than exist in the session. ' +
                              'It could be that you have selected mismatching directories. ' +
-                             'Please verify and re-run the program')
+                             'Please verify and re-run WEncoder')
         return False
 
     #-- All trials up to trial #N were coded, but some trials were not coded yet
     elif raw_trial_nums[:len(coded_trial_nums)] == coded_trial_nums:
-        ans = messagebox.askquestion('Experiment was already coded',
-                                     'The results directory contains the coding of trials up to {:}. '.format(max_coded) +
+        ans = messagebox.askquestion('Session was already coded',
+                                     'The encoded-data folder already contains coding for trials 1-{:}. '.format(max_coded) +
                                      'Do you want to continue coding from trial #{:}?'.format(max_coded + 1))
         if ans:
             return max_coded + 1
@@ -153,8 +153,8 @@ def _trials_to_code(raw_exp, coded_dir):
 
     #-- Coding was done up to trial #N, but some trials were skipped and not coded
     else:
-        ans = messagebox.askquestion('Experiment was already coded',
-                                     'The results directory contains the coding of trials up to {:}, '.format(max_coded) +
+        ans = messagebox.askquestion('Session was already coded',
+                                     'The encoded-data folder contains the coding of trials up to {:}, '.format(max_coded) +
                                      'but the coding has skipped some trials. ' +
                                      'Do you want to continue coding from trial #{:}?'.format(max_coded + 1))
         if ans:
@@ -255,98 +255,3 @@ def _open_choose_trial(curr_trial, all_trials):
 
         else:
             return curr_trial
-
-
-'''def run_mccloskey():
-    """
-    Run the app with full UI. Ask the user for any relevant info.
-    Input files are in McCloskey's format.
-    """
-    root = tk.Tk()
-    root.withdraw()
-
-    raw_dir = uiu.choose_directory('Select the directory with the experiment raw data')
-    print("raw dir is: " + str(raw_dir))
-    if raw_dir is None:
-
-        return
-
-    prefixes = _get_mccloskey_prefixes(raw_dir)
-
-    if prefixes is None:
-        return
-
-    results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
-    if results_dir is None:
-        return
-    rc = messagebox.askokcancel('Validate',
-                                'Input directory: ' + raw_dir +
-                                '\nResults directory: ' + results_dir +
-                                '\nPlease double-check this. Any existing data in the results directory may be overriden.')
-    if not rc:
-        return
-
-    raw_exp = mccloskey.rawreader.load_experiment(raw_dir, prefixes)
-
-    which_trials_to_code = _trials_to_code(raw_exp, results_dir)
-    if isinstance(which_trials_to_code, int):
-        trial_to_start_from = which_trials_to_code
-        trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
-
-
-    elif which_trials_to_code:
-        trials_to_code = raw_exp.trials
-
-    else:
-        return
-
-    try:
-        code_experiment(trials_to_code, results_dir,trial_to_start_from )
-    except Exception as e:
-        traceback.print_exc()
-        messagebox.showerror('Error in coding app', str(e))'''
-
-
-
-#-------------------------------------------------------------------------------------
-'''def _get_mccloskey_prefixes(dir_name):
-
-    all_prefixes = mccloskey.rawreader.get_existing_prefixes(dir_name)
-    if len(all_prefixes) == 0:
-        messagebox.showerror('Invalid directory', 'No raw data was found in the selected directory')
-        return None
-
-    all_prefixes = list(all_prefixes)
-
-    layout = [
-        [sg.Text('Choose the file prefixes you want to include, in order:', font=('Arial', 18))],
-    ]
-
-    for i, prefix in enumerate(all_prefixes):
-        desc = sg.Text("{:}. ".format(i + 1), font=('Arial', 18))
-        selection = sg.DropDown(['-'] + all_prefixes, readonly=True)
-        layout.append([desc, selection])
-
-    layout.append([sg.Button('OK'), sg.Button('Cancel')])
-
-    while True:
-        window = sg.Window('Choose sessions for markup', layout)
-        event, values = window.Read()
-
-        window.Close()
-
-        if event is None or event == 'Cancel':
-            return None
-
-        selected_prefixes = [v for v in values.values() if v is not None and v != '-']
-        print(selected_prefixes)
-
-        if len(selected_prefixes) == len(set(selected_prefixes)):
-            #-- OK, no duplicates
-            return selected_prefixes
-
-        messagebox.showerror('Invalid selection', 'Please do not selecte the same file prefix twice')'''
-
-
-#-------------------------------------------------------------------------------------
-

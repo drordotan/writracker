@@ -1,9 +1,8 @@
-from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsView, QGraphicsScene
 from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
 from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5 import uic
-from recorder_io import Target, Trial, Trajectory
+from wacom_recorder.recorder_io import Target, Trial, Trajectory
 from datetime import datetime, date, timedelta
 from pygame import error as pgerr  # handle pygame errors as exceptions
 from mutagen.mp3 import MP3        # get mp3 length
@@ -65,7 +64,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
         self.path = QPainterPath()
         # UI settings
-        uic.loadUi('recorder_ui.ui', self)
+        uic.loadUi(os.path.dirname(__file__) + os.sep + 'recorder_ui.ui', self)
         self.cfg_window = QDialog()
         # UI - Button
         self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')

@@ -1,3 +1,3 @@
-from . import io
+from . import dataio
 from . import trialcoder
 from . import expcoder

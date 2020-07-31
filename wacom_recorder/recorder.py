@@ -16,7 +16,7 @@ import pandas as pd             # read excel file input, reloading session
 
 
 #-------------------------------------------------------------------------------------------------------------
-#todo: move these classes to recorder.io module
+#todo: move these classes to oldrecorder.io module
 
 class Target:
     def __init__(self, target_id, target_value, sound_file_name="", next_trial_id=1):
@@ -596,7 +596,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                     tmp_trial = Trial(trial_id=key, target_id=target.id, target_value=target.value,
                                       rc_code=trials_dict[key]['rc'],
                                       session_time=trials_dict[key]['session_time'],
-                                      session_num=trials_dict[key]['session_number'],
+                                      session_num=trials_dict[key]['date'],
                                       traj_file_name=trials_dict[key]['file_name'],
                                       abs_time=trials_dict[key]['absolute_time'])
                     target.trials.append(tmp_trial)
@@ -643,7 +643,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def save_trials_file(self):
         with open(self.results_folder_path + os.sep + "trials.csv", mode='w') as trials_file:
             trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
-                                                           'session_time', 'session_number', 'absolute_time',
+                                                           'session_time', 'date', 'absolute_time',
                                                            'file_name', 'sound_file_length'], lineterminator='\n')
             trials_csv_file.writeheader()
             sorted_trials = []
@@ -653,7 +653,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             sorted_trials.sort(key=lambda x: x.id)    # sort by unique trial ID
             for trial in sorted_trials:
                 row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
-                           rc=trial.rc_code, session_time=trial.session_time, session_number=trial.session_num,
+                           rc=trial.rc_code, session_time=trial.session_time, date=trial.session_num,
                            absolute_time=trial.abs_time, file_name=trial.traj_file_name,
                            sound_file_length=trial.sound_file_length)
                 trials_csv_file.writerow(row)

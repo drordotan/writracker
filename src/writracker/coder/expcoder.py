@@ -7,7 +7,7 @@ from tkinter import messagebox
 import tkinter as tk
 import traceback
 
-from writracker.coder.trialcoder import markup_one_trial as _markup_one_trial
+from writracker.encoder.trialcoder import encode_one_trial as _markup_one_trial
 import writracker as wt
 import writracker.uiutil as uiu
 
@@ -24,14 +24,14 @@ def run():
     raw_exp = _load_raw_exp_ui()
     if raw_exp is None:
         return
-
-    results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
+    results_dir = uiu.choose_directory('Select the directory for the results (coded data) hello')
     if results_dir is None or results_dir == '':
         return
 
     which_trials_to_code = _trials_to_code(raw_exp, results_dir)
+
     if isinstance(which_trials_to_code, int):
-        trials_to_code = [t for t in raw_exp.trials if t.trial_num >= which_trials_to_code]
+        trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
 
     elif which_trials_to_code:
         trials_to_code = raw_exp.trials
@@ -39,10 +39,10 @@ def run():
     else:
         return
 
-    try:
-        code_experiment(trials_to_code, results_dir)
-    except Exception as e:
-        messagebox.showerror('Error in coding app', str(e))
+    # try:
+    code_experiment(trials_to_code, results_dir)
+    # except Exception as e:
+    #     messagebox.showerror('Error in coding app', str(e))
 
 
 #-------------------------------------------------------------------------------------
@@ -53,18 +53,21 @@ def _load_raw_exp_ui():
         if raw_dir is None or raw_dir == '':
             return None
 
-        err_msg = wt.recorder.io.is_invalid_data_directory(raw_dir)
-        if err_msg is None:
-            return raw_dir
+        err_msg = wt.recorder.dataio.is_invalid_data_directory(raw_dir)
+        if err_msg is not None:                                         #check if there suppose to be "not" before None
+            print("Invalid raw-data directory 11")
+            messagebox.showerror("Invalid raw-data directory 1", err_msg)
+            return None
 
-        messagebox.showerror("Invalid raw-data directory", err_msg)
+        #try:
+        exp = wt.recorder.dataio.load_experiment(raw_dir)
+        print("try")
+        return exp
 
-        try:
-            exp = wt.recorder.io.load_experiment(raw_dir)
-            return exp
+        '''except Exception as e:
+            print("Invalid raw-data directory 2")
+            messagebox.showerror("Invalid raw-data directory 2", str(e))'''
 
-        except Exception as e:
-            messagebox.showerror("Invalid raw-data directory", str(e))
 
 
 #-------------------------------------------------------------------------------------
@@ -74,15 +77,24 @@ def _trials_to_code(raw_exp, coded_dir):
     she wants to recode all trials.
     """
 
-    raw_trial_nums = tuple(sorted([t.trial_num for t in raw_exp.trials]))
+    raw_trial_nums = tuple(sorted([t.trial_id for t in raw_exp.trials]))
 
-    if not os.path.isfile(wt.coder.io.trial_index_filename(coded_dir)):
+
+    print("coded dir is: " + str(coded_dir))
+    print(raw_exp)
+
+    if not os.path.isfile(wt.encoder.dataio.trial_index_filename(coded_dir)):
         #-- There is no index file - coding has not started yet
+        print("no index file")
         return True
 
-    coded_trials = wt.coder.io.load_trials_index(coded_dir)
-    coded_trial_nums = tuple(sorted(set([t['trial_num'] for t in coded_trials])))
+    coded_trials = wt.encoder.dataio.load_trials_index(coded_dir)
+    coded_trial_nums = tuple(sorted(set([t['trial_id'] for t in coded_trials])))
+    print(coded_trial_nums)
+    print(coded_trials)
+    print("value error")
     max_coded = max(coded_trial_nums)
+    print("max coded: " + str(max_coded))
 
     #-- All trials were already coded
     if raw_trial_nums == coded_trial_nums:
@@ -138,18 +150,21 @@ def run_mccloskey():
     root.withdraw()
 
     raw_dir = uiu.choose_directory('Select the directory with the experiment raw data')
+    print("raw dir is: " + str(raw_dir))
+    #raw_dir = "C:\Users\Ron\Documents\GitHub\new\raw"
     if raw_dir is None:
+
         return
 
     prefixes = _get_mccloskey_prefixes(raw_dir)
+
     if prefixes is None:
         return
 
     results_dir = uiu.choose_directory('Select the directory for the results (coded data)')
-    print('res=' + results_dir)
+    #results_dir = "C:\Users\Ron\Documents\GitHub\new\results"
     if results_dir is None:
         return
-
     rc = messagebox.askokcancel('Validate',
                                 'Input directory: ' + raw_dir +
                                 '\nResults directory: ' + results_dir +
@@ -161,7 +176,7 @@ def run_mccloskey():
 
     which_trials_to_code = _trials_to_code(raw_exp, results_dir)
     if isinstance(which_trials_to_code, int):
-        trials_to_code = [t for t in raw_exp.trials if t.trial_num >= which_trials_to_code]
+        trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
 
     elif which_trials_to_code:
         trials_to_code = raw_exp.trials
@@ -220,12 +235,14 @@ def _get_mccloskey_prefixes(dir_name):
 #-------------------------------------------------------------------------------------
 def code_experiment(trials, out_dir):
 
+    print("trials are: " + str(trials))
     i = 0
     while i < len(trials):
 
-        trial = trials[i]
 
-        wt.coder.io.remove_from_trial_index(out_dir, trial.trial_num)
+        trial = trials[i]
+        print("trial is: " + str(trial))
+        wt.encoder.dataio.remove_from_trial_index(out_dir, trial.trial_id)
 
         print('Processing trial #{}, source: {}'.format(i + 1, trial.source))
         rc = _markup_one_trial(trial, out_dir)
@@ -234,10 +251,16 @@ def code_experiment(trials, out_dir):
             break
 
         elif rc == 'next':
+            if i == (len(trials)-1):
+                continue
             i += 1
 
+
         elif rc == 'prev':
+            if i == 0:
+                continue
             i -= 1
+
 
         elif rc == 'choose_trial':
             next_trial = _open_choose_trial(trial, trials)
@@ -253,7 +276,7 @@ def _open_choose_trial(curr_trial, all_trials):
     Open the 'settings' window
     """
 
-    trial_nums = [t.trial_num for t in all_trials]
+    trial_nums = [t.trial_id for t in all_trials]
 
     show_popup = True
     warning = ''
@@ -262,7 +285,7 @@ def _open_choose_trial(curr_trial, all_trials):
 
         layout = [
             [sg.Text(warning, text_color='red', font=('Arial', 18))],
-            [sg.Text('Go to trial number: '), sg.InputText(str(curr_trial.trial_num)),
+            [sg.Text('Go to trial number: '), sg.InputText(str(curr_trial.trial_id)),
              sg.Text('({:} - {:})'.format(min(trial_nums), max(trial_nums)))],
             [sg.Button('OK'), sg.Button('Cancel')],
         ]
@@ -281,20 +304,20 @@ def _open_choose_trial(curr_trial, all_trials):
 
         if apply:
             try:
-                trial_num = int(values[0])
+                trial_id = int(values[0])
             except ValueError:
                 warning = 'Invalid trial: please write a whole number'
                 continue
 
-            if not (min(trial_nums) <= trial_num <= max(trial_nums)):
+            if not (min(trial_nums) <= trial_id <= max(trial_nums)):
                 warning = 'Invalid trial number (choose a number between {:} and {:}'.format(min(trial_nums), max(trial_nums))
                 continue
 
-            if trial_num not in trial_nums:
+            if trial_id not in trial_nums:
                 warning = 'A trial with this number does not exist'
                 continue
 
-            matching = [t for t in all_trials if t.trial_num == trial_num]
+            matching = [t for t in all_trials if t.trial_id == trial_id]
             return matching[0]
 
         else:

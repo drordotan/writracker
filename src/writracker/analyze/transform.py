@@ -1,5 +1,5 @@
 """
-Transform the coder data
+Transform the encoder data
 """
 import csv
 import numpy as np

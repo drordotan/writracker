@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 """
 Load and save coded files
 """
@@ -6,32 +10,57 @@ import csv
 import os
 import numpy as np
 from collections import namedtuple
+<<<<<<< HEAD
 
 import writracker.utils as u
 import writracker as wt
 # noinspection PyProtectedMember
 from writracker.recorder.dataio import _parse_config_int_value, _parse_config_float_value, _parse_config_bool_value
+=======
+import data
+from encoder import dataiooldrecorder
+from encoder import trialcoder
+
+# noinspection PyProtectedMember
+from encoder.dataiooldrecorder import _parse_config_int_value, _parse_config_float_value
+from encoder import extract_aggregate_measures
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 
 StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 
 
 #-------------------------------------------------------------------------------------
 
+<<<<<<< HEAD
 trials_index_fields = 'trial_id','target_id','sub_trial_num','target','response','session_time',\
                       'rc','raw_file_name','absolute_time','date','self_correction', 'sound_file_length'
 
 
 #-------------------------------------------------------------------------------------
 def load_experiment(dir_name):
+=======
+trials_index_fields = 'trial_id','target_id','sub_trial_num','target','response','time_in_session',\
+                      'rc','raw_file_name','time_in_day','date','self_correction', 'sound_file_length'
+
+
+#-------------------------------------------------------------------------------------
+def encoder(dir_name, trials):
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 
     traj_filenames = _load_trajectory_filenames(dir_name)
     index = load_trials_index(dir_name)
 
     trials = []
     for t in index:
+<<<<<<< HEAD
         trial = wt.data.EncoderTrial(trial_id=t['trial_id'], target_id=t['target_id'], stimulus=t['target'],
                                      response=t['response'], characters=[], strokes=[], sub_trial_num=t['sub_trial_num'],
                                      session_time=t['session_time'], rc=t['rc'], self_correction = 'self_correction')
+=======
+        trial = data.EncoderTrial(trial_id=t['trial_id'], target_id=t['target_id'], stimulus=t['target'],
+                                     response=t['response'], characters=[], strokes=[], sub_trial_num=t['sub_trial_num'],
+                                     time_in_session=t['time_in_session'], rc=t['rc'], self_correction = 'self_correction')
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 
         trial_key = trial.trial_id, trial.sub_trial_num
         if trial_key not in traj_filenames:
@@ -43,6 +72,7 @@ def load_experiment(dir_name):
         trial.strokes = strokes
         trials.append(trial)
 
+<<<<<<< HEAD
     return wt.data.Experiment(trials, source_path=dir_name)
 
 
@@ -57,6 +87,27 @@ def save_experiment(exp, dir_name):
         _set_char_num_in_each_stroke(trial)
         save_trajectory(trial.strokes, trial.trial_id, trial.sub_trial_num, dir_name)
 
+=======
+    return data.Experiment(trials, source_path=dir_name)
+
+
+#-------------------------------------------------------------------------------------
+
+"""
+***Unused!
+
+
+def save_experiment(exp, dir_name):
+
+    dataiooldrecorder.reset_trial_info_file(dir_name)
+
+    for trial in exp.trials:
+        append_to_trial_index(dir_name, trial.trial_id, trial.sub_trial_num, trial.target_id, trial.stimulus,
+                              trial.response, trial.time_in_session, trial.rc, trial.self_correction)
+        _set_char_num_in_each_stroke(trial)
+        save_trajectory(trial.strokes, trial.trial_id, trial.sub_trial_num, dir_name)
+"""
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 
 #-------------------------------------------------
 def _set_char_num_in_each_stroke(trial):
@@ -92,19 +143,73 @@ def save_trajectory(strokes, trial_id, sub_trial_num, out_dir, trial):
             stroke_num += 1
             for dot in stroke.trajectory:
                 row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down='1' if stroke.on_paper else '0',
+<<<<<<< HEAD
                            x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t), correction = trial.self_correction)
+=======
+                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t), correction = stroke.correction)
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
                 writer.writerow(row)
 
     return filename
 
 
 #-------------------------------------------------------------------------------------
+<<<<<<< HEAD
+=======
+
+def save_strokes_file(strokes, trial_id, sub_trial_num, out_dir, trial):
+
+    filename = "{:}/Encoded_Strokes.csv".format(out_dir)
+    index_fn = out_dir + os.sep + 'Encoded_Strokes.csv'
+    file_exists = os.path.isfile(index_fn)
+
+    with open(filename, 'a' if file_exists else 'w') as fp:
+        writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'stroke', 'correction'], lineterminator='\n')
+        if not file_exists:
+            writer.writeheader()
+        stroke_num = 0
+        for stroke in strokes:
+            stroke_num += 1
+            row = dict(trial_id = trial_id, char_num=stroke.char_num+1, stroke=stroke_num, correction=stroke.correction)
+            writer.writerow(row)
+    return filename
+
+
+# -------------------------------------------------------------------------------------
+
+def save_characters_file(characters, strokes, trial_id, sub_trial_num, out_dir, trial):
+
+
+    '''
+    index_fn = out_dir + os.sep + 'encoded_characters.csv'
+        file_exists = os.path.isfile(index_fn)
+
+        filename = "{:}/encoded_characters.csv".format(out_dir)
+        with open(filename, 'a' if file_exists else 'w') as fp:
+            writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'correction'], lineterminator='\n')
+            if not file_exists:
+                writer.writeheader()
+            char_num = 0
+            for c in characters:
+                char_num += 1
+                row = dict(trial_id = trial_id, char_num=c.char_num, correction= c.correction)
+                writer.writerow(row)
+    '''
+    #extract_aggregate_measures.execute_agg_measures(out_dir)
+
+#-------------------------------------------------------------------------------------
+
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 def _load_trajectory_filenames(dir_name):
     """ Load the names of all trajectory files in the given directory """
 
     filenames = dict()
 
     for fn in os.listdir(dir_name):
+<<<<<<< HEAD
+=======
+    #for traj_name in trials.raw_file_name:
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
         m = re.match('trajectory_(\\d+)(_part(\\d+))?.csv', fn)
         if m is None:
             continue
@@ -162,10 +267,17 @@ def _load_strokes(filename):
                     strokes_info.append(StrokeInfo(curr_stroke, last_char_num))
                 last_stroke_num = stroke_num
                 last_char_num = char_num
+<<<<<<< HEAD
                 curr_stroke = wt.data.Stroke(on_paper, char_num, [])
 
             #-- Append point
             pt = wt.data.TrajectoryPoint(x, y, prs, t)
+=======
+                curr_stroke = data.Stroke(on_paper, char_num, [])
+
+            #-- Append point
+            pt = data.TrajectoryPoint(x, y, prs, t)
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
             curr_stroke.trajectory.append(pt)
 
     if curr_stroke is not None:
@@ -225,7 +337,11 @@ def _strokes_to_characters(filename, strokes_info):
 
         else:
             # -- New character
+<<<<<<< HEAD
             curr_char = wt.data.Character(char_num, [stroke], pre_char_space=pre_char_space)
+=======
+            curr_char = data.Character(char_num, [stroke], pre_char_space=pre_char_space)
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
             pre_char_space = None
             characters.append(curr_char)
             last_char_num = char_num
@@ -269,7 +385,11 @@ def reset_trial_info_file(dir_name):
 
 
 #-------------------------------------------------------------------------------------------------
+<<<<<<< HEAD
 def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc,self_correction, sound_file_length):
+=======
+def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc,self_correction, sound_file_length,raw_file_name,time_in_day,date):
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
     """
     Append a line to the trials.csv file
     """
@@ -284,6 +404,7 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  target_id=target_id,
                  target=target,
                  response=response,
+<<<<<<< HEAD
                  session_time=trial_start_time,
                  rc='' if rc is None else rc,
                  self_correction=self_correction,
@@ -292,6 +413,19 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
 
 
     with open(index_fn, 'a' if file_exists else 'w') as fp:
+=======
+                 time_in_session=trial_start_time,
+                 rc='' if rc is None else rc,
+                 self_correction=self_correction,
+                 sound_file_length = sound_file_length,
+                 raw_file_name = raw_file_name,
+                 time_in_day=time_in_day,
+                 date=date
+                 )
+
+
+    with open(index_fn, 'a' if file_exists else 'w', encoding="cp437", errors='ignore') as fp:
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
         writer = csv.DictWriter(fp, trials_index_fields, lineterminator='\n')
         if not file_exists:
             writer.writeheader()
@@ -312,7 +446,11 @@ def remove_from_trial_index(dir_name, trial_id, sub_trial_num=None):
 
     index = load_trials_index(dir_name)
 
+<<<<<<< HEAD
     with open(index_fn, 'w') as fp:
+=======
+    with open(index_fn, 'w', encoding="cp437", errors='ignore') as fp:
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
         writer = csv.DictWriter(fp, trials_index_fields, lineterminator='\n')
         writer.writeheader()
         for entry in index:
@@ -335,7 +473,11 @@ def load_trials_index(dir_name):
     if not os.path.isfile(index_fn):
         return []
 
+<<<<<<< HEAD
     with open(index_fn, 'r') as fp:
+=======
+    with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
         reader = csv.DictReader(fp)
         _validate_csv_format(index_fn, reader, trials_index_fields)
 
@@ -344,19 +486,34 @@ def load_trials_index(dir_name):
             location = 'line {:} in {:}'.format(reader.line_num, index_fn)
             trial_id = _parse_config_int_value('trial_id', row['trial_id'], location)
             sub_trial_num = _parse_config_int_value('sub_trial_num', row['sub_trial_num'], location)
+<<<<<<< HEAD
             target_id = _parse_config_int_value('target_id', row['target_id'], location, allow_empty=True)
             session_time = _parse_config_float_value('session_time', row['session_time'], location, allow_empty=True)
+=======
+            target_id = row['target_id']
+            #target_id = _parse_config_int_value('target_id', row['target_id'], location, allow_empty=True)
+            time_in_session = row['time_in_session']
+            #time_in_session = _parse_config_float_value('time_in_session', row['time_in_session'], location, allow_empty=True)
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
             rc = None if row['rc'] == '' else row['rc']
             target = row['target']
             response = row['response']
             raw_file_name = row['raw_file_name']
+<<<<<<< HEAD
             absolute_time = row['absolute_time']
+=======
+            time_in_day = row['time_in_day']
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
             date= row['date']
             self_correction = row['self_correction']
             sound_file_length = row['sound_file_length']
 
 
             result.append(dict(trial_id=trial_id,target_id=target_id,sub_trial_num=sub_trial_num,target=target,response=response
+<<<<<<< HEAD
                                ,session_time=session_time,rc=rc,raw_file_name=raw_file_name,absolute_time=absolute_time,date=date,self_correction = self_correction, sound_file_length = sound_file_length))
+=======
+                               ,time_in_session=time_in_session,rc=rc,raw_file_name=raw_file_name,time_in_day=time_in_day,date=date,self_correction = self_correction, sound_file_length = sound_file_length))
+>>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 
     return result

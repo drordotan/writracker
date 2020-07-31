@@ -2,16 +2,15 @@ import time
 from collections import namedtuple
 import os
 import csv
-import re
 
 import PySimpleGUI as sg
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 
-from writracker.recorder import io as twio
-from writracker.recorder.io import StartAcquisition, trials_csv_filename
-import writracker.uiutil as uiu
-import writracker.utils as u
-import writracker as wt
+from encoder import dataiooldrecorder as twio
+from encoder.dataiooldrecorder import StartAcquisition, trials_csv_filename
+import uiutil as uiu
+import utils as u
+import data
 
 
 #----------------------------------------------------------
@@ -63,7 +62,7 @@ def run():
             messagebox.showinfo('Please choose another output directory or rename the file')
             return
 
-        wt.recorder.io.reset_trial_info_file(out_dir)
+        twio.reset_trial_info_file(out_dir)
 
     record(targets, out_dir, start_acquisition_on=config['start_acquisition_on'], beep_on_start=config['beep_on_start'])
 
@@ -87,7 +86,7 @@ def record(targets, out_dir, screen_size=None, start_acquisition_on=StartAcquisi
     """
 
     curr_target_num = 0
-    trial_num = 1
+    trial_id = 1
 
     exp_start_time = time.time()
     if beep_on_start:
@@ -102,18 +101,17 @@ def record(targets, out_dir, screen_size=None, start_acquisition_on=StartAcquisi
         else:
             target = t['target']
             repeat_number = t['repeated']
-
-        rc = record_one_target(trial_num, curr_target_num, target, out_dir, start_acquisition_on, screen_size=screen_size,
+        rc = record_one_target(trial_id, curr_target_num, target, out_dir, start_acquisition_on, screen_size=screen_size,
                                exp_start_time=exp_start_time, target_repeat_number=repeat_number)
         if rc == 'again':
             pass
 
         elif rc == 'accept_and_next':
-            trial_num += 1
+            trial_id += 1
             curr_target_num += 1
 
         elif rc == 'failed_trial':
-            trial_num += 1
+            trial_id += 1
             curr_target_num += 1
             targets.append(dict(target=target, repeated=repeat_number + 1))
 
@@ -133,7 +131,7 @@ def record(targets, out_dir, screen_size=None, start_acquisition_on=StartAcquisi
 
 
 #----------------------------------------------------------
-def record_one_target(trial_num, target_num, target, out_dir, start_acquisition_on, screen_size=None, exp_start_time=None,
+def record_one_target(trial_id, target_id, target, out_dir, start_acquisition_on, screen_size=None, exp_start_time=None,
                       target_repeat_number=1):
     """
     Run one trial in the recording session
@@ -143,7 +141,7 @@ def record_one_target(trial_num, target_num, target, out_dir, start_acquisition_
         screen_size = uiu.screen_size()
         screen_size = screen_size[0] - 50, screen_size[1] - 150
 
-    window = _create_recording_window(screen_size, trial_num, target_num, target, target_repeat_number)
+    window = _create_recording_window(screen_size, trial_id, target_id, target, target_repeat_number)
 
     acquiring = start_acquisition_on == StartAcquisition.Always
     trial_start_time = None
@@ -192,13 +190,13 @@ def record_one_target(trial_num, target_num, target, out_dir, start_acquisition_
         #-- Accept this trial
         elif event in ('a', 'A', 'accept'):
             window.Close()
-            twio.append_trial(out_dir, trial_num, target_num, target, trajectory, trial_start_time, True)
+            twio.append_trial(out_dir, trial_id, target_id, target, trajectory, trial_start_time, True)
             return 'accept_and_next'
 
         #-- Accept this trial, but mark it as "failed" for rerun
         elif event in ('f', 'F', 'fail_trial'):
             window.Close()
-            twio.append_trial(out_dir, trial_num, target_num, target, trajectory, trial_start_time, False)
+            twio.append_trial(out_dir, trial_id, target_id, target, trajectory, trial_start_time, False)
             return 'failed_trial'
 
         #-- Start acquisition
@@ -214,7 +212,7 @@ def record_one_target(trial_num, target_num, target, out_dir, start_acquisition_
 
 
 #-------------------------------------------------------------------------------------------------
-def _create_recording_window(screen_size, trial_num, target_num, target, target_repeat_number):
+def _create_recording_window(screen_size, trial_id, target_id, target, target_repeat_number):
 
     commands = [
         sg.Button('(S)tart acquisition', key='start_acquire'),
@@ -228,7 +226,7 @@ def _create_recording_window(screen_size, trial_num, target_num, target, target_
     ]
 
     repeat_text = "" if target_repeat_number == 1 else _repeat_text(target_repeat_number)
-    title = 'Target #{:}{:}: {:}'.format(target_num, repeat_text, target)
+    title = 'Target #{:}{:}: {:}'.format(target_id, repeat_text, target)
 
     layout = [
         [sg.Text(title, text_color='green', font=('Arial', 24))],
@@ -236,7 +234,7 @@ def _create_recording_window(screen_size, trial_num, target_num, target, target_
         commands
     ]
 
-    window = sg.Window('Trial #{:}'.format(trial_num), layout, return_keyboard_events=True)
+    window = sg.Window('Trial #{:}'.format(trial_id), layout, return_keyboard_events=True)
     window.Finalize()
 
     return window

@@ -53,16 +53,21 @@ class RawTrial(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trial_num, target_num, stimulus, traj_points, start_time=None, rc=None, source=None):
-        self.target_num = target_num
-        self.trial_num = trial_num
+    def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None, self_correction = None,
+                 sound_file_length = None,raw_file_name = None, time_in_day = None, date = None):
+        self.target_id = target_id
+        self.trial_id = trial_id
         self.stimulus = stimulus
         self.traj_points = traj_points
-        self.start_time = start_time
+        self.time_in_session = time_in_session
         self.rc = rc
         self.source = source
         self.response = ''
-
+        self.self_correction = self_correction
+        self.sound_file_length = sound_file_length
+        self.raw_file_name = raw_file_name
+        self.time_in_day = time_in_day
+        self.date = date
 
     #-----------------------------------------------------------------
     @property
@@ -88,17 +93,18 @@ class CodedTrial(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trial_num, target_num, stimulus, response, characters, strokes, sub_trial_num=1, start_time=None, rc=None):
+    def __init__(self, trial_num, target_id, stimulus, response, characters, strokes, sub_trial_num=1, time_in_session=None, rc=None,self_correction = None, sound_file_length = None):
         self.trial_num = trial_num
         self.sub_trial_num = sub_trial_num
-        self.target_num = target_num
+        self.target_id = target_id
         self.stimulus = stimulus
         self.response = response
         self.characters = characters
         self.strokes = strokes
-        self.start_time = start_time
+        self.time_in_session = time_in_session
         self.rc = rc
-
+        self.self_correction = self_correction
+        self.sound_file_length = sound_file_length
 
     #-----------------------------------------------------------------
     @property
@@ -173,6 +179,8 @@ class Stroke(object):
         self.on_paper = on_paper
         self.char_num = char_num
         self.trajectory = trajectory
+        self.correction = 0
+
 
 
     @property

@@ -3,8 +3,43 @@ Transform the encoder data
 """
 import csv
 import numpy as np
+from collections import namedtuple
+from copy import copy
 
 import math
+
+CharInfo = namedtuple('CharInfo', ['character', 'csv_row'])
+
+#-----------------------------------------------------------------------------------------------------
+class AggFunc(object):
+
+    def __init__(self, func, out_fields, apply_per_char=True, get_prev_aggregations=False):
+        """
+
+        :param func: Aggregation function. It can be either of:
+            - function(trial, character) - runs on one character. Returns the aggregated value, or a list/tuple of aggregated values.
+            - function(trial, csv_rows) - runs on all characters. Returns a list with one element per character, which is an
+                                          aggregated value or a list/tuple of aggregated values.
+                                          The csv_rows argument is the output of previous aggregation functions: a char_num->info dict,
+                                          where "info" is a dict with the results of previous aggregation functions
+        :param out_fields: Name(s) of the functino's output fields
+        :param apply_per_char: indicates whether the "func" parameter works on one character or on the whole trial
+        """
+
+        if isinstance(out_fields, str):
+            out_fields = [out_fields]
+        elif is_collection(out_fields):
+            out_fields = tuple(out_fields)
+        else:
+            raise ValueError('Invalid "out_fields" argument - expecting either a field name or a list of field names')
+
+        assert isinstance(apply_per_char, bool)
+        assert isinstance(get_prev_aggregations, bool)
+
+        self.func = func
+        self.out_fields = out_fields
+        self.apply_per_char = apply_per_char
+        self.get_prev_aggregations = get_prev_aggregations
 
 
 #-----------------------------------------------------------------------------------------------------
@@ -12,12 +47,9 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
     """
     Compute an aggregate value (or values) per trajectory section, and potentially save to CSV
 
-    :param trials: A list of :class:`writracker.Trial` objects
+    :param trials: A list of :class:`Trial` objects
     :param agg_func_specs: A list of functions that compute the aggregate values.
-             Each element in the list is a tuple. The first tuple element is function(trial, character), which returns
-             the aggregated value or a list/tuple with 2 or more aggregated values.
-             The other tuple elemenmts are the names of the CSV fields in which the aggregate values will be saved.
-             The number of field names must match the function's return value.
+             Each element in the list is an AggFunc object.
     :param trial_filter: Function for filtering trials: function(trial) -> bool (return False for trials to exclude)
     :param char_filter: Function for filtering trials: function(character, trial) -> bool (return False for trials to exclude)
                              (return False for trajectory sections to exclude)
@@ -28,12 +60,8 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
 
     assert len(agg_func_specs) > 0, "No aggregation functions were provided"
     for func_spec in agg_func_specs:
-        assert len(func_spec) >= 2, \
-            'Invalid aggregation function specification ({:}): expecting a tuple of function and field names'.format(func_spec)
-        assert '__call__' in dir(func_spec[0]), \
-            'Invalid aggregation function ({:}): expecting a tuple of function and field names'.format(func_spec[0])
-        for fld in func_spec[1:]:
-            assert isinstance(fld, str), 'Invalid field name "{:}"'.format(fld)
+        assert isinstance(func_spec, AggFunc), \
+            'Invalid aggregation function specification ({:}): expecting an AggFunc object'.format(func_spec)
 
     #-- Filter trials
     if trial_filter is not None:
@@ -53,16 +81,8 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
             n_errors += 1
             continue
 
-        characters = trial.characters if (char_filter is None) else [c for c in trial.characters if char_filter(c, trial)]
-
-        for character in characters:
-            csv_row = dict(subject='', trial_num=trial.trial_num, target_num=trial.target_num, target=trial.stimulus,
-                           char_num=character.char_num, char=trial.response[character.char_num - 1])
-            if subj_id is not None:
-                csv_row['subject'] = subj_id
-
-            _apply_aggregation_functions_to_one_character(agg_func_specs, character, csv_row, save_as_attr, trial)
-            csv_rows.append(csv_row)
+        trial_rows = _apply_aggregation_functions_to_trial(agg_func_specs, trial, subj_id, char_filter, save_as_attr)
+        csv_rows.extend(trial_rows)
 
     if n_errors > 0:
         raise Exception('Errors were found in {:}/{:} trials, see details above'.format(n_errors, len(trials)))
@@ -71,7 +91,7 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
     if out_filename is not None:
         csv_fieldnames = ([] if subj_id is None else ['subject']) + \
                         ['trial_num', 'target_num', 'target', 'char_num', 'char'] + \
-                        [field for func_spec in agg_func_specs for field in func_spec[1:]]
+                        [field for func_spec in agg_func_specs for field in func_spec.out_fields]
         with open(out_filename, 'w') as fp:
             writer = csv.DictWriter(fp, csv_fieldnames, lineterminator='\n')
             writer.writeheader()
@@ -80,28 +100,71 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
 
 
 #--------------------------------------------------
-def _apply_aggregation_functions_to_one_character(agg_funcs, character, csv_row, save_on_char, trial):
+def _apply_aggregation_functions_to_trial(agg_func_specs, trial, subj_id, char_filter, save_as_attr):
 
-    for agg_func_spec in agg_funcs:
-        func = agg_func_spec[0]
-        field_names = agg_func_spec[1:]
-        agg_value = func(trial, character)
+    characters = trial.characters if (char_filter is None) else [c for c in trial.characters if char_filter(c, trial)]
 
-        if len(field_names) > 1:
-            if len(field_names) != len(agg_value):
-                raise ValueError("the aggregation function {:} was expected to return {:} values ({:}) but it returned {:} values ({:})".
-                                 format(func, len(field_names), ", ".join(field_names), len(agg_value), agg_value))
+    #-- Create result object (not yet filled) per character
+    char_infos = [CharInfo(character,
+                           dict(subject='' if subj_id is None else subj_id,
+                                trial_num=trial.trial_num,
+                                target_num=trial.target_num,
+                                target=trial.stimulus,
+                                char_num=character.char_num,
+                                char=trial.response[character.char_num - 1]))
+                  for character in characters]
+
+    #-- Apply aggregation functions
+    for agg_func_spec in agg_func_specs:
+
+        csv_row_per_char = {ci.csv_row['char_num']: copy(ci.csv_row) for ci in char_infos} if agg_func_spec.get_prev_aggregations else None
+
+        if agg_func_spec.apply_per_char:
+            #-- The aggregation fuction should be called per character
+            for ci in char_infos:
+                if agg_func_spec.get_prev_aggregations:
+                    agg_value = agg_func_spec.func(trial, ci.character, prev_agg=csv_row_per_char)
+                else:
+                    agg_value = agg_func_spec.func(trial, ci.character)
+                _save_aggregated_value_on_character(agg_value, ci.character, ci.csv_row, agg_func_spec.out_fields, agg_func_spec.func, save_as_attr)
 
         else:
-            agg_value = [agg_value]
+            #-- The aggregation fuction should be called once for the whole trial
 
-        for field, value in zip(field_names, agg_value):
-            csv_row[field] = value
-            if save_on_char:
-                try:
-                    setattr(character, field, value)
-                except AttributeError:
-                    raise AttributeError("Can't set attribute '{:}' of character".format(field))
+            if agg_func_spec.get_prev_aggregations:
+                agg_values = agg_func_spec.func(trial, prev_agg=csv_row_per_char)
+            else:
+                agg_values = agg_func_spec.func(trial)
+
+            assert len(agg_values) == len(trial.characters)
+
+            for agg_value, character in zip(agg_values, trial.characters):
+                if characters.char_num in csv_row_per_char:
+                    _save_aggregated_value_on_character(agg_value, character, csv_row_per_char[character.char_num],
+                                                        agg_func_spec.out_fields, agg_func_spec.func, save_as_attr)
+
+
+    return [ci.csv_row for ci in char_infos]
+
+
+#--------------------------------------------------
+def _save_aggregated_value_on_character(agg_values, character, csv_row, field_names, func, save_as_char_attr):
+
+    if len(field_names) > 1:
+        if len(field_names) != len(agg_values):
+            raise ValueError("the aggregation function {:} was expected to return {:} values ({:}) but it returned {:} values ({:})".
+                             format(func, len(field_names), ", ".join(field_names), len(agg_values), agg_values))
+
+    else:
+        agg_values = [agg_values]
+
+    for field, value in zip(field_names, agg_values):
+        csv_row[field] = value
+        if save_as_char_attr:
+            try:
+                setattr(character, field, value)
+            except AttributeError:
+                raise AttributeError("Can't set attribute '{:}' of character".format(field))
 
 
 #-----------------------------------------------------------------------------------------------------
@@ -210,3 +273,30 @@ def find_interval_containing(values, p_contained, in_place=False):
         ind = min_inds[i - 1]
 
     return values[ind], values[ind + n_required_values - 1]
+
+
+#--------------------------------------
+def is_collection(value, allow_set=True, element_type=None, element_validator=None):
+    """
+    Check whether a given value is a collection object
+    :param value:
+    :param allow_set: Whether a set is considered as a collection or not
+    :param element_type: All elements must be of this type
+    :param element_validator: A function that returns True for valid elements
+    """
+    val_methods = dir(value)
+    if not ("__len__" in val_methods and "__iter__" in val_methods and
+            (allow_set or "__getitem__" in val_methods) and not isinstance(value, str)):
+        return False
+
+    if element_type is not None:
+        for elem in value:
+            if not isinstance(elem, element_type):
+                return False
+
+    if element_validator is not None:
+        for elem in value:
+            if not element_validator(elem):
+                return False
+
+    return True

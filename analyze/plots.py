@@ -6,9 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
 
-import writracker as wt
-from writracker.analyze.transform import get_bounding_box
-import writracker.utils as u
+from analyze.transform import get_bounding_box
+import utils as u
 
 
 #------------------------------------------------------------------------------
@@ -25,11 +24,11 @@ def plot_trial(trial, n_colors=10, get_z_levels=None, ax=None, decorations=None)
     """
     Plot the trial raw data - the characters, as the subject wrote them.
 
-    :type trial: writracker.Trial
+    :type trial: Trial
     :param n_colors: No. of colors to use to denote level of pressure
     :param ax: The axes to use for plotting
     """
-    if isinstance(trial, wt.data.RawTrial):
+    if isinstance(trial, data.RawTrial):
         draw_extras = False
 
     lightest_color = 0.95

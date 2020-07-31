@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1114</width>
-    <height>837</height>
+    <height>845</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -51,10 +51,20 @@
          </size>
         </property>
         <property name="text">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;img src=&quot;img/writracker_logo.png&quot; width=175 height=116/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;http://mathinklab.org/writracker/&quot;&gt;&lt;img src=&quot;img/writracker_logo.png&quot; width=175 height=116/&gt;&lt;/a&gt;
+&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
+        </property>
+        <property name="openExternalLinks">
+         <bool>true</bool>
+        </property>
+        <property name="textInteractionFlags">
+         <set>Qt::TextBrowserInteraction</set>
         </property>
        </widget>
       </item>
@@ -337,7 +347,7 @@ border-color: rgb(255, 0, 0);</string>
            <string>Discard current trajectory and repeat current target</string>
           </property>
           <property name="text">
-           <string>Reset current target</string>
+           <string>Reset trial</string>
           </property>
           <property name="icon">
            <iconset>
@@ -353,6 +363,22 @@ border-color: rgb(255, 0, 0);</string>
           <property name="sizeConstraint">
            <enum>QLayout::SetDefaultConstraint</enum>
           </property>
+          <item>
+           <widget class="QComboBox" name="combobox_targets">
+            <property name="minimumSize">
+             <size>
+              <width>75</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>75</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
           <item>
            <widget class="QPushButton" name="goto_btn">
             <property name="enabled">
@@ -375,22 +401,6 @@ border-color: rgb(255, 0, 0);</string>
             </property>
             <property name="text">
              <string>Go to</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="combobox_targets">
-            <property name="minimumSize">
-             <size>
-              <width>75</width>
-              <height>25</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>75</width>
-              <height>16777215</height>
-             </size>
             </property>
            </widget>
           </item>
@@ -477,6 +487,9 @@ border-color: rgb(255, 0, 0);</string>
         </property>
         <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
          <widget class="QPushButton" name="end_ssn_btn">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="minimumSize">
            <size>
             <width>175</width>
@@ -569,7 +582,7 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
              </size>
             </property>
             <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Starts the session&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Rotate the graphics display view.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string/>
@@ -714,11 +727,17 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
     <property name="title">
      <string>Options</string>
     </property>
-    <addaction name="actionChoose_start_ssn"/>
-    <addaction name="actionQuit"/>
+    <addaction name="actionAddError"/>
     <addaction name="separator"/>
    </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionOnline_help"/>
+   </widget>
    <addaction name="menuChoose_targets_file"/>
+   <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionChoose_start_ssn">
@@ -726,9 +745,20 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
     <string>Start Session</string>
    </property>
   </action>
-  <action name="actionQuit">
+  <action name="actionAddError">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
-    <string>Quit</string>
+    <string>Add Error type</string>
+   </property>
+  </action>
+  <action name="actionOnline_help">
+   <property name="text">
+    <string>Online help</string>
+   </property>
+   <property name="toolTip">
+    <string>Go to the Writracker-Recorder website</string>
    </property>
   </action>
  </widget>

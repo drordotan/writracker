@@ -10,13 +10,6 @@ import tkinter as tk
 from encoder import *
 from encoder import dataio
 
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-from tkinter import*
-import tkinter as tk
-from writracker.encoder import dataio
-import writracker as wt
-=======
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
 
 markup_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'))
@@ -36,11 +29,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
     sub_trial_num = 0
 
     selection_handler = None
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-    show_command = False
-=======
     show_command = None
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
     while len(trial_queue) > 0:
 
@@ -68,11 +57,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
 
         elif rc == 'reset_trial':
             trial_queue = [_create_default_characters(trial.traj_points, markup_config['max_within_char_overlap'])]
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-            wt.encoder.dataio.remove_from_trial_index(out_dir, trial.trial_id)
-=======
             dataio.remove_from_trial_index(out_dir, trial.trial_id)
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
             sub_trial_num = 0
             trial.self_correction = "0"
             show_command = None
@@ -104,12 +89,6 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             selection_handler = extra_info
 
         elif rc == 'show_correction':
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-            show_command = True
-            trial_queue.insert(0, characters)
-            selection_handler = extra_info
-
-=======
             if show_command:
                 show_command = False
             else:
@@ -128,7 +107,6 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
         elif rc == 'error_codes':
             trial_queue.insert(0, characters)
 
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
         else:
             raise Exception('Bug: unknown rc ({:})'.format(rc))
@@ -214,15 +192,10 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
     expand_ratio, offset, screen_size = _get_expand_ratio(all_markup_dots, screen_size, margin)
 
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-    title = 'Trial #{:}, target={:} ({:} characters, {:} strokes) ronronron'\
-        .format(trial.trial_id, trial.stimulus, len(on_paper_chars), len(on_paper_strokes))
-=======
     title = 'Trial #{:}, target={:} ({:} characters, {:} strokes) '\
         .format(trial.trial_id, trial.stimulus, len(on_paper_chars), len(on_paper_strokes))
 
 
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
     window = _create_window_for_markup(screen_size, title)
 
     if len(on_paper_chars) < 2:
@@ -230,31 +203,11 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         window['split_trial'].update(disabled=True)
     window['accept_error'].update(disabled=True)
 
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-
-
-
-=======
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
     graph = window.Element('graph')
     instructions = window.Element('instructions')
 
     _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, margin, dot_radius)
 
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-
-    selection_handler = None
-    current_command = None
-    window['show_correction'].enable_events = True
-    print("enable " + str(window['show_correction'].enable_events))
-
-
-
-    '''if (show_command == True):
-        window.FindElement('show_correction').update(disabled=False)'''
-    '''else:
-        window['show_correction'].update(disabled=True)'''
-=======
     selection_handler = None
     current_command = None
 
@@ -272,11 +225,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         window['self_correction'].update(disabled=True)
     else:
         window['self_correction'].update(disabled=False)
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
     while True:
-
-        #window['show_correction'].enable_events = False
 
         event, values = window.Read()
         #print("event is: "+str(event))
@@ -289,33 +239,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- Enables self correction checkbox
         if trial.self_correction == "1":
             window['show_correction'].update(disabled = False)
-
-        #window['show_correction'].update(value=True)
-        #window['show_correction'].enable_events=True
-        print("enable 2 " + str(window['show_correction'].enable_events))
-
-        '''if (show_command == True):
-            window.FindElement('show_correction').update(disabled=False)'''
-
-        print("values are: " + str(values))
-        print(event)
-
-        #-- Enables Error button only if an error is selected
-
-        if (values[0] not in markup_config["error_codes"]):
-            window['accept_error'].update(disabled=True)
-        else:
-            window['accept_error'].update(disabled=False)
-
-
-        #-- Enables self correction checkbox
-
-        '''if (current_command == 'self_correction' or 'show_correction'):
-            window['show_correction'].update(True)'''
-            #alues['show_correction']) == True
-
-
-
 
         #-- Window was closed: reset the trial
         if event is None:
@@ -343,20 +266,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             return 'settings', None, None
 
         #-- OK - Accept current coding
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-        if event in ('a', 'A', 'accept'):
-            trial.rc = trial.stimulus
-            save_trial(trial, characters, sub_trial_num, out_dir)
-            window.Close()
-            return 'next_trial', None, None
-
-        #-- Accept current coding, set trial as error
-        if event in ('o', 'O', 'accept_error'):
-            trial.rc = values[0]
-            save_trial(trial, characters, sub_trial_num, out_dir)
-            window.Close()
-            return 'next_trial', None, None
-=======
         if event in ('a', 'A', 'accept', 65):
             trial.rc = trial.stimulus
             res = trial.response
@@ -388,7 +297,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 save_trial(trial, characters, sub_trial_num, out_dir)
                 window.Close()
                 return 'next_trial', None, None
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
         #-- Skip this trial
         elif event in ('k', 'K', 'skip_trial', 75):
@@ -409,7 +317,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                     selection_handler = _CharSelector(graph, characters, 'any', selection_handler.selected)
                 else:
                     selection_handler = _CharSelector(graph, characters, 'any', [])
-
 
         #-- Split a stroke into 2 characters
         elif event in ('s', 'S', 'split_stroke', 83):
@@ -465,30 +372,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             # window.Close()
             # return 'response', characters, None
 
-        #-- Self correction
-        elif event in ('f', 'F', 'self_correction'):
-            if current_command is None:
-                instructions.Update('Select the correct character. ENTER=confirm, ESC=abort')
-                current_command = 'self_correction'
-                trial.self_correction = "1"
-                selection_handler = _SingleStrokeSelector(graph, strokes)
-                last_selection_handler = selection_handler
-
-        # -- Show Self correction
-        elif event == 'show_correction':
-            #window['show_correction'].enable_events=True
-            print("values are 2 : " + str(values))
-            current_command = 'show_correction'
-            chars1 = _self_correction(characters, last_selection_handler, window['show_correction'], current_command, values)
-            if (window['show_correction']) == False:
-                window['show_correction'].update(value=True)
-            else:
-                if (window['show_correction']) == True:
-                    window['show_correction'].update(value=False)
-            print("values are 3 : " + str(values))
-            window.Close()
-            return 'show_correction', chars1, last_selection_handler
-
         #-- Mouse click
         elif event == 'graph':
             if selection_handler is not None:
@@ -519,12 +402,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 return 'split_trial', chars1, chars2
 
             elif current_command == 'self_correction':
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-                chars1 = _self_correction(characters, selection_handler, window['self_correction'], current_command,values)
-                window.Close()
-                return 'self_correction', chars1, last_selection_handler
-
-=======
                 trial.self_correction = "1"
                 chars1 = _self_correction(characters, selection_handler, window, current_command,values, graph)
                 _set_stroke_color(last_selection_handler.selected, 'yellow', graph)
@@ -535,21 +412,14 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 updated_characters = _delete_stroke(characters, selection_handler)
                 window.Close()
                 return 'delete_stroke', updated_characters, selection_handler.selected
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
             else:
                 raise Exception('Bug')
 
         #-- ESC clicked: cancel the currently-running command
         #elif len(event) == 1 and ord(event) == 27:                         #Original line!!!
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-        if current_command is not None and len(event) == 1 and ord(event) == 27:
-            print("im here")
-
-=======
         #if current_command is not None and len(event) == 1 and ord(event) == 27:
         if current_command is not None and event == 'Escape:27':
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
             instructions.Update('')
             current_command = None
             #if selection_handler is not None:
@@ -576,13 +446,9 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('(M)erge 2 characters', key='merge_chars'),
         sg.Button('(R)eset current trial', key='reset_trial'),
         sg.Button('Sel(f) correction', key='self_correction'),
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-        sg.Checkbox('Show correction', default=False, key='show_correction', enable_events= True),
-=======
         sg.Checkbox('Show correction', key='show_correction', enable_events=True, disabled=True),
         sg.Button('(D)elete stroke', key='delete_stroke'),
 
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
     ]
 
     commands_nav = [
@@ -600,11 +466,7 @@ def _create_window_for_markup(screen_size, title):
 
     commands_general = [
         sg.Button('S(E)ttings', key='settings'),
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-        sg.Button('(Q)uit encoder', key='quit'),
-=======
         sg.Button('(Q)uit WEncoder', key='quit'),
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
     ]
 
     layout = [
@@ -648,27 +510,8 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
                 dot.screen_y = y
                 dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill=stroke.color)
                 dot_num = dot_num + 1
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-                #print("x is: " + str(x))
-                #print("y is: " + str(y))
-                #print("i is: " + str(i))
 
 
-            graph.TKCanvas.create_text(x + 2, y + 2, fill='yellow', text=str(char_index) + "." + str(i))
-=======
-
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
-
-    '''self.canvas = Canvas(root, width=800, height=650, bg='#afeeee')
-            self.canvas.create_text(100, 10, fill="darkblue", font="Times 20 italic bold",
-                                    text="Click the bubbles that are multiples of two.")'''
-
-    '''greeting = tk.Label(text="Hello, Tkinter")
-            greeting.pack()
-            #graph.mainloop()'''
-
-    '''label = tk.Label(text="Hello, Tkinter", fg="white", bg="yellow")
-            label.pack()'''
 
             graph.TKCanvas.create_text(x+2 , y+2 , fill='yellow', text=str(char_index) + "." + str(i+1), anchor = NW)
 
@@ -838,10 +681,7 @@ class _Stroke(data.Stroke):
         super().__init__(on_paper, None, dots)
         self.stroke_num = stroke_num
         self.is_seen = True
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-=======
         # self.correction = correction
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
     @property
     def xlim(self):
@@ -911,11 +751,7 @@ class _SingleStrokeSelector(object):
 #-------------------------------------------------------------------------------------
 class _MultiStrokeSelector(object):
     """
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-    Handles click to split a character into two sets of strones
-=======
     Handles click to split a character into two sets of strokes
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
     """
 
     def __init__(self, graph, characters):
@@ -1361,14 +1197,9 @@ def _apply_split_stroke(characters, stroke, dot):
 #-------------------------------------------------------------------------------------
 def save_trial(trial, characters, sub_trial_num, out_dir):
 
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-    wt.encoder.dataio.append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
-                                            trial.response, trial.session_time, trial.rc, trial.self_correction, trial.sound_file_length)
-=======
     dataio.append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
                                             trial.response, trial.time_in_session, trial.rc, trial.self_correction, trial.sound_file_length, trial.raw_file_name, trial.time_in_day, trial.date)
 
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
     strokes = []
     for c in characters:
@@ -1385,45 +1216,12 @@ def save_trial(trial, characters, sub_trial_num, out_dir):
         strokes.extend(c.strokes)
 
     dataio.save_trajectory(strokes, trial.trial_id, sub_trial_num, out_dir, trial)
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-
-=======
     dataio.save_strokes_file(strokes, trial.trial_id, sub_trial_num, out_dir, trial)
     dataio.save_characters_file(characters, strokes, trial.trial_id, sub_trial_num, out_dir, trial)
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
 
 
 #-------------------------------------------------------------------------------------
 
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-def _self_correction(characters, selection_handler, checkbox, current_command, values):
-    test_char = characters
-    if checkbox:
-        if(current_command == 'show_correction'):
-            #checkbox.update(enable_events=True)
-            if(values['show_correction'] == False):
-                print("123")
-                #values['show_correction'] = True
-                #checkbox.update(value=True)
-                for c in test_char:
-                    for s in c.strokes:
-                        if s == selection_handler.selected:
-                            s.on_paper = True
-                            #checkbox.update(enable_events=False)
-
-            else:
-                print("ron2")
-                #values['show_correction'] = False
-                #checkbox.update(value=False)
-                print("checkbox == " + str(values))
-                test_char = characters
-                for c in test_char:
-                    for s in c.strokes:
-                        if s == selection_handler.selected:
-                            s.on_paper = False
-        else:
-            #checkbox.update(enable_events=True)
-=======
 def _self_correction(characters, selection_handler, window, current_command, values, graph):
     test_char = characters
     if current_command == 'show_correction':
@@ -1433,14 +1231,10 @@ def _self_correction(characters, selection_handler, window, current_command, val
                     if s == selection_handler.selected:
                         s.on_paper = True
         else:
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py
             for c in test_char:
                 for s in c.strokes:
                     if s == selection_handler.selected:
                         s.on_paper = False
-<<<<<<< HEAD:src/writracker/coder/trialcoder.py
-    return test_char
-=======
 
     else:                                                   #Self correction button function
         window.FindElement('show_correction').Update(disabled=False, value=True)
@@ -1469,4 +1263,3 @@ def _delete_stroke(characters, selection_handler):
 
     return test_char
 
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b:encoder/trialcoder.py

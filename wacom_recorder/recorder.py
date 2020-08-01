@@ -7,63 +7,12 @@ from datetime import datetime, date, timedelta
 from pygame import error as pgerr  # handle pygame errors as exceptions
 from mutagen.mp3 import MP3        # get mp3 length
 from shutil import copyfile
-<<<<<<< HEAD
-from mutagen.mp3 import MP3     # get mp3 length
-from pygame import error as pgerr # handle pygame errors as exceptions
-from pygame import mixer        # handle sound files
-import pandas as pd             # read excel file input, reloading session
-
-
-#-------------------------------------------------------------------------------------------------------------
-#todo: move these classes to oldrecorder.io module
-
-class Target:
-    def __init__(self, target_id, target_value, sound_file_name="", next_trial_id=1):
-        self.id = target_id
-        self.value = target_value
-        self.trials = []
-        self.next_trial_id = next_trial_id      # this is actually the INDEX of the next trial in trials array
-        self.rc_code = ""                       # Target RC code equals the last evaluated trial RC code.
-        self.sound_file_name = sound_file_name
-        self.sound_file_length = ""
-
-    def __str__(self):
-        trial_arr = ""
-        for trial in self.trials:
-            trial_arr += str(trial)
-        return "id " + str(self.id) + " value:" + self.value + "| trials: [" + trial_arr + "]" + " | rc: " + self.rc_code + " | next trial ID: " + str(self.next_trial_id)
-
-
-#-------------------------------------------------------------------------------------------------------------
-
-
-class Trial:
-    def __init__(self, trial_id, target_id, target_value, rc_code, session_time, traj_file_name, session_num=str(date.today()),
-                 abs_time=datetime.now().strftime("%H:%M:%S"), sound_file_length=""):
-        self.id = trial_id                      # unique ID, defined in the main exec loop
-        self.target_id = target_id
-        self.target_value = target_value
-        self.rc_code = rc_code
-        self.session_time = session_time
-        self.session_num = session_num
-        self.traj_file_name = traj_file_name
-        self.abs_time = abs_time
-        self.sound_file_length = sound_file_length
-
-    def __str__(self):
-        return "Trial: " + str(self.id) + "|" + str(self.target_id) + "/" + str(self.target_value) + "|" \
-               + str(self.rc_code) + "|" + self.traj_file_name + str(self.session_time)+"|"+str(self.session_num)+"|"+str(self.abs_time)+"|"
-
-
-#-------------------------------------------------------------------------------------------------------------
-=======
 from pygame import mixer           # handle sound files
 import subprocess, json            # This originally used only to check if WACOM tablet is connected
 import pandas as pd
 import sys
 import csv
 import os
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
 
 
 # -------------------------------------------------------------------------------------------------------------
@@ -605,17 +554,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 for key in trials_dict.keys():
                     tmp_trial = Trial(trial_id=key, target_id=target.id, target=target.value,
                                       rc_code=trials_dict[key]['rc'],
-<<<<<<< HEAD
-                                      session_time=trials_dict[key]['session_time'],
-                                      session_num=trials_dict[key]['date'],
-                                      traj_file_name=trials_dict[key]['file_name'],
-                                      abs_time=trials_dict[key]['absolute_time'])
-=======
                                       time_in_session=trials_dict[key]['time_in_session'],
                                       date=trials_dict[key]['date'],
                                       traj_file_name=trials_dict[key]['raw_file_name'],
                                       abs_time=trials_dict[key]['time_in_day'])
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
                     target.trials.append(tmp_trial)
         return True
 
@@ -662,27 +604,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # todo: move to "io" package
 
     def save_trials_file(self):
-<<<<<<< HEAD
-        with open(self.results_folder_path + os.sep + "trials.csv", mode='w') as trials_file:
-            trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
-                                                           'session_time', 'date', 'absolute_time',
-                                                           'file_name', 'sound_file_length'], lineterminator='\n')
-            trials_csv_file.writeheader()
-            sorted_trials = []
-            for target in self.targets:
-                for trial in target.trials:
-                    sorted_trials.append(trial)
-            sorted_trials.sort(key=lambda x: x.id)    # sort by unique trial ID
-            for trial in sorted_trials:
-                row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target_value,
-                           rc=trial.rc_code, session_time=trial.session_time, date=trial.session_num,
-                           absolute_time=trial.abs_time, file_name=trial.traj_file_name,
-                           sound_file_length=trial.sound_file_length)
-                trials_csv_file.writerow(row)
-
-    #----------------------------------------------------------------------------------
-    #todo: move to "io" package
-=======
         try:
             with open(self.results_folder_path + os.sep + "trials.csv", mode='w', encoding='utf-8') as trials_file:
                 trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
@@ -707,7 +628,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # ----------------------------------------------------------------------------------
     # todo: move to "io" package
 
->>>>>>> 2a984317832506ad948646c6d2408e63875ee17b
     def save_remaining_targets_file(self):
         try:
             with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w', encoding='utf-8') as targets_file:

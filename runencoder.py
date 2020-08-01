@@ -1,3 +1,2 @@
-from writracker.encoder.expcoder import run
-
+from encoder.expcoder import run
 run()

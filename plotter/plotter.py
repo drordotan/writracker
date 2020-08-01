@@ -74,15 +74,18 @@ class MainWindow(QMainWindow):
         self.btn_convert_gif = self.findChild(QPushButton, 'btn_convert_gif')
         self.combox_trials = self.findChild(QComboBox, 'combox_trials')
         self.btn_quit = self.findChild(QPushButton, 'btn_quit')
-        self.init_ui()
-        self.choose_trials_file()
         self.trials_file = None
+        self.destination_folder = None
+        self.choose_trials_file()
+        self.init_ui()
 
     def init_ui(self):
         self.menu_online_help.triggered.connect(self.f_menu_online_help)
         self.btn_play.clicked.connect(self.f_btn_play)
         self.btn_convert_gif.clicked.connect(self.f_btn_convert_gif)
         self.btn_quit.clicked.connect(self.f_btn_quit)
+        self.setWindowState(Qt.WindowActive)
+
     # -----------------------------------------------------------------------------------------------------------------
     # -----------------------------------------------  Button Functions -----------------------------------------------
 
@@ -104,10 +107,13 @@ class MainWindow(QMainWindow):
         self.btn_convert_gif.setEnabled(False)
         filename, ok = QInputDialog.getText(self, "Filename", "Enter a name for the GIF file")
         if not ok:
+            self.btn_convert_gif.setEnabled(True)
             return False
-
+        if not self.choose_destination_folder():
+            self.btn_convert_gif.setEnabled(True)
+            return False
         traj_file_path = self.combox_trials.currentData()
-        anim_file_path = os.path.split(traj_file_path)[0]+os.sep+filename
+        anim_file_path = self.destination_folder+os.sep+filename
         response = QMessageBox.question(self, "Notice", "Conversion is slow and might take up to a minute.\n"
                                         "Please be patient. a message will appear when finished",
                                         QMessageBox.Ok | QMessageBox.Cancel)
@@ -157,6 +163,23 @@ class MainWindow(QMainWindow):
             msg = QMessageBox()
             answer = msg.question(self, "Error", "Load targets file in order to start the session \n"
                                                  "would you like to try another file?",
+                                  msg.Yes | msg.No, msg.Yes)
+            if answer == msg.Yes:
+                continue
+            else:
+                return False
+
+    def choose_destination_folder(self):
+        while True:
+            folder = str(QFileDialog.getExistingDirectory(self, "Select a folder to save the animation"))
+            if folder:
+                path_ok = os.access(folder, os.W_OK | os.X_OK)
+                if path_ok:
+                    self.destination_folder = folder
+                    return True
+            msg = QMessageBox()
+            answer = msg.question(self, "Error", "The chosen folder is not valid, or doesn't have write permissions \n"
+                                                 "would you like to try another folder?",
                                   msg.Yes | msg.No, msg.Yes)
             if answer == msg.Yes:
                 continue

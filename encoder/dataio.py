@@ -87,8 +87,11 @@ def save_trajectory(strokes, trial_id, sub_trial_num, out_dir, trial):
     :param out_dir: Output directory
     """
 
-    trial_num_portion = str(trial_id) if sub_trial_num == 1 else "{:}_part{:}".format(trial_id, sub_trial_num)
+    trial_num_portion = "trial_{:}_target_{:}".format(trial_id, trial.target_id) if sub_trial_num == 1\
+        else "trial_{:}_target_{:}_part{:}".format(trial_id, trial.target_id, sub_trial_num)
     filename = "{:}/trajectory_{:}.csv".format(out_dir, trial_num_portion)
+
+    '''trajectory_trial#_target#.csv'''
 
     with open(filename, 'w') as fp:
 

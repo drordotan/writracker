@@ -7,7 +7,15 @@ import utils as u
 import pandas as pd
 from encoder import dataio
 
+#-------------------------------------------------------------------------------------------------
 
+
+uncoded_raw_trial = (tuple(sorted(
+            ['trial_id', 'target_id', 'target', 'rc', 'time_in_session', 'date', 'time_in_day', 'raw_file_name',
+             'sound_file_length'])))
+coded_trial = (tuple(sorted(
+    ['trial_id', 'target_id', 'sub_trial_num', 'target', 'response', 'time_in_session', 'rc', 'raw_file_name',
+     'time_in_day', 'date', 'self_correction', 'sound_file_length'])))
 
 trials_csv_filename = 'trials.csv'
 
@@ -38,12 +46,6 @@ def load_experiment_trajwriter(dir_name, trial_index_filter=None):
                               sound_file_length=trial_spec['sound_file_length'],
                               raw_file_name=trial_spec['raw_file_name'], time_in_day=trial_spec['time_in_day'],
                               date=trial_spec['date'])
-
-        '''
-        trial = data.CodedTrial(trial_num=t['trial_num'], target_num=t['target_num'], stimulus=t['target'],
-                                   response=t['response'], characters=[], strokes=[], sub_trial_num=t['sub_trial_num'],
-                                   start_time=t['start_time'], rc=t['rc'])
-        '''
 
 
         trial_key = trial.trial_id, trial.sub_trial_num
@@ -256,12 +258,6 @@ def load_trials_index(dir_name):
         reader = csv.DictReader(fp)
         already_coded = True
 
-        uncoded_raw_trial = (tuple(sorted(
-            ['trial_id', 'target_id', 'target', 'rc', 'time_in_session', 'date', 'time_in_day', 'raw_file_name',
-             'sound_file_length'])))
-        coded_trial = (tuple(sorted(
-            ['trial_id', 'target_id', 'sub_trial_num', 'target', 'response', 'time_in_session', 'rc', 'raw_file_name',
-             'time_in_day', 'date', 'self_correction', 'sound_file_length'])))
         if tuple(sorted(reader.fieldnames)) != coded_trial:
             already_coded = False
             if tuple(sorted(reader.fieldnames)) != uncoded_raw_trial:
@@ -276,7 +272,7 @@ def load_trials_index(dir_name):
             csv_input['self_correction'] = '0'
             csv_input.to_csv(index_fn, index=False)
 
-        fp.seek(0)
+        fp.seek(0)                                                          #Puts the file pointer back on 0.
         reader2 = csv.DictReader(fp)
 
 
@@ -427,6 +423,5 @@ def is_invalid_data_directory(dir_name):
                 return "Invalid directory - bad format of {:} ".format(trials_csv_filename)
 
 
-            #return "Invalid directory - bad format of {:} ".format(trials_csv_filename)
 
     return None

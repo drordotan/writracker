@@ -267,11 +267,11 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
         #-- OK - Accept current coding
         if event in ('a', 'A', 'accept'):
-            trial.rc = trial.stimulus
+            trial.rc = "OK"
             res = trial.response
             if res is None or (res == "" or ''):
                 sg.Popup('No response entered', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
-            elif len(trial.response)!= len(on_paper_chars):
+            elif len(trial.response) != len(on_paper_chars):
                 sg.Popup('Unmatch number of characters', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
             else:
                 save_trial(trial, characters, sub_trial_num, out_dir)
@@ -443,7 +443,7 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('Split (S)troke', key='split_stroke'),
         sg.Button('Split (C)haracter', key='split_char'),
         sg.Button('Split (T)rial', key='split_trial'),
-        sg.Button('(M)erge 2 characters', key='merge_chars'),
+        sg.Button('(M)erge characters', key='merge_chars'),
         sg.Button('(R)eset current trial', key='reset_trial'),
         sg.Button('Sel(f) correction', key='self_correction'),
         sg.Checkbox('Show correction', key='show_correction', enable_events=True, disabled=True),
@@ -470,7 +470,7 @@ def _create_window_for_markup(screen_size, title):
     ]
 
     layout = [
-        [sg.Text(' ' * 100, text_color='green', key='instructions', font=('Arial', 16))],
+        [sg.Text(' ' * 100, text_color='white', key='instructions', font=('Arial', 16))],
         [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)],
         commands_m,
         commands_nav,
@@ -569,7 +569,7 @@ def _split_stroke(stroke, screen_size, margin, dot_radius=6):
             window.Close()
             return selected_dot.markup
 
-        elif len(event) == 1 and ord(event) == 27:
+        elif event == 'Escape:27':
             #-- ESC pressed
             if selected_dot is None:
                 window.Close()
@@ -578,7 +578,6 @@ def _split_stroke(stroke, screen_size, margin, dot_radius=6):
                 for dot in dots:
                     graph.TKCanvas.itemconfig(dot.ui, fill=dot.color)
                 selected_dot = None
-
 
 #-------------------------------------------------------------------------------------
 def _create_window_for_split_strokes(screen_size):
@@ -1028,6 +1027,8 @@ def _set_stroke_color(stroke, color, graph):
 def _apply_split_character(characters, selection_handler):
 
     char = selection_handler.selected_char
+    if char == None:
+        return characters
     char_ind = characters.index(char)
 
     stroke = selection_handler.selected_stroke

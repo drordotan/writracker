@@ -432,7 +432,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- ESC clicked: cancel the currently-running command
         #elif len(event) == 1 and ord(event) == 27:                         #Original line!!!
 
-        if current_command is not None and event == 27:
+        if current_command is not None and (event == 27 or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)):
             instructions.Update('')
             current_command = None
             #if selection_handler is not None:

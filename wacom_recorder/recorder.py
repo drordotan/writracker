@@ -3,13 +3,14 @@ from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5 import uic
 from wacom_recorder.recorder_io import Target, Trial, Trajectory
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from pygame import error as pgerr  # handle pygame errors as exceptions
+from wacom_recorder import wintab
 from mutagen.mp3 import MP3        # get mp3 length
 from shutil import copyfile
 from pygame import mixer           # handle sound files
-import subprocess, json            # This originally used only to check if WACOM tablet is connected
 import pandas as pd
+import subprocess                  # This originally used only to check if WACOM tablet is connected on MAC
 import sys
 import csv
 import os
@@ -25,11 +26,20 @@ def _null_converter(v):
     return str(v)
 
 
+TABLET_POLL_TIME = 5    # defines the polling frequency for tablet packets, in milliseconds
+
+
 # -------------------------------------------------------------------------------------------------------------
-class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QmainWindow() or Qwidget()
+class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QMainWindow() or Qwidget()
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.title = "WriTracker Recorder"
+        # Establish tablet connection & Start polling
+        hWnd = int(self.winId())                            # Get current window's window handle
+        wintab.hctx = wintab.OpenTabletContexts(hWnd)       # context handle for the tablet polling function.
+        self.poll_timer = QTimer(self)
+        self.poll_timer.timeout.connect(self.tabletPoll)    # Start timer & Run polling function
+        self.poll_timer.start(TABLET_POLL_TIME)
         # pen settings & variables
         self.pen_x = 0
         self.pen_xtilt = 0
@@ -39,9 +49,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.rotation_angle = 0             # Each rotate button press adds 90. used for rotating the traj file.
         self.x_resolution = app.desktop().screenGeometry().right()  # this value is for mirroring X coordinates
         # All files & paths
-        self.targets_file = None            # loaded by user, holds the targets.
-        self.remaining_targets_file = None  # keeps track of remaining targets, or targets to re-show.
-        self.trials_file = None             # keeps track of each trajectory file
+        self.targets_file = None               # loaded by user, holds the targets.
+        self.remaining_targets_file = None     # keeps track of remaining targets, or targets to re-show.
+        self.trials_file = None                # keeps track of each trajectory file
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
         self.results_folder_path = None        # Folder for the output files.
         self.sounds_folder_path = None         # Folder containing input sound files.
@@ -142,12 +152,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.tablet_paint_area.fitInView(800, 600, 0, 0, Qt.KeepAspectRatio)  # reset the graphicsView scaling
         self.show()
 
-    def tabletEvent(self, tabletEvent):
-        self.pen_x = self.x_resolution - tabletEvent.globalX()  # Fix tablet mirroring-flip X axis
-        self.pen_y = tabletEvent.globalY()
-        self.pen_pressure = int(tabletEvent.pressure() * 100)
-        self.pen_xtilt = tabletEvent.xTilt()
-        self.pen_ytilt = tabletEvent.yTilt()
+    def tabletPoll(self):
+        lpPkts = (wintab.PACKET * 100)()
+        lpPkts  = wintab.GetPackets()
+        if lpPkts == 0:  # no packets received
+            return
+        self.pen_x = lpPkts[0].pkX
+        self.pen_y = lpPkts[0].pkY
+        new_pressure = int(lpPkts[0].pkNormalPressure/327.67)      # normalized to 0-100 range
         # mark Trial started flag, but only if the ok/error are not checked.
         # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
         if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
@@ -156,19 +168,49 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             if not self.trial_started and self.sounds_folder_path is None:
                 self.start_trial()
 
-        # write to traj file:
-        if self.current_active_trajectory is not None and self.session_started:
-            self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
-        if tabletEvent.type() == QTabletEvent.TabletPress:
-            self.path.moveTo(tabletEvent.pos())
-        elif tabletEvent.type() == QTabletEvent.TabletMove:
-            self.path.lineTo(tabletEvent.pos())
-        elif tabletEvent.type() == QTabletEvent.TabletRelease:
-            if self.pen_pressure != 0 and self.session_started:
+        if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
+            self.path.moveTo(QPoint(self.pen_x, self.pen_y))
+        elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
+            if self.session_started:
                 # When the pen leaves the surface, add a sample point with zero pressure
                 self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
-        tabletEvent.accept()
-        self.update()                   # calls paintEvent behind the scenes
+        elif new_pressure > 0:                                               # it's a "TabletMove" event
+            self.path.lineTo(QPoint(self.pen_x, self.pen_y))
+        self.update()                                       # calls paintEvent
+        self.pen_pressure = new_pressure
+        # write to traj file:
+        if self.current_active_trajectory is not None and self.session_started:
+            self.current_active_trajectory.add_row(self.x_resolution - self.pen_x, self.pen_y, self.pen_pressure)   # Fix tablet mirroring-flip X axis
+
+    """ This is the old function to get tablet information using events. 
+        it work well, but does not allow recording tablet move above the surface ('hovering') """
+    # def tabletEvent(self, tabletEvent):
+    #     self.pen_x = self.x_resolution - tabletEvent.globalX()  # Fix tablet mirroring-flip X axis
+    #     self.pen_y = tabletEvent.globalY()
+    #     self.pen_pressure = int(tabletEvent.pressure() * 100)
+    #     self.pen_xtilt = tabletEvent.xTilt()
+    #     self.pen_ytilt = tabletEvent.yTilt()
+    #     # mark Trial started flag, but only if the ok/error are not checked.
+    #     # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
+    #     if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
+    #         # When we the user chose to play sounds
+    #         # the trial will start when pressing play, and not when touching the tablet.
+    #         if not self.trial_started and self.sounds_folder_path is None:
+    #             self.start_trial()
+    #
+    #     # write to traj file:
+    #     if self.current_active_trajectory is not None and self.session_started:
+    #         self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
+    #     if tabletEvent.type() == QTabletEvent.TabletPress:
+    #         self.path.moveTo(tabletEvent.pos())
+    #     elif tabletEvent.type() == QTabletEvent.TabletMove:
+    #         self.path.lineTo(tabletEvent.pos())
+    #     elif tabletEvent.type() == QTabletEvent.TabletRelease:
+    #         if self.pen_pressure != 0 and self.session_started:
+    #             # When the pen leaves the surface, add a sample point with zero pressure
+    #             self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
+    #     tabletEvent.accept()
+    #     self.update()                   # calls paintEvent behind the scenes
 
     def paintEvent(self, event):
         self.scene.addPath(self.path)
@@ -249,7 +291,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.read_next_target()  # read first target
         mixer.init()            # must initialize once before playing sound files
         try:
-            mixer.music.load("sounds/beep_sound.mp3")
+            mixer.music.load("wacom_recorder/sounds/beep_sound.mp3")
             mixer.music.play(0)
         except TypeError:
             self.show_info_msg("Error!", "Error when trying to access sound file.")
@@ -340,6 +382,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.close_current_trial()
                 self.save_trials_file()
                 self.save_remaining_targets_file()
+            self.poll_timer.stop()
+            wintab.CloseTabletContext(wintab.hctx)
             self.close()
 
     def f_btn_end_ssn(self):
@@ -893,27 +937,18 @@ def check_if_tablet_connected_mac():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
+# Check if a wacom tablet is connected. This check works on windows device - depended on wintab32 library
 # The check isn't blocking the program from running - for the case the device status is not 100% reliable.
 def check_if_tablet_connected_windows():
-    try:
-        device_list = subprocess.getoutput(
-            "PowerShell -Command \"& {Get-PnpDevice | Select-Object Status,FriendlyName | ConvertTo-Json}\"")
-        devices_parsed = json.loads(device_list)
-        for dev in devices_parsed:
-            if str(dev['FriendlyName']).find("Wacom") == 0:
-                if str(dev['Status']) != "OK":
-                    QMessageBox().critical(None, "No Tablet Detected",
-                                           "Could not verify a connection to a Wacom tablet."
-                                           "\nPlease make sure a tablet is connected.\n"
-                                           "You may proceed, but unexpected errors may occur")
-                    return False
-                else:
-                    return True
-    except (UnicodeDecodeError, KeyError, TimeoutError):
-        QMessageBox.about(None, "Could not check if tablet is connected",
-                          "The program could not perform the tablet connection check.\n"
-                          "Make sure the tablet is connected")
+    tablet_name = wintab.getTabletInfo()
+    if tablet_name is not None:
+        print("WintabW: Tablet Found: {}".format(tablet_name))
+        return True
+    else:
+        print("WintabW: No tablet is connected")
+        QMessageBox().critical(None, "No Tablet Detected",  "Could not verify a connection to a Wintab32 tablet."
+                                                            "\nPlease make sure a tablet is connected.\n "
+                                                            "You may proceed, but unexpected errors may occur")
         return False
 
 

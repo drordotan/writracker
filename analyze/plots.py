@@ -140,10 +140,10 @@ def _convert_z_to_level(z_values, max_z, n_colors):
 #-------------------------------------------------------------
 def _trial_title(trial):
 
-    title = 'Trial {:}'.format(trial.trial_num)
+    title = 'Trial {:}'.format(trial.trial_id)
 
-    if trial.target_num is not None:
-        title += '(#{:})'.format(trial.target_num)
+    if trial.target_id is not None:
+        title += '(#{:})'.format(trial.target_id)
 
     if trial.stimulus is not None:
         if trial.stimulus.isnumeric:

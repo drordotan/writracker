@@ -29,33 +29,33 @@ class StartAcquisition(Enum):
 
 def load_experiment_trajwriter(dir_name, trial_index_filter=None):
 
-    traj_filenames = dataio._load_trajectory_filenames(dir_name)
+    encoded_traj_filenames = dataio._load_encoded_trajectory_filenames(dir_name)
     index = load_trials_index(dir_name)
 
     trials = []
     #for t in index:
     for trial_spec in index:
         trial_id = trial_spec['trial_id']
+        sub_trial_num = trial_spec['sub_trial_num']
         if trial_index_filter is not None and not trial_index_filter(trial_spec):
             continue
-        points = load_trajectory(dir_name+"/"+traj_filenames[trial_id])
+        #points = load_trajectory(dir_name+"/"+encoded_traj_filenames[(trial_id, sub_trial_num)])
+        points = load_trajectory(dir_name+"/"+encoded_traj_filenames[(trial_id, sub_trial_num)])
 
-        trial = data.RawTrial(trial_id, trial_spec['target_id'], trial_spec['target'], points,
-                              time_in_session=trial_spec['time_in_session'], rc=trial_spec['rc'], source=None,
-                              self_correction=trial_spec['self_correction'],
-                              sound_file_length=trial_spec['sound_file_length'],
-                              raw_file_name=trial_spec['raw_file_name'], time_in_day=trial_spec['time_in_day'],
-                              date=trial_spec['date'])
-
+        trial = data.CodedTrial(trial_id, trial_spec['target_id'], trial_spec['target'], points,
+                                time_in_session=trial_spec['time_in_session'], rc=trial_spec['rc'], source=None, response=trial_spec['response'],
+                                self_correction=trial_spec['self_correction'],sound_file_length = trial_spec['sound_file_length'],
+                                raw_file_name=trial_spec['raw_file_name'],time_in_day=trial_spec['time_in_day'],
+                                date=trial_spec['date'], sub_trial_num = trial_spec['sub_trial_num'])
 
         trial_key = trial.trial_id, trial.sub_trial_num
-        if trial_key not in traj_filenames:
+        if trial_key not in encoded_traj_filenames:
             raise Exception('Invalid experiment directory {:}: There is no trajectory for trial #{:}, sub-trial #{:}'
-                            .format(dir_name, trial.trial_num, trial.sub_trial_num))
+                            .format(dir_name, trial.trial_id, trial.sub_trial_num))
 
-        characters, strokes = dataio._load_trajectory(trial.trial_id, dir_name + os.sep + traj_filenames[trial_key])
+        characters, strokes = dataio._load_trajectory(trial.trial_id, dir_name + os.sep + encoded_traj_filenames[trial_key])
 
-        dataio.validate_trial(trial, characters, strokes)
+        #dataio.validate_trial(trial, characters, strokes)
 
         trial.characters = characters
         trial.strokes = strokes

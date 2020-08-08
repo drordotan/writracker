@@ -133,23 +133,23 @@ def save_strokes_file(strokes, trial_id, sub_trial_num, out_dir, trial):
 
 def save_characters_file(characters, strokes, trial_id, sub_trial_num, out_dir, trial):
 
+    extract_aggregate_measures.execute_agg_measures(out_dir)
 
-    '''
+'''
     index_fn = out_dir + os.sep + 'encoded_characters.csv'
-        file_exists = os.path.isfile(index_fn)
+    file_exists = os.path.isfile(index_fn)
 
-        filename = "{:}/encoded_characters.csv".format(out_dir)
-        with open(filename, 'a' if file_exists else 'w') as fp:
-            writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'correction'], lineterminator='\n')
-            if not file_exists:
-                writer.writeheader()
-            char_num = 0
-            for c in characters:
-                char_num += 1
-                row = dict(trial_id = trial_id, char_num=c.char_num, correction= c.correction)
-                writer.writerow(row)
-    '''
-    #extract_aggregate_measures.execute_agg_measures(out_dir)
+    filename = "{:}/encoded_characters.csv".format(out_dir)
+    with open(filename, 'a' if file_exists else 'w') as fp:
+        writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'correction'], lineterminator='\n')
+        if not file_exists:
+            writer.writeheader()
+        char_num = 0
+        for c in characters:
+            char_num += 1
+            row = dict(trial_id = trial_id, char_num=c.char_num, correction= c.correction)
+            writer.writerow(row)
+'''
 
 #-------------------------------------------------------------------------------------
 
@@ -164,6 +164,7 @@ def _load_trajectory_filenames(dir_name):
         if m is None:
             continue
 
+
         trial_id = int(m.group(1))
         sub_trial_num = 1 if m.group(3) is None else int(m.group(3))
 
@@ -173,6 +174,29 @@ def _load_trajectory_filenames(dir_name):
 
 
 #-------------------------------------------------------------------------------------
+
+def _load_encoded_trajectory_filenames(dir_name):
+    """ Load the names of all encoded trajectory files in the given directory """
+
+    filenames = dict()
+
+    for fn in os.listdir(dir_name):
+    #for traj_name in trials.raw_file_name:
+    #(_part(\\d+))?
+        m = re.match('trajectory_trial_(\d+)_target_(\w+)(_part(\\d+))?.csv', fn)
+        if m is None:
+            continue
+        trial_id = int(m.group(1))
+        sub_trial_num = 1 if m.group(3) is None else int(m.group(3))
+        filenames[(trial_id, sub_trial_num)] = fn
+
+    return filenames
+
+
+#-------------------------------------------------------------------------------------
+
+
+
 def _load_trajectory(trial_id, filename):
 
     if not os.path.isfile(filename):
@@ -206,10 +230,13 @@ def _load_strokes(filename):
             char_num = _parse_int(row['char_num'], 'char_num', filename, reader.line_num)
             stroke_num = row['stroke']
             on_paper = _parse_int(row['pen_down'], 'pen_down', filename, reader.line_num) != 0
-            x = _parse_int(row['x'], 'x', filename, reader.line_num)
-            y = _parse_int(row['y'], 'y', filename, reader.line_num)
-            prs = _parse_int(row['pressure'], 'pressure', filename, reader.line_num)
-            t = _parse_float(row['time'], 'time', filename, reader.line_num)
+            # x = _parse_int(row['x'], 'x', filename, reader.line_num)
+            # y = _parse_int(row['y'], 'y', filename, reader.line_num)
+            # prs = _parse_int(row['pressure'], 'pressure', filename, reader.line_num)
+            x = row['x']
+            y = row['y']
+            prs = row['pressure']
+            t = row['time']
 
             #-- New stroke
             if stroke_num != last_stroke_num:
@@ -305,7 +332,7 @@ def _parse_int(value, col_name, filename, line_num):
     try:
         return int(value)
     except ValueError:
-        raise ValueError("Invalid format for column '{:}' in line {:} in {:}: expecting an integer value".format(col_name, filename, line_num))
+        raise ValueError("Invalid format for column '{:}' in line {:} in {:}: expecting an integer value".format(col_name, line_num, filename))
 
 
 #------------------------------

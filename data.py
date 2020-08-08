@@ -26,7 +26,7 @@ class Experiment(object):
     #-----------------------------------------------------------------
     @property
     def sorted_trials(self):
-        return tuple(sorted(self._trials, key=attrgetter('trial_num')))
+        return tuple(sorted(self._trials, key=attrgetter('trial_id')))
 
 
     #-----------------------------------------------------------------
@@ -36,7 +36,7 @@ class Experiment(object):
 
     #-----------------------------------------------------------------
     def sort_trials(self):
-        self._trials.sort(key=attrgetter('trial_num'))
+        self._trials.sort(key=attrgetter('trial_id'))
 
 
     #-----------------------------------------------------------------
@@ -93,30 +93,35 @@ class CodedTrial(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trial_num, target_id, stimulus, response, characters, strokes, sub_trial_num=1, time_in_session=None, rc=None,self_correction = None, sound_file_length = None):
-        self.trial_num = trial_num
-        self.sub_trial_num = sub_trial_num
+    def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None, response = None, self_correction = None,
+                 sound_file_length = None,raw_file_name = None, time_in_day = None, date = None, sub_trial_num = 1):
         self.target_id = target_id
+        self.trial_id = trial_id
         self.stimulus = stimulus
-        self.response = response
-        self.characters = characters
-        self.strokes = strokes
+        self.traj_points = traj_points
         self.time_in_session = time_in_session
         self.rc = rc
+        self.source = source
+        self.response = response
         self.self_correction = self_correction
         self.sound_file_length = sound_file_length
+        self.raw_file_name = raw_file_name
+        self.time_in_day = time_in_day
+        self.date = date
+        self.sub_trial_num = sub_trial_num
+
+    #-----------------------------------------------------------------
+    # @property
+    # def traj_points(self):
+    #     return [pt for stroke in self.strokes for pt in stroke.trajectory]
+
 
     #-----------------------------------------------------------------
     @property
-    def traj_points(self):
-        return [pt for stroke in self.strokes for pt in stroke.trajectory]
-
-
-    #-----------------------------------------------------------------
-    @property
+    # def on_paper_points(self):
+    #     return [pt for stroke in self.strokes if stroke.on_paper for pt in stroke.trajectory]
     def on_paper_points(self):
-        return [pt for stroke in self.strokes if stroke.on_paper for pt in stroke.trajectory]
-
+        return [pt for pt in self.traj_points if pt.z > 0]
 
     #-----------------------------------------------------------------
     @property
@@ -193,8 +198,8 @@ class Stroke(object):
         """
         The duration (in ms) it took to complete this stroke
         """
-        t_0 = self.trajectory[0].t
-        t_n = self.trajectory[-1].t
+        t_0 = float(self.trajectory[0].t)
+        t_n = float(self.trajectory[-1].t)
         return t_n - t_0
 
 

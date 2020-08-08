@@ -9,10 +9,24 @@ from tkinter import*
 import tkinter as tk
 from encoder import *
 from encoder import dataio
-
+import pyautogui
 
 
 markup_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'))
+
+RED = ["#FF0000", "#FF8080", "#FFA0A0"]
+CYAN = ["#00FFFF", "#A0FFFF", "#C0FFFF"]
+ORANGE = ["DarkOrange1", "DarkOrange2", "DarkOrange3"]
+
+# root = tk.Tk()
+# screen_width = root.winfo_screenwidth()
+# screen_height = root.winfo_screenheight()
+width, height= pyautogui.size()
+
+# full_window = app.desktop().frameGeometry()            # get desktop resolution
+#         self.resize(full_window.width(), full_window.height())  # set window size to full screen
+#         self.move(0, 0)
+
 
 
 
@@ -130,7 +144,7 @@ def _open_settings(config):
 
         layout = [
             [sg.Text(warning, text_color='red')],
-            [sg.Text('Maximal overlap between 2 strokes in the same character (%): '), max_within_char_overlap],
+            [sg.Text('Minimal overlap between 2 strokes in the same character (At least #%): '), max_within_char_overlap],
             [sg.Text('Error codes: '), error_codes],
             [sg.Button('OK'), sg.Button('Cancel')],
         ]
@@ -233,11 +247,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
 
         m = re.match('.+:(\\d+)', event)
-        print("m is: " + str(m))
         if m is not None:
             event = int(m.group(1))
-            print("event2 is: " + str(event))
-
 
         #-- Enables self correction checkbox
         if trial.self_correction == "1":
@@ -250,13 +261,17 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- Reset the trial
         elif event in ('r', 'R', 'reset_trial', 82):
             window.FindElement('show_correction').Update(disabled=True)
-            window.Close()
-            return 'reset_trial', None, None
+            answer = sg.Popup('Reset trial', 'Are you sure you want to reset the current trial?', button_type=1)
+            if answer == "Yes":
+                window.Close()
+                return 'reset_trial', None, None
 
         #-- Quit the app
         elif event in ('q', 'Q', 'quit', '/'):
-            window.Close()
-            return 'quit', None, None
+            answer = sg.Popup('Quit', 'Are you sure you want to quit WEncoder?', button_type = 1)
+            if answer == "Yes":
+                window.Close()
+                return 'quit', None, None
 
         #-- Select trial
         elif event in ('g', 'G', 'choose_trial', 71):
@@ -373,7 +388,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
         elif event == 'response':
-            text = sg.popup_get_text('Response', 'Please enter response:')
+            text = sg.popup_get_text('The participant wrote {:} characters'.format(len(on_paper_chars)), 'Please enter response:')
             trial.response = text
             # window.Close()
             # return 'response', characters, None
@@ -417,14 +432,17 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                     return 'continue', characters, None
                 trial.self_correction = "1"
                 chars1 = _self_correction(characters, selection_handler, window, current_command,values, graph)
-                _set_stroke_color(last_selection_handler.selected, 'yellow', graph)
                 window.Close()
                 return 'self_correction', chars1, last_selection_handler
 
             elif current_command == 'delete_stroke':
                 updated_characters = _delete_stroke(characters, selection_handler)
-                window.Close()
-                return 'delete_stroke', updated_characters, selection_handler.selected
+                answer = sg.Popup('Delete stroke', 'Are you sure you want to delete this stroke?', button_type=1)
+                if answer == "Yes":
+                    window.Close()
+                    return 'delete_stroke', updated_characters, selection_handler.selected
+                # else:
+                #     return 'continue', None, None
 
             else:
                 raise Exception('Bug')
@@ -458,9 +476,9 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('Split (T)rial', key='split_trial'),
         sg.Button('(M)erge characters', key='merge_chars'),
         sg.Button('(R)eset current trial', key='reset_trial'),
-        sg.Button('Sel(f) correction', key='self_correction'),
-        sg.Checkbox('Show correction', key='show_correction', enable_events=True, disabled=True),
         sg.Button('(D)elete stroke', key='delete_stroke'),
+        sg.Button('Sel(f) correction', key='self_correction'),
+        sg.Checkbox('Show correction strokes', key='show_correction', enable_events=True, disabled=True),
 
     ]
 
@@ -494,9 +512,9 @@ def _create_window_for_markup(screen_size, title):
     label = tk.Label(text="Hello, Tkinter", fg="white", bg="yellow")
     label.pack()
 
-    window = sg.Window(title, layout, return_keyboard_events=True)
+    window = sg.Window(title, layout, return_keyboard_events=True,  resizable = True)
     window.Finalize()
-
+    #window.Maximize()
     return window
 
 
@@ -509,22 +527,28 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
         char_index += 1
         strokes = char.on_paper_strokes
 
-        color = RED if char.char_num % 2 == 1 else CYAN
+        color = ORANGE if char.char_num % 2 == 1 else CYAN
 
         for i in range(len(strokes)):
             stroke = strokes[i]
-            stroke.color = color[i] if i < len(color) else color[-1]
+            if stroke.correction != 1:
+                stroke.color = color[i] if i < len(color) else color[-1]
 
             for dot in stroke.trajectory:
                 x = (dot.x - offset[0]) * expand_ratio + margin
                 y = (dot.y - offset[1]) * expand_ratio + margin
                 y = screen_size[1] - y
+                #x = screen_size[1] - x
                 dot.screen_x = x
                 dot.screen_y = y
-                dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill=stroke.color)
+                if stroke.correction == 1:
+                    if dot_num % 2 == 0:
+                        dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill = "red")
+                    else:
+                        dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill = "yellow")
+                else:
+                    dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill = stroke.color)
                 dot_num = dot_num + 1
-
-
 
             graph.TKCanvas.create_text(x+2 , y+2 , fill='yellow', text=str(char_index) + "." + str(i+1), anchor = NW)
 
@@ -539,8 +563,7 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
     '''label = tk.Label(text="Hello, Tkinter", fg="white", bg="yellow")
             label.pack()'''
 
-RED = ["#FF0000", "#FF8080", "#FFA0A0"]
-CYAN = ["#00FFFF", "#A0FFFF", "#C0FFFF"]
+
 
 
 #-------------------------------------------------------------------------------------
@@ -600,7 +623,7 @@ def _create_window_for_split_strokes(screen_size):
         [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)]
     ]
 
-    window = sg.Window('Split a stroke into 2', layout, return_keyboard_events=True)
+    window = sg.Window('Split a stroke into 2', layout, return_keyboard_events=True, resizable = True)
     window.Finalize()
 
     return window
@@ -971,16 +994,23 @@ def _get_expand_ratio(dots, screen_size, margin):
     x = [dot.x for dot in dots]
     y = [dot.y for dot in dots]
 
+    # min_x = 20
+    # max_x = screen_size[0] - 20
+    # min_y = 1000
+    # max_y = screen_size[1]-20
+
     min_x = min(x)
     max_x = max(x)
     min_y = min(y)
     max_y = max(y)
     canvas_width = max_x - min_x + 1
     canvas_height = max_y - min_y + 1
+
+    # canvas_width = screen_size[0] - 20
+    # canvas_height = screen_size[1]/3
+
     expand_ratio = min((screen_size[0] - margin*2) / canvas_width, (screen_size[1] - margin*2) / canvas_height)
-
     new_screen_size = round(canvas_width * expand_ratio) + margin * 2, round(canvas_height * expand_ratio) + margin * 2
-
     return expand_ratio, (min_x, min_y), new_screen_size
 
 
@@ -1034,7 +1064,12 @@ def _set_stroke_color(stroke, color, graph):
         color = stroke.color
     for dot in stroke:
         graph.TKCanvas.itemconfig(dot.ui, fill=color)
+#-------------------------------------------------------------------------------------
 
+def _set_corrected_stroke_color(stroke, color, graph):
+    stroke.color = color
+    for dot in stroke:
+        graph.TKCanvas.itemconfig(dot.ui, fill=color)
 
 #-------------------------------------------------------------------------------------
 def _apply_split_character(characters, selection_handler):
@@ -1256,7 +1291,6 @@ def _self_correction(characters, selection_handler, window, current_command, val
             for s in c.strokes:
                 if s == selection_handler.selected:
                     s.on_paper = True
-                    #_set_stroke_color(s, 'yellow', graph)
                     s.correction = 1
                     c.correction = 1
 

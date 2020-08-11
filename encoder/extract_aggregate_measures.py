@@ -4,8 +4,8 @@ from analyze.transform import GetBoundingBox, AggFunc
 import encoder
 from encoder import dataiooldrecorder
 
-output_dir = r'C:\Users\Ron\Documents\GitHub\new\output'
-input_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
+# output_dir = r'C:\Users\Ron\Documents\GitHub\new\output'
+# input_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
 
 #-------------------------------------------------------
 def trial_ok(trial):
@@ -75,4 +75,4 @@ def execute_agg_measures(input_dir):
 
     analyze.transform.aggregate_characters(exp.trials, agg_func_specs=agg_func_specs, subj_id=os.path.basename(input_dir),
                                               trial_filter=lambda trial:trial.rc == 'OK',
-                                              out_filename=output_dir + '/ADME_main.csv', save_as_attr=False)
+                                              out_filename=input_dir + '/characters_ADME_main.csv', save_as_attr=False)

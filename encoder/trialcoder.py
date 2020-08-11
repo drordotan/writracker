@@ -9,10 +9,24 @@ from tkinter import*
 import tkinter as tk
 from encoder import *
 from encoder import dataio
-
+import pyautogui
 
 
 markup_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'))
+
+RED = ["#FF0000", "#FF8080", "#FFA0A0"]
+CYAN = ["#00FFFF", "#A0FFFF", "#C0FFFF"]
+ORANGE = ["DarkOrange1", "DarkOrange2", "DarkOrange3"]
+
+# root = tk.Tk()
+# screen_width = root.winfo_screenwidth()
+# screen_height = root.winfo_screenheight()
+width, height= pyautogui.size()
+
+# full_window = app.desktop().frameGeometry()            # get desktop resolution
+#         self.resize(full_window.width(), full_window.height())  # set window size to full screen
+#         self.move(0, 0)
+
 
 
 
@@ -130,7 +144,7 @@ def _open_settings(config):
 
         layout = [
             [sg.Text(warning, text_color='red')],
-            [sg.Text('Maximal overlap between 2 strokes in the same character (%): '), max_within_char_overlap],
+            [sg.Text('Minimal overlap between 2 strokes in the same character (At least #%): '), max_within_char_overlap],
             [sg.Text('Error codes: '), error_codes],
             [sg.Button('OK'), sg.Button('Cancel')],
         ]
@@ -228,13 +242,13 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
     while True:
 
-
-
         event, values = window.Read()
+        print("event is: " + str(event))
 
-        print("event is: "+str(event))
-        print("values are: "+str(values))
 
+        m = re.match('.+:(\\d+)', event)
+        if m is not None:
+            event = int(m.group(1))
 
         #-- Enables self correction checkbox
         if trial.self_correction == "1":
@@ -245,34 +259,41 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             return 'reset_trial', None, None
 
         #-- Reset the trial
-        elif event in ('r', 'R', 'reset_trial'):
+        elif event in ('r', 'R', 'reset_trial', 82):
             window.FindElement('show_correction').Update(disabled=True)
-            window.Close()
-            return 'reset_trial', None, None
+            answer = sg.Popup('Reset trial', 'Are you sure you want to reset the current trial?', button_type=1)
+            if answer == "Yes":
+                window.Close()
+                return 'reset_trial', None, None
 
         #-- Quit the app
-        elif event in ('q', 'Q', 'quit'):
-            window.Close()
-            return 'quit', None, None
+        elif event in ('q', 'Q', 'quit', '/'):
+            answer = sg.Popup('Quit', 'Are you sure you want to quit WEncoder?', button_type = 1)
+            if answer == "Yes":
+                window.Close()
+                return 'quit', None, None
 
         #-- Select trial
-        elif event in ('g', 'G', 'choose_trial'):
+        elif event in ('g', 'G', 'choose_trial', 71):
             window.Close()
             return 'choose_trial', None, None
 
         #-- Open settings window
-        elif event in ('e', 'E', 'settings'):
+        elif event in ('e', 'E', 'settings', 69):
             window.Close()
             return 'settings', None, None
 
         #-- OK - Accept current coding
-        if event in ('a', 'A', 'accept'):
-            trial.rc = trial.stimulus
+        if event in ('a', 'A', 'accept', 65):
+            trial.rc = "OK"
             res = trial.response
             if res is None or (res == "" or ''):
-                sg.Popup('No response entered', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
-            elif len(trial.response)!= len(on_paper_chars):
-                sg.Popup('Unmatch number of characters', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
+                res = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)),'No response entered')
+                trial.response = res
+                #sg.Popup('No response entered', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
+            elif len(trial.response) != len(on_paper_chars):
+                res = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)), 'Unmatch number of characters')
+                trial.response = res
             else:
                 save_trial(trial, characters, sub_trial_num, out_dir)
                 window.Close()
@@ -288,7 +309,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             #     window['accept_error'].update(disabled=True)
 
         #-- Error - Accept current coding, set trial as error
-        if event in ('o', 'O', 'accept_error'):
+        if event in ('o', 'O', 'accept_error', 79):
             trial.rc = values['error']
             res = trial.response
             if res is None or (res == "" or ''):
@@ -299,17 +320,17 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 return 'next_trial', None, None
 
         #-- Skip this trial
-        elif event in ('k', 'K', 'skip_trial'):
+        elif event in ('k', 'K', 'skip_trial', 75):
             window.Close()
             return 'next_trial', None, None
 
         #-- Return to previous trial
-        elif event in ('p', 'P', 'prev_trial'):
+        elif event in ('p', 'P', 'prev_trial', 80):
             window.Close()
             return 'prev_trial', None, None
 
         #-- Merge 2 characters
-        elif event in ('m', 'M', 'merge_chars'):
+        elif event in ('m', 'M', 'merge_chars', 77):
             if current_command is None:
                 instructions.Update('Select the characters to merge. ENTER=confirm, ESC=abort')
                 current_command = 'merge_chars'
@@ -319,21 +340,21 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                     selection_handler = _CharSelector(graph, characters, 'any', [])
 
         #-- Split a stroke into 2 characters
-        elif event in ('s', 'S', 'split_stroke'):
+        elif event in ('s', 'S', 'split_stroke', 83):
             if current_command is None:
                 instructions.Update('Select a stroke to split. ENTER=confirm, ESC=abort')
                 current_command = 'split_stroke'
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
         #-- Split a character
-        elif event in ('c', 'C', 'split_char'):
+        elif event in ('c', 'C', 'split_char', 67):
             if current_command is None:
                 instructions.Update('Select a character to split to 2 different characters. ENTER=confirm, ESC=abort')
                 current_command = 'split_char'
                 selection_handler = _MultiStrokeSelector(graph, characters)
 
         #-- Split the trial into 2 trials
-        elif event in ('t', 'T', 'split_trial'):
+        elif event in ('t', 'T', 'split_trial', 84):
             if current_command is None:
                 instructions.Update('Select the last character of trial#1. ENTER=confirm, ESC=abort')
                 current_command = 'split_trial'
@@ -341,7 +362,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
 
         #-- Self correction
-        elif event in ('f', 'F', 'self_correction'):
+        elif event in ('f', 'F', 'self_correction', 70):
             if current_command is None:
                 instructions.Update('Select the correct character. ENTER=confirm, ESC=abort')
                 #window['show_correction'].update(disabled=False)
@@ -360,14 +381,14 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             window.Close()
             return 'show_correction', chars1, last_selection_handler
 
-        elif event == 'delete_stroke':
+        elif event in ('d', 'D', 'delete_stroke', 68):
             if current_command is None:
                 instructions.Update('Select a stroke to delete. ENTER=confirm, ESC=abort')
                 current_command = 'delete_stroke'
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
         elif event == 'response':
-            text = sg.popup_get_text('Response', 'Please enter response:')
+            text = sg.popup_get_text('The participant wrote {:} characters'.format(len(on_paper_chars)), 'Please enter response:')
             trial.response = text
             # window.Close()
             # return 'response', characters, None
@@ -378,7 +399,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 selection_handler.clicked(values)
 
         #-- ENTER clicked: end the currently-running command
-        elif current_command is not None and len(event) == 1 and ord(event) == 13:
+
+        elif current_command is not None and type(event) is not int and len(event) == 1 and ord(event) == 13:
             if current_command == 'split_char':
                 characters = _apply_split_character(characters, selection_handler)
                 window.Close()
@@ -393,33 +415,42 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                     return 'continue', characters, None
 
             elif current_command == 'split_stroke':
+                if selection_handler.selected is None:
+                    return 'continue', characters, None
                 window.Close()
                 return 'split_stroke', characters, selection_handler.selected
 
             elif current_command == 'split_trial':
+                if selection_handler.selected is None:
+                    return 'continue', characters, None
                 chars1, chars2 = _split_chars_into_2_trials(characters, selection_handler)
                 window.Close()
                 return 'split_trial', chars1, chars2
 
             elif current_command == 'self_correction':
+                if selection_handler.selected is None:
+                    return 'continue', characters, None
                 trial.self_correction = "1"
                 chars1 = _self_correction(characters, selection_handler, window, current_command,values, graph)
-                _set_stroke_color(last_selection_handler.selected, 'yellow', graph)
                 window.Close()
                 return 'self_correction', chars1, last_selection_handler
 
             elif current_command == 'delete_stroke':
                 updated_characters = _delete_stroke(characters, selection_handler)
-                window.Close()
-                return 'delete_stroke', updated_characters, selection_handler.selected
+                answer = sg.Popup('Delete stroke', 'Are you sure you want to delete this stroke?', button_type=1)
+                if answer == "Yes":
+                    window.Close()
+                    return 'delete_stroke', updated_characters, selection_handler.selected
+                # else:
+                #     return 'continue', None, None
 
             else:
                 raise Exception('Bug')
 
         #-- ESC clicked: cancel the currently-running command
         #elif len(event) == 1 and ord(event) == 27:                         #Original line!!!
-        #if current_command is not None and len(event) == 1 and ord(event) == 27:
-        if current_command is not None and event == 'Escape:27':
+
+        if current_command is not None and (event == 27 or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)):
             instructions.Update('')
             current_command = None
             #if selection_handler is not None:
@@ -443,11 +474,11 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('Split (S)troke', key='split_stroke'),
         sg.Button('Split (C)haracter', key='split_char'),
         sg.Button('Split (T)rial', key='split_trial'),
-        sg.Button('(M)erge 2 characters', key='merge_chars'),
+        sg.Button('(M)erge characters', key='merge_chars'),
         sg.Button('(R)eset current trial', key='reset_trial'),
+        sg.Button('(D)elete stroke', key='delete_stroke'),
         sg.Button('Sel(f) correction', key='self_correction'),
-        sg.Checkbox('Show correction', key='show_correction', enable_events=True, disabled=True),
-        sg.Button('Delete stroke', key='delete_stroke'),
+        sg.Checkbox('Show correction strokes', key='show_correction', enable_events=True, disabled=True),
 
     ]
 
@@ -466,11 +497,11 @@ def _create_window_for_markup(screen_size, title):
 
     commands_general = [
         sg.Button('S(E)ttings', key='settings'),
-        sg.Button('(Q)uit encoder', key='quit'),
+        sg.Button('(Q)uit WEncoder', key='quit'),
     ]
 
     layout = [
-        [sg.Text(' ' * 100, text_color='green', key='instructions', font=('Arial', 16))],
+        [sg.Text(' ' * 100, text_color='white', key='instructions', font=('Arial', 16))],
         [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)],
         commands_m,
         commands_nav,
@@ -481,9 +512,9 @@ def _create_window_for_markup(screen_size, title):
     label = tk.Label(text="Hello, Tkinter", fg="white", bg="yellow")
     label.pack()
 
-    window = sg.Window(title, layout, return_keyboard_events=True)
+    window = sg.Window(title, layout, return_keyboard_events=True,  resizable = True)
     window.Finalize()
-
+    #window.Maximize()
     return window
 
 
@@ -496,22 +527,28 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
         char_index += 1
         strokes = char.on_paper_strokes
 
-        color = RED if char.char_num % 2 == 1 else CYAN
+        color = ORANGE if char.char_num % 2 == 1 else CYAN
 
         for i in range(len(strokes)):
             stroke = strokes[i]
-            stroke.color = color[i] if i < len(color) else color[-1]
+            if stroke.correction != 1:
+                stroke.color = color[i] if i < len(color) else color[-1]
 
             for dot in stroke.trajectory:
                 x = (dot.x - offset[0]) * expand_ratio + margin
                 y = (dot.y - offset[1]) * expand_ratio + margin
                 y = screen_size[1] - y
+                #x = screen_size[1] - x
                 dot.screen_x = x
                 dot.screen_y = y
-                dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill=stroke.color)
+                if stroke.correction == 1:
+                    if dot_num % 2 == 0:
+                        dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill = "red")
+                    else:
+                        dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill = "yellow")
+                else:
+                    dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill = stroke.color)
                 dot_num = dot_num + 1
-
-
 
             graph.TKCanvas.create_text(x+2 , y+2 , fill='yellow', text=str(char_index) + "." + str(i+1), anchor = NW)
 
@@ -526,8 +563,7 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
     '''label = tk.Label(text="Hello, Tkinter", fg="white", bg="yellow")
             label.pack()'''
 
-RED = ["#FF0000", "#FF8080", "#FFA0A0"]
-CYAN = ["#00FFFF", "#A0FFFF", "#C0FFFF"]
+
 
 
 #-------------------------------------------------------------------------------------
@@ -569,7 +605,7 @@ def _split_stroke(stroke, screen_size, margin, dot_radius=6):
             window.Close()
             return selected_dot.markup
 
-        elif len(event) == 1 and ord(event) == 27:
+        elif event == 'Escape:27':
             #-- ESC pressed
             if selected_dot is None:
                 window.Close()
@@ -579,7 +615,6 @@ def _split_stroke(stroke, screen_size, margin, dot_radius=6):
                     graph.TKCanvas.itemconfig(dot.ui, fill=dot.color)
                 selected_dot = None
 
-
 #-------------------------------------------------------------------------------------
 def _create_window_for_split_strokes(screen_size):
 
@@ -588,7 +623,7 @@ def _create_window_for_split_strokes(screen_size):
         [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)]
     ]
 
-    window = sg.Window('Split a stroke into 2', layout, return_keyboard_events=True)
+    window = sg.Window('Split a stroke into 2', layout, return_keyboard_events=True, resizable = True)
     window.Finalize()
 
     return window
@@ -959,16 +994,23 @@ def _get_expand_ratio(dots, screen_size, margin):
     x = [dot.x for dot in dots]
     y = [dot.y for dot in dots]
 
+    # min_x = 20
+    # max_x = screen_size[0] - 20
+    # min_y = 1000
+    # max_y = screen_size[1]-20
+
     min_x = min(x)
     max_x = max(x)
     min_y = min(y)
     max_y = max(y)
     canvas_width = max_x - min_x + 1
     canvas_height = max_y - min_y + 1
+
+    # canvas_width = screen_size[0] - 20
+    # canvas_height = screen_size[1]/3
+
     expand_ratio = min((screen_size[0] - margin*2) / canvas_width, (screen_size[1] - margin*2) / canvas_height)
-
     new_screen_size = round(canvas_width * expand_ratio) + margin * 2, round(canvas_height * expand_ratio) + margin * 2
-
     return expand_ratio, (min_x, min_y), new_screen_size
 
 
@@ -1022,12 +1064,19 @@ def _set_stroke_color(stroke, color, graph):
         color = stroke.color
     for dot in stroke:
         graph.TKCanvas.itemconfig(dot.ui, fill=color)
+#-------------------------------------------------------------------------------------
 
+def _set_corrected_stroke_color(stroke, color, graph):
+    stroke.color = color
+    for dot in stroke:
+        graph.TKCanvas.itemconfig(dot.ui, fill=color)
 
 #-------------------------------------------------------------------------------------
 def _apply_split_character(characters, selection_handler):
 
     char = selection_handler.selected_char
+    if char == None:
+        return characters
     char_ind = characters.index(char)
 
     stroke = selection_handler.selected_stroke
@@ -1242,7 +1291,6 @@ def _self_correction(characters, selection_handler, window, current_command, val
             for s in c.strokes:
                 if s == selection_handler.selected:
                     s.on_paper = True
-                    #_set_stroke_color(s, 'yellow', graph)
                     s.correction = 1
                     c.correction = 1
 

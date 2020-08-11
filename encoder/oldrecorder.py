@@ -256,7 +256,7 @@ def _repeat_text(n):
 def _save_targets_not_yet_processed(targets, filename):
     with open(filename, 'w') as fp:
         writer = csv.DictWriter(fp, ['target', 'repeated'], lineterminator=u.newline())
-        writer.writeheader()
+            writer.writeheader()
         for target in targets:
             writer.writerow(target)
 

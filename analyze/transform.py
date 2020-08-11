@@ -67,19 +67,21 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
     if trial_filter is not None:
         trials = [t for t in trials if trial_filter(t)]
 
+
     csv_rows = []
     n_errors = 0
 
     for trial in trials:
 
+
         if len(trial.characters) == 0:
             continue
 
-        if len(trial.characters) != len(trial.response):
-            print('WARNING: Trial #{:} (stimulus={:}) has {:} characters but the response is {:}'.
-                  format(trial.trial_num, trial.stimulus, len(trial.characters), trial.response))
-            n_errors += 1
-            continue
+        # if len(trial.characters) != len(trial.response):
+        #     print('WARNING: Trial #{:} (stimulus={:}) has {:} characters but the response is {:}'.
+        #           format(trial.trial_id, trial.stimulus, len(trial.characters), trial.response))
+        #     n_errors += 1
+        #     continue
 
         trial_rows = _apply_aggregation_functions_to_trial(agg_func_specs, trial, subj_id, char_filter, save_as_attr)
         csv_rows.extend(trial_rows)
@@ -90,7 +92,7 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
     #-- Save to CSV
     if out_filename is not None:
         csv_fieldnames = ([] if subj_id is None else ['subject']) + \
-                        ['trial_num', 'target_num', 'target', 'char_num', 'char'] + \
+                        ['trial_id', 'target_id', 'target', 'char_num', 'char'] + \
                         [field for func_spec in agg_func_specs for field in func_spec.out_fields]
         with open(out_filename, 'w') as fp:
             writer = csv.DictWriter(fp, csv_fieldnames, lineterminator='\n')
@@ -101,19 +103,18 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
 
 #--------------------------------------------------
 def _apply_aggregation_functions_to_trial(agg_func_specs, trial, subj_id, char_filter, save_as_attr):
-
+    print("trial: "+ str(trial))
     characters = trial.characters if (char_filter is None) else [c for c in trial.characters if char_filter(c, trial)]
 
     #-- Create result object (not yet filled) per character
     char_infos = [CharInfo(character,
                            dict(subject='' if subj_id is None else subj_id,
-                                trial_num=trial.trial_num,
-                                target_num=trial.target_num,
+                                trial_id=trial.trial_id,
+                                target_id=trial.target_id,
                                 target=trial.stimulus,
                                 char_num=character.char_num,
-                                char=trial.response[character.char_num - 1]))
-                  for character in characters]
-
+                                char=trial.response[character.char_num-1])) for character in characters]
+    #char=trial.response[character.char_num - 1]
     #-- Apply aggregation functions
     for agg_func_spec in agg_func_specs:
 
@@ -216,8 +217,8 @@ def _get_bounding_box_traj(trajectory, fraction_of_x_points=None, fraction_of_y_
     :param fraction_of_y_points: Percentage of y coordinates that must be in the trajectory. Value between 0 and 1.
     """
 
-    x = [pt.x for pt in trajectory]
-    y = [pt.y for pt in trajectory]
+    (x) = ([float(pt.x) for pt in trajectory])
+    (y) = ([float(pt.y) for pt in trajectory])
 
     if fraction_of_x_points is not None:
         xmin, xmax = find_interval_containing(x, fraction_of_x_points, in_place=True)

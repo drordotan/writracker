@@ -2,12 +2,14 @@
 An application for coding strokes & characters in a full experiment
 """
 import os
+# noinspection PyPep8Naming
 import PySimpleGUI as sg
 from tkinter import messagebox
 import tkinter as tk
+
+from writracker import encoder
 from writracker.encoder import dataiooldrecorder
-from writracker.encoder import *
-from writracker.encoder import encode_one_trial as _markup_one_trial
+from writracker.encoder.trialcoder import encode_one_trial
 from writracker import uiutil as uiu
 
 
@@ -24,7 +26,6 @@ def run():
     if raw_exp is None:
         return
 
-    #results_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
     results_dir = uiu.choose_directory('Select the encoded-data (results) folder')
     if results_dir is None or results_dir == '':
         return
@@ -32,13 +33,10 @@ def run():
     which_trials_to_code = _trials_to_code(raw_exp, results_dir)
 
     if isinstance(which_trials_to_code, int):
-        trial_to_start_from = which_trials_to_code-2
         trials_to_code = raw_exp.trials
-        # trials_to_code = [t for t in raw_exp.trials if t.trial_id >= which_trials_to_code]
 
     elif which_trials_to_code:
         trials_to_code = raw_exp.trials
-        trial_to_start_from = 0
 
     else:
         return
@@ -49,8 +47,8 @@ def run():
     # except Exception as e:
     #     messagebox.showerror('Error in coding app', str(e))
 
-#-------------------------------------------------------------------------------------
 
+#-------------------------------------------------------------------------------------
 def working_directories(raw_input_dir, output_dir):
 
     input_dir = raw_input_dir
@@ -58,10 +56,7 @@ def working_directories(raw_input_dir, output_dir):
     return input_dir, results_dir
 
 
-
 #-------------------------------------------------------------------------------------
-
-
 def current_trial_index(trials, trial_to_start_from):
     return trials, trial_to_start_from
 
@@ -70,29 +65,24 @@ def current_trial_index(trials, trial_to_start_from):
 def _load_raw_exp_ui():
 
     while True:
-        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\raw'
-        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\for_ron'
-        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\updated_fields_new1'
-        #raw_dir = r'C:\Users\Ron\Documents\GitHub\new\maya_resultes2'
         raw_dir = uiu.choose_directory("Select the raw-data folder (where WRecorder saved the handwriting)")
         if raw_dir is None or raw_dir == '':
             return None
 
         err_msg = dataiooldrecorder.is_invalid_data_directory(raw_dir)
-        if err_msg is not None:                                         #check if there suppose to be "not" before None
+        if err_msg is not None:  # check if there suppose to be "not" before None
             print("Invalid raw-data directory")
             messagebox.showerror("Invalid raw-data directory", err_msg)
             return None
 
         #try:
         exp = dataiooldrecorder.load_experiment(raw_dir)
-        print("try")
+        #print("try")
         return exp
 
         '''except Exception as e:
             print("Invalid raw-data directory 2")
             messagebox.showerror("Invalid raw-data directory 2", str(e))'''
-
 
 
 #-------------------------------------------------------------------------------------
@@ -105,12 +95,12 @@ def _trials_to_code(raw_exp, coded_dir):
     raw_trial_nums = tuple(sorted([t.trial_id for t in raw_exp.trials]))
 
 
-    if not os.path.isfile(dataio.trial_index_filename(coded_dir)):
+    if not os.path.isfile(encoder.dataio.trial_index_filename(coded_dir)):
         #-- There is no index file - coding has not started yet
         print("no index file")
         return True
 
-    coded_trials = dataio.load_trials_index(coded_dir)
+    coded_trials = encoder.dataio.load_trials_index(coded_dir)
     coded_trial_nums = tuple(sorted(set([t['trial_id'] for t in coded_trials])))
     try:
         max_coded = max(coded_trial_nums)
@@ -174,10 +164,10 @@ def code_experiment(trials, out_dir):
 
         trial = trials[i]
         print("trial is: " + str(trial))
-        dataio.remove_from_trial_index(out_dir, trial.trial_id)
+        encoder.dataio.remove_from_trial_index(out_dir, trial.trial_id)
 
         print('Processing trial #{}, source: {}'.format(i + 1, trial.source))
-        rc = _markup_one_trial(trial, out_dir)
+        rc = encode_one_trial(trial, out_dir)
 
         if rc == 'quit':
             break

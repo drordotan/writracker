@@ -1,4 +1,5 @@
 import os
+import writracker.encoder
 from writracker.encoder.transform import GetBoundingBox, AggFunc
 
 
@@ -9,21 +10,27 @@ from writracker.encoder.transform import GetBoundingBox, AggFunc
 def trial_ok(trial):
     return trial['rc'] == 'OK'
 
+
 #-------------------------------------------------------
+# noinspection PyUnusedLocal
 def get_pre_char_delay(trial, character):
     """
     The delay between this character and the previous one
     """
     return round(character.pre_char_delay)
 
+
 #-------------------------------------------------------
+# noinspection PyUnusedLocal
 def get_post_char_delay(trial, character):
     """
     The delay between this character and the next one
     """
     return round(character.post_char_delay)
 
+
 #-------------------------------------------------------
+# noinspection PyUnusedLocal
 def get_pre_char_distance(trial, character, prev_agg):
     """
     The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box)
@@ -36,7 +43,9 @@ def get_pre_char_distance(trial, character, prev_agg):
     else:
         return None
 
+
 #-------------------------------------------------------
+# noinspection PyUnusedLocal
 def get_post_char_distance(trial, character, prev_agg):
     """
     The horizontal distance between this character and the next one (rely on the previously-calculated bounding box)
@@ -50,10 +59,7 @@ def get_post_char_distance(trial, character, prev_agg):
         return None
 
 
-
 #-------------------------------------------------------
-
-
 def execute_agg_measures(input_dir):
 
     #-- The list of the aggregations to perform (each becomes one or more columns in the resulting CSV file)
@@ -66,10 +72,6 @@ def execute_agg_measures(input_dir):
     )
 
     exp = writracker.encoder.dataiooldrecorder.load_experiment_trajwriter(input_dir, trial_index_filter=trial_ok)
-
-    #exp = encoder.dataiooldrecorder.load_experiment(input_dir)
-
-
 
     writracker.encoder.transform.aggregate_characters(exp.trials, agg_func_specs=agg_func_specs, subj_id=os.path.basename(input_dir),
                                                       trial_filter=lambda trial:trial.rc == 'OK',

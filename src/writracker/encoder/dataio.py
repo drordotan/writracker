@@ -10,7 +10,7 @@ from collections import namedtuple
 import data
 
 # noinspection PyProtectedMember
-from writracker.encoder import _parse_config_int_value
+from writracker.encoder.dataiooldrecorder import _parse_config_int_value
 from writracker.encoder import extract_aggregate_measures
 
 StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])

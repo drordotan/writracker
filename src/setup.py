@@ -5,7 +5,7 @@ import writracker
 setup(name='writracker',
       version=".".join([str(v) for v in writracker.version()]),
       description='Framework for pen-tracking experiments',
-      url='http://trajtracker.com',
+      url='http://www.mathinklab.com/writracker',
       author='Dror Dotan',
       author_email='dotandro@mail.tau.ac.il',
       license='GPL',

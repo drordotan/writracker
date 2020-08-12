@@ -1,8 +1,6 @@
 import os
-import analyze
-from analyze.transform import GetBoundingBox, AggFunc
-import encoder
-from encoder import dataiooldrecorder
+from writracker.encoder.transform import GetBoundingBox, AggFunc
+
 
 # output_dir = r'C:\Users\Ron\Documents\GitHub\new\output'
 # input_dir = r'C:\Users\Ron\Documents\GitHub\new\results'
@@ -67,12 +65,12 @@ def execute_agg_measures(input_dir):
         AggFunc(get_post_char_distance, 'post_char_distance', get_prev_aggregations=True),
     )
 
-    exp = encoder.dataiooldrecorder.load_experiment_trajwriter(input_dir, trial_index_filter=trial_ok)
+    exp = writracker.encoder.dataiooldrecorder.load_experiment_trajwriter(input_dir, trial_index_filter=trial_ok)
 
     #exp = encoder.dataiooldrecorder.load_experiment(input_dir)
 
 
 
-    analyze.transform.aggregate_characters(exp.trials, agg_func_specs=agg_func_specs, subj_id=os.path.basename(input_dir),
-                                              trial_filter=lambda trial:trial.rc == 'OK',
-                                              out_filename=input_dir + '/characters_ADME_main.csv', save_as_attr=False)
+    writracker.encoder.transform.aggregate_characters(exp.trials, agg_func_specs=agg_func_specs, subj_id=os.path.basename(input_dir),
+                                                      trial_filter=lambda trial:trial.rc == 'OK',
+                                                      out_filename=input_dir + '/characters_ADME_main.csv', save_as_attr=False)

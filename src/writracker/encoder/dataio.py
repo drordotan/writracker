@@ -8,12 +8,10 @@ import os
 import numpy as np
 from collections import namedtuple
 import data
-from encoder import dataiooldrecorder
-from encoder import trialcoder
 
 # noinspection PyProtectedMember
-from encoder.dataiooldrecorder import _parse_config_int_value, _parse_config_float_value
-from encoder import extract_aggregate_measures
+from writracker.encoder import _parse_config_int_value
+from writracker.encoder import extract_aggregate_measures
 
 StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 

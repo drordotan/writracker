@@ -3,9 +3,8 @@ import csv
 import os
 import re
 import data
-import utils as u
 import pandas as pd
-from encoder import dataio
+from writracker.encoder import dataio
 
 #-------------------------------------------------------------------------------------------------
 
@@ -53,7 +52,7 @@ def load_experiment_trajwriter(dir_name, trial_index_filter=None):
             raise Exception('Invalid experiment directory {:}: There is no trajectory for trial #{:}, sub-trial #{:}'
                             .format(dir_name, trial.trial_id, trial.sub_trial_num))
 
-        characters, strokes = dataio._load_trajectory(trial.trial_id, dir_name + os.sep + encoded_traj_filenames[trial_key])
+        characters, strokes = dataio._load_trajectory(trial.trial_id, dir_name+os.sep+encoded_traj_filenames[trial_key])
 
         #dataio.validate_trial(trial, characters, strokes)
 

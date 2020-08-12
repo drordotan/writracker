@@ -3,12 +3,10 @@ coding strokes & characters in one trial
 """
 import PySimpleGUI as sg
 import numpy as np
-import re
 import data
 from tkinter import*
 import tkinter as tk
-from encoder import *
-from encoder import dataio
+from writracker.encoder import dataio
 import pyautogui
 
 
@@ -1247,7 +1245,7 @@ def _apply_split_stroke(characters, stroke, dot):
 def save_trial(trial, characters, sub_trial_num, out_dir):
 
     dataio.append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
-                                            trial.response, trial.time_in_session, trial.rc, trial.self_correction, trial.sound_file_length, trial.raw_file_name, trial.time_in_day, trial.date)
+                                 trial.response, trial.time_in_session, trial.rc, trial.self_correction, trial.sound_file_length, trial.raw_file_name, trial.time_in_day, trial.date)
 
 
     strokes = []

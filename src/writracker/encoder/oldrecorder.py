@@ -6,12 +6,9 @@ import csv
 import PySimpleGUI as sg
 from tkinter import messagebox
 
-from encoder import dataiooldrecorder as twio
-from encoder.dataiooldrecorder import StartAcquisition, trials_csv_filename
-import uiutil as uiu
-import utils as u
-import data
-
+from writracker.encoder import dataiooldrecorder as twio
+from writracker.encoder import StartAcquisition, trials_csv_filename
+from writracker import utils as u, uiutil as uiu
 
 #----------------------------------------------------------
 

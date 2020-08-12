@@ -2,10 +2,8 @@ from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditio
 from PyQt5.QtCore import *       # core core of QT classes
 from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
 from PyQt5 import uic
-from wacom_recorder.recorder_io import Target, Trial, Trajectory
 from datetime import datetime, date
 from pygame import error as pgerr  # handle pygame errors as exceptions
-from wacom_recorder import wintab
 from mutagen.mp3 import MP3        # get mp3 length
 from shutil import copyfile
 from pygame import mixer           # handle sound files
@@ -14,6 +12,9 @@ import subprocess                  # This originally used only to check if WACOM
 import sys
 import csv
 import os
+
+from writracker.recorder import recorder_io
+from writracker.recorder import wintab
 
 
 # -------------------------------------------------------------------------------------------------------------
@@ -30,14 +31,16 @@ TABLET_POLL_TIME = 5    # defines the polling frequency for tablet packets, in m
 
 
 # -------------------------------------------------------------------------------------------------------------
+# noinspection PyPep8Naming
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QMainWindow() or Qwidget()
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.title = "WriTracker Recorder"
         # Establish tablet connection & Start polling
-        hWnd = int(self.winId())                            # Get current window's window handle
-        wintab.hctx = wintab.OpenTabletContexts(hWnd)       # context handle for the tablet polling function.
+        h_wnd = int(self.winId())                            # Get current window's window handle
+        wintab.hctx = wintab.OpenTabletContexts(h_wnd)       # context handle for the tablet polling function.
         self.poll_timer = QTimer(self)
+        # noinspection PyUnresolvedReferences
         self.poll_timer.timeout.connect(self.tabletPoll)    # Start timer & Run polling function
         self.poll_timer.start(TABLET_POLL_TIME)
         # pen settings & variables
@@ -152,14 +155,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.tablet_paint_area.fitInView(800, 600, 0, 0, Qt.KeepAspectRatio)  # reset the graphicsView scaling
         self.show()
 
+    #--------------------------------------------------------------------------------------
     def tabletPoll(self):
-        lpPkts = (wintab.PACKET * 100)()
-        lpPkts  = wintab.GetPackets()
-        if lpPkts == 0:  # no packets received
+        # noinspection PyUnresolvedReferences,PyUnusedLocal
+        lp_pkts = (wintab.PACKET*100)()
+        lp_pkts = wintab.GetPackets()
+        if lp_pkts == 0:  # no packets received
             return
-        self.pen_x = lpPkts[0].pkX
-        self.pen_y = lpPkts[0].pkY
-        new_pressure = int(lpPkts[0].pkNormalPressure/327.67)      # normalized to 0-100 range
+        self.pen_x = lp_pkts[0].pkX
+        self.pen_y = lp_pkts[0].pkY
+        new_pressure = int(lp_pkts[0].pkNormalPressure/327.67)      # normalized to 0-100 range
         # mark Trial started flag, but only if the ok/error are not checked.
         # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
         if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
@@ -216,17 +221,22 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.scene.addPath(self.path)
 
     #               -------------------------- Button/Menu Functions --------------------------
+
+    #------------------------------------------------------------------------------------------
     # This function rotates the graphicsView, then calculates the rotation factor for the points in the traj file.
     def f_btn_rotate(self):
         self.tablet_paint_area.rotate(90)
         self.rotation_angle = (self.rotation_angle+90) % 360  # allowed angles: 0,90,180,270
 
+    #------------------------------------------------------------------------------------------
     def f_menu_add_error(self):
         new_error, ok = QInputDialog.getText(self, "Insert new error type", "Type the new error and press OK \n"
                                                                             "The new error will be added to the list")
         if ok:
             self.combox_errors.addItem(new_error.strip())
 
+    #------------------------------------------------------------------------------------------
+    # noinspection PyMethodMayBeStatic
     def f_menu_online_help(self):
         qmbox = QMessageBox()
         qmbox.setWindowTitle("Online help")
@@ -235,7 +245,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                       "Press here to visit WriTracker Recorder website</a>")
         qmbox.exec()
 
-# This function loads previous session status, and continues it
+    #------------------------------------------------------------------------------------------
+    # This function loads previous session status, and continues it
     def f_btn_continue_ssn(self):
         self.clean_display()
         self.show_info_msg("Continuing an existing session", "Choose the an existing results folder")
@@ -244,7 +255,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 if self.choose_targets_file(continue_session=True):
                     try:
                         df = pd.read_csv(str(self.results_folder_path)+"/trials.csv")
-                    except(IOError):    # -- allow the user to exit the loop
+                    except IOError:    # -- allow the user to exit the loop
                         msg = QMessageBox()
                         answer = msg.question(self, "Error", "Couldn't load trials.csv \n"
                                                              "would you like to try another folder?",
@@ -270,6 +281,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             else:
                 return False
 
+    #------------------------------------------------------------------------------------------
     def f_btn_start_ssn(self):
         self.clean_display()
         self.show_info_msg("Starting a new session",
@@ -291,17 +303,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.read_next_target()  # read first target
         mixer.init()            # must initialize once before playing sound files
         try:
-            mixer.music.load("wacom_recorder/sounds/beep_sound.mp3")
+            mixer.music.load("writracker/recorder/sounds/beep_sound.mp3")
             mixer.music.play(0)
         except TypeError:
             self.show_info_msg("Error!", "Error when trying to access sound file.")
-        except pgerr as message:
+        except pgerr:
             self.show_info_msg("Error!", "Error when trying to play sound file.")
 
+    #------------------------------------------------------------------------------------------
     def f_btn_reset(self):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
-        answer = msg.question(self, 'Reset current Target', "This action will also delete the current trajectory file\n Press yes to confirm", msg.Yes | msg.No, msg.No)
+        answer = msg.question(self, 'Reset current Target', "This action will also delete the current trajectory file\n Press yes to confirm",
+                              msg.Yes | msg.No, msg.No)
         if answer == msg.Yes:
             print("Writracker: trajectory file deleted, " + str(self.current_active_trajectory))
             os.remove(str(self.current_active_trajectory))
@@ -313,6 +327,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         else:
             return
 
+    #------------------------------------------------------------------------------------------
     def f_btn_next(self):
         self.clean_display()
         if self.trial_started is True:
@@ -323,9 +338,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.read_next_error_target(read_backwards=False)
         else:
             self.read_next_target()
-        if  self.allow_sound_play:
+        if self.allow_sound_play:
             self.btn_play.setEnabled(True)
 
+    #------------------------------------------------------------------------------------------
     def f_btn_play(self):
         print("play")
         self.btn_play.setEnabled(False)
@@ -338,9 +354,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.targets[self.curr_target_index].sound_file_length = round(MP3(soundfile).info.length, 2)
         except TypeError:
             self.show_info_msg("Error!", "Error when trying to access sound file.")
-        except pgerr as message:
+        except pgerr:
             self.show_info_msg("Error!", "Error when trying to play sound file.")
 
+    #------------------------------------------------------------------------------------------
     def f_btn_prv(self):
         self.clean_display()
         if self.trial_started is True:
@@ -351,13 +368,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.read_next_error_target(read_backwards=True)
         else:
             self.read_prev_target()
-        if  self.allow_sound_play:
+        if self.allow_sound_play:
             self.btn_play.setEnabled(True)
 
+    #------------------------------------------------------------------------------------------
     # when pressing any of the radio buttons
     def f_btn_rb(self):
         self.toggle_buttons(True)
 
+    #------------------------------------------------------------------------------------------
     def f_btn_goto(self):
         target_id = self.combox_targets.currentText().split("-")[0]
         target_index = 0
@@ -366,12 +385,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.close_current_trial()
         self.trial_started = False
         self.toggle_rb(False)
-        for target in self.targets: # searching for the correct Array index matching the target id
+        for target in self.targets:  # searching for the correct Array index matching the target id
             if target.id == target_id:
                 break
             target_index += 1
         self.read_next_target(from_goto=True, goto_index=int(target_index))
 
+    #------------------------------------------------------------------------------------------
     def f_btn_quit(self):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
@@ -386,6 +406,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             wintab.CloseTabletContext(wintab.hctx)
             self.close()
 
+    #------------------------------------------------------------------------------------------
     def f_btn_end_ssn(self):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
@@ -394,11 +415,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.reset_session()
         return
 
+    #------------------------------------------------------------------------------------------
     def f_btn_plus(self):
         self.tablet_paint_area.scale(1.25, 1.25)
 
+    #------------------------------------------------------------------------------------------
     def f_btn_minus(self):
         self.tablet_paint_area.scale(0.75, 0.75)
+
 
     #               -------------------------- GUI/messages Functions --------------------------
 
@@ -406,7 +430,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def choose_targets_file(self, continue_session=False):
         while True:
             if not continue_session:
-                targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(), "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
+                targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(),
+                                                                    "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
                 targets_file_path = targets_file_path_raw[0]
             else:
                 targets_file_path = self.results_folder_path+"/Original_targets_file_copy.csv"
@@ -414,9 +439,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 try:
                     with open(targets_file_path) as self.targets_file:
                         if not self.parse_targets(targets_file_path):
-                            raise IOError # bad targets file format
+                            raise IOError  # bad targets file format
                         self.lbl_targetsfile.setText("<strong> Current targets file Path: </strong><div align=left>"
-                                                     + targets_file_path +"</div>")
+                                                     + targets_file_path + "</div>")
                         self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path))
                         return True
                 except IOError:
@@ -508,6 +533,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     # ----------------------------------------------------------------------------------
     # This function creates & shows the configuration window, before starting a session.
+    # noinspection PyUnresolvedReferences,PyArgumentList
     def pop_config_menu(self):
         self.cfg_window.setWindowTitle("Session configuration")
         layout_v = QVBoxLayout()
@@ -596,13 +622,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 trials_dict = df.set_index('trial_id').query('target==' + "'" + str(target.value) + "'",
                                                              inplace=False).T.to_dict()
                 for key in trials_dict.keys():
-                    tmp_trial = Trial(trial_id=key, target_id=target.id, target=target.value,
-                                      rc_code=trials_dict[key]['rc'],
-                                      time_in_session=trials_dict[key]['time_in_session'],
-                                      date=trials_dict[key]['date'],
-                                      traj_file_name=trials_dict[key]['raw_file_name'],
-                                      abs_time=trials_dict[key]['time_in_day'])
+                    tmp_trial = recorder_io.Trial(trial_id=key, target_id=target.id, target=target.value,
+                                                  rc_code=trials_dict[key]['rc'],
+                                                  time_in_session=trials_dict[key]['time_in_session'],
+                                                  date=trials_dict[key]['date'],
+                                                  traj_file_name=trials_dict[key]['raw_file_name'],
+                                                  abs_time=trials_dict[key]['time_in_day'])
                     target.trials.append(tmp_trial)
+
         return True
 
     # ----------------------------------------------------------------------------------
@@ -669,6 +696,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             QMessageBox().critical(self, "Warning! file access error",
                                    "WriTracker couldn't save trials file. Last trial information"
                                    " wasn't saved. If the problem repeats, restart the session.", QMessageBox.Ok)
+
     # ----------------------------------------------------------------------------------
     # todo: move to "io" package
 
@@ -702,12 +730,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # Add new a new completed Trial inside the current Target
         current_target = self.targets[self.curr_target_index]
         traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
-        time_rel = datetime.strptime(self.current_trial_start_time, "%H:%M:%S") - \
-                   datetime.strptime(self.session_start_time,"%H:%M:%S")
-        current_trial = Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
-                              time_in_session=time_rel, traj_file_name=traj_filename, date=str(date.today()),
-                              abs_time=datetime.now().strftime("%H:%M:%S"),
-                              sound_file_length=current_target.sound_file_length)
+        time_rel = datetime.strptime(self.current_trial_start_time, "%H:%M:%S") - datetime.strptime(self.session_start_time, "%H:%M:%S")
+        current_trial = recorder_io.Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
+                                          time_in_session=time_rel, traj_file_name=traj_filename, date=str(date.today()),
+                                          abs_time=datetime.now().strftime("%H:%M:%S"),
+                                          sound_file_length=current_target.sound_file_length)
         current_target.trials.append(current_trial)
         current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1
@@ -748,20 +775,20 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         else:  # read as csv
             df = pd.read_csv(targets_file_path, converters=converters)
 
-        if not {'target_id', 'target'}.issubset(set(list(df))): # Check targets file format
-            QMessageBox().warning(None, "Wrong targets file format",
-                                  "targets file must contain the following fields:"
-                                  "'target_id', 'target'.\nOptional field: 'sound_file_name'")
+        if not {'target_id', 'target'}.issubset(set(list(df))):  # Check targets file format
+            _warning("Wrong targets file format",
+                     "targets file must contain the following fields: 'target_id', 'target'.\nOptional field: 'sound_file_name'")
             return False
 
         for index, row in df.iterrows():
             if "sound_file_name" in df.columns:
-                self.targets.append(Target(row["target_id"], row["target"].strip(), row["sound_file_name"] if str(row["sound_file_name"]) != 'nan' else "" ))
+                self.targets.append(recorder_io.Target(row["target_id"], row["target"].strip(),
+                                                       row["sound_file_name"] if str(row["sound_file_name"]) != 'nan' else ""))
                 self.allow_sound_play = True
             else:
-                self.targets.append(Target(row["target_id"], row["target"].strip()))
-                self.allow_sound_play = False # when no sound_file_column, the user is not allowed to choose sounds folder
-            self.combox_targets.addItem(str(row["target_id"])+"-"+str(row["target"]))
+                self.targets.append(recorder_io.Target(row["target_id"], row["target"].strip()))
+                self.allow_sound_play = False  # when no sound_file_column, the user is not allowed to choose sounds folder
+            self.combox_targets.addItem(str(row["target_id"]) + "-" + str(row["target"]))
 
         return True
 
@@ -790,7 +817,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     #todo: move to "io" package
     def create_dir_copy_targets(self):
         # If the file already exists, we assume the user chose "continue existing session". no need to create copies.
-        if os.path.isfile(self.results_folder_path+"\\Remaining_targets.csv"): #
+        if os.path.isfile(self.results_folder_path+"\\Remaining_targets.csv"):
             print("Recorder: Remaining_targets.csv file exists. Assuming this is a restored session")
             return True
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
@@ -807,7 +834,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # ----------------------------------------------------------------------------------
     def open_trajectory(self, unique_id):
         name = "trajectory_"+unique_id
-        self.current_active_trajectory = Trajectory(name, self.results_folder_path)
+        self.current_active_trajectory = recorder_io.Trajectory(name, self.results_folder_path)
         self.current_active_trajectory.open_traj_file("header")
 
     # ----------------------------------------------------------------------------------
@@ -901,7 +928,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.read_next_error_target()
         else:
             self.show_info_msg("End of targets",
-                               'Reached the end of the targets file.\nClick "exit" to finish, or go back '+
+                               'Reached the end of the targets file.\nClick "exit" to finish, or go back ' +
                                'using the "prev" or "goto" buttons')
             #todo: must the user click END SESSION?
 
@@ -920,7 +947,7 @@ def check_if_tablet_connected():
         return check_if_tablet_connected_mac()
 
     else:
-        QMessageBox().critical(None, "Unsupported system", "WriTracker can only run on Windows or Mac")
+        _critical_msg("Unsupported system", "WriTracker can only run on Windows or Mac")
         return False
 
 
@@ -930,9 +957,8 @@ def check_if_tablet_connected_mac():
     if 'WACOM' in output.upper():
         return True
     else:
-        QMessageBox().critical(None, "No Tablet Detected", "Could not verify a connection to a Wacom tablet.\n"
-                                                           "Please make sure a tablet is connected.\n"
-                                                           "You may proceed, but unexpected errors may occur")
+        _critical_msg("No Tablet Detected", "Could not verify a connection to a Wacom tablet.\n"
+                                            "Please make sure a tablet is connected.\nYou may proceed, but unexpected errors may occur")
         return False
 
 
@@ -946,13 +972,25 @@ def check_if_tablet_connected_windows():
         return True
     else:
         print("WintabW: No tablet is connected")
-        QMessageBox().critical(None, "No Tablet Detected",  "Could not verify a connection to a Wintab32 tablet."
-                                                            "\nPlease make sure a tablet is connected.\n "
-                                                            "You may proceed, but unexpected errors may occur")
+        _critical_msg("No Tablet Detected", "Could not verify a connection to a Wintab32 tablet."
+                                            "\nPlease make sure a tablet is connected.\n "
+                                            "You may proceed, but unexpected errors may occur")
         return False
 
 
-# ---------------------------------------------------------------------------------------------------------
+#----------------------------------------
+def _warning(title, msg):
+    # noinspection PyTypeChecker
+    QMessageBox().warning(None, title, msg)
+
+
+#----------------------------------------
+def _critical_msg(title, msg):
+    # noinspection PyTypeChecker
+    QMessageBox().critical(None, title, msg)
+
+
+#---------------------------------------------------------------------------------------------------------
 def main():
     global app
     app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv

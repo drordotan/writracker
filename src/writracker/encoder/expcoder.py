@@ -5,11 +5,10 @@ import os
 import PySimpleGUI as sg
 from tkinter import messagebox
 import tkinter as tk
-import traceback
-from encoder import dataiooldrecorder
-from encoder import *
-from encoder.trialcoder import encode_one_trial as _markup_one_trial
-import uiutil as uiu
+from writracker.encoder import dataiooldrecorder
+from writracker.encoder import *
+from writracker.encoder import encode_one_trial as _markup_one_trial
+from writracker import uiutil as uiu
 
 
 #-------------------------------------------------------------------------------------
@@ -86,7 +85,7 @@ def _load_raw_exp_ui():
             return None
 
         #try:
-        exp =dataiooldrecorder.load_experiment(raw_dir)
+        exp = dataiooldrecorder.load_experiment(raw_dir)
         print("try")
         return exp
 

@@ -167,18 +167,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.start_trial()
 
         if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
-            self.path.moveTo(QPoint(self.pen_x, self.pen_y))
+            self.path.moveTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
         elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
             if self.session_started:
                 # When the pen leaves the surface, add a sample point with zero pressure
                 self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
         elif new_pressure > 0:                                               # it's a "TabletMove" event
-            self.path.lineTo(QPoint(self.pen_x, self.pen_y))
+            self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
         self.update()                                       # calls paintEvent
         self.pen_pressure = new_pressure
         # write to traj file:
         if self.current_active_trajectory is not None and self.session_started:
-            self.current_active_trajectory.add_row(self.x_resolution - self.pen_x, self.pen_y, self.pen_pressure)   # Fix tablet mirroring-flip X axis
+            self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
 
     """ This is the old function to get tablet information using events. 
         it work well, but does not allow recording tablet move above the surface ('hovering') """

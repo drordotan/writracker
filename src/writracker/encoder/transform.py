@@ -10,6 +10,7 @@ import math
 
 CharInfo = namedtuple('CharInfo', ['character', 'csv_row'])
 
+
 #-----------------------------------------------------------------------------------------------------
 class AggFunc(object):
 
@@ -43,7 +44,7 @@ class AggFunc(object):
 
 
 #-----------------------------------------------------------------------------------------------------
-def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=None, char_filter=None, out_filename=None, save_as_attr=False):
+def aggregate_characters(trials, agg_func_specs=(), trial_filter=None, char_filter=None, out_filename=None, save_as_attr=False):
     """
     Compute an aggregate value (or values) per trajectory section, and potentially save to CSV
 
@@ -83,7 +84,7 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
         #     n_errors += 1
         #     continue
 
-        trial_rows = _apply_aggregation_functions_to_trial(agg_func_specs, trial, subj_id, char_filter, save_as_attr)
+        trial_rows = _apply_aggregation_functions_to_trial(agg_func_specs, trial, char_filter, save_as_attr)
         csv_rows.extend(trial_rows)
 
     if n_errors > 0:
@@ -91,8 +92,7 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
 
     #-- Save to CSV
     if out_filename is not None:
-        csv_fieldnames = ([] if subj_id is None else ['subject']) + \
-                        ['trial_id', 'target_id', 'target', 'char_num', 'char'] + \
+        csv_fieldnames = ['trial_id', 'sub_trial_num', 'target_id', 'target', 'char_num', 'char'] + \
                         [field for func_spec in agg_func_specs for field in func_spec.out_fields]
         with open(out_filename, 'w') as fp:
             writer = csv.DictWriter(fp, csv_fieldnames, lineterminator='\n')
@@ -102,19 +102,20 @@ def aggregate_characters(trials, agg_func_specs=(), subj_id=None, trial_filter=N
 
 
 #--------------------------------------------------
-def _apply_aggregation_functions_to_trial(agg_func_specs, trial, subj_id, char_filter, save_as_attr):
-    print("trial: "+ str(trial))
+def _apply_aggregation_functions_to_trial(agg_func_specs, trial, char_filter, save_as_attr):
+
+    # print("trial: "+ str(trial))
     characters = trial.characters if (char_filter is None) else [c for c in trial.characters if char_filter(c, trial)]
 
     #-- Create result object (not yet filled) per character
     char_infos = [CharInfo(character,
-                           dict(subject='' if subj_id is None else subj_id,
-                                trial_id=trial.trial_id,
+                           dict(trial_id=trial.trial_id,
+                                sub_trial_num=trial.sub_trial_num,
                                 target_id=trial.target_id,
                                 target=trial.stimulus,
                                 char_num=character.char_num,
                                 char=trial.response[character.char_num-1])) for character in characters]
-    #char=trial.response[character.char_num - 1]
+
     #-- Apply aggregation functions
     for agg_func_spec in agg_func_specs:
 

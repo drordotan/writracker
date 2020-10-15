@@ -1,4 +1,10 @@
-from . import recorder_io
-from . import recorder
-from . import wintab
-from . import wintab_params
+import os
+
+from . import dataio
+from . import results
+
+
+if os.name == 'nt':
+    from . import wintab
+    from . import wintab_params
+    from . import recorder

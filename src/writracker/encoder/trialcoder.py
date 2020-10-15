@@ -8,9 +8,7 @@ import PySimpleGUI as sg
 import tkinter as tk
 import pyautogui
 
-import data
 from writracker.encoder import dataio
-
 
 markup_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'))
 
@@ -198,7 +196,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     #-- Skipping empty trials
     if len(strokes) == 0:
         trial.rc = 'empty'
-        save_trial(trial, characters, sub_trial_num, out_dir)
+        dataio.save_trial(trial, characters, sub_trial_num, out_dir)
         return 'next_trial', None, None
 
     on_paper_chars = [c for c in characters if len(c.trajectory) > 0]
@@ -296,7 +294,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                                         'Unmatch number of characters')
                 trial.response = res
             else:
-                save_trial(trial, characters, sub_trial_num, out_dir)
+                dataio.save_trial(trial, characters, sub_trial_num, out_dir)
                 window.Close()
                 return 'next_trial', None, None
 
@@ -316,7 +314,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             if res is None or (res == "" or ''):
                 sg.Popup('No response entered', 'Please enter a response')
             else:
-                save_trial(trial, characters, sub_trial_num, out_dir)
+                dataio.save_trial(trial, characters, sub_trial_num, out_dir)
                 window.Close()
                 return 'next_trial', None, None
 
@@ -712,7 +710,7 @@ class _Dot(object):
 
 
 #-------------------------------------------------------------------------------------
-class _Stroke(data.Stroke):
+class _Stroke(dataio.Stroke):
 
     def __init__(self, dots, stroke_num, on_paper):
         super().__init__(on_paper, None, dots)
@@ -1238,32 +1236,6 @@ def _apply_split_stroke(characters, stroke, dot):
     _renumber_chars_and_strokes(characters)
 
     return characters
-
-
-#-------------------------------------------------------------------------------------
-def save_trial(trial, characters, sub_trial_num, out_dir):
-
-    dataio.append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
-                                 trial.response, trial.time_in_session, trial.rc, trial.self_correction,
-                                 trial.sound_file_length, trial.raw_file_name, trial.time_in_day, trial.date)
-
-    strokes = []
-    for c in characters:
-        trial.self_correction = c.correction
-        for stroke in c.strokes:
-            stroke.char_num = c.char_num
-
-        if not c.strokes[0].on_paper:
-            c.strokes[0].char_num = 0
-
-        if not c.strokes[-1].on_paper:
-            c.strokes[-1].char_num = 0
-
-        strokes.extend(c.strokes)
-
-    dataio.save_trajectory(strokes, trial.trial_id, sub_trial_num, out_dir, trial)
-    dataio.save_strokes_file(strokes, trial.trial_id, sub_trial_num, out_dir, trial)
-    dataio.save_characters_file(characters, strokes, trial.trial_id, sub_trial_num, out_dir, trial)
 
 
 #-------------------------------------------------------------------------------------

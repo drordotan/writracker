@@ -7,75 +7,228 @@ import csv
 import os
 import numpy as np
 from collections import namedtuple
-import data
+from operator import attrgetter
 
-# noinspection PyProtectedMember
-from writracker.encoder.dataiooldrecorder import _parse_config_int_value
-from writracker.encoder import extract_aggregate_measures
+from writracker.encoder import transform
+import writracker.utils as u
+from writracker import commonio
+from writracker.utils import validate_csv_format
 
 StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 
 
-#-------------------------------------------------------------------------------------
-
-trials_index_fields = 'trial_id','target_id','sub_trial_num','target','response','time_in_session',\
-                      'rc','raw_file_name','time_in_day','date','self_correction', 'sound_file_length'
+trials_index_fields = 'trial_id', 'target_id', 'sub_trial_num', 'target', 'response', 'time_in_session', \
+                      'rc', 'traj_file_name', 'time_in_day', 'date', 'self_correction', 'sound_file_length'
 
 
-#-------------------------------------------------------------------------------------
-def encoder(dir_name, trials):
+#-------------------------------------------------------------------------------------------------
+def load_experiment(dir_name, trial_index_filter=None):
 
-    traj_filenames = _load_trajectory_filenames(dir_name)
-    index = load_trials_index(dir_name)
+    index = _load_trials_index(dir_name)
 
     trials = []
-    for t in index:
-        trial = data.EncoderTrial(trial_id=t['trial_id'], target_id=t['target_id'], stimulus=t['target'],
-                                     response=t['response'], characters=[], strokes=[], sub_trial_num=t['sub_trial_num'],
-                                     time_in_session=t['time_in_session'], rc=t['rc'], self_correction = 'self_correction')
+
+    for trial_spec in index:
+
+        if trial_index_filter is not None and not trial_index_filter(trial_spec):
+            continue
+
+        traj_filename = dir_name+os.sep+trial_spec['traj_file_name']
+        points = commonio.load_trajectory(traj_filename)
+
+        trial = CodedTrial(trial_id=trial_spec['trial_id'],
+                           sub_trial_num=trial_spec['sub_trial_num'],
+                           target_id=trial_spec['target_id'],
+                           stimulus=trial_spec['target'],
+                           traj_points=points,
+                           time_in_session=trial_spec['time_in_session'],
+                           rc=trial_spec['rc'],
+                           response=trial_spec['response'],
+                           self_correction=trial_spec['self_correction'],
+                           sound_file_length=trial_spec['sound_file_length'],
+                           traj_file_name=trial_spec['traj_file_name'],
+                           time_in_day=trial_spec['time_in_day'],
+                           date=trial_spec['date'])
 
         trial_key = trial.trial_id, trial.sub_trial_num
-        if trial_key not in traj_filenames:
-            raise Exception('Invalid experiment directory {:}: There is no trajectory for trial #{:}, sub-trial #{:}'
-                            .format(dir_name, trial.trial_id, trial.sub_trial_num))
-        characters, strokes = _load_trajectory(trial.trial_id, dir_name + os.sep + traj_filenames[trial_key])
+
+        characters, strokes = _parse_trajectory(trial.trial_id, traj_filename)
+
+        #dataio.validate_trial(trial, characters, strokes)
 
         trial.characters = characters
         trial.strokes = strokes
         trials.append(trial)
 
-    return data.Experiment(trials, source_path=dir_name)
+    return Experiment(trials, source_path=dir_name)
+
+
+#--------------------------------------------------------------------------------------------------------------------
+class Experiment(object):
+    """
+    All trials of one experiment session
+    """
+
+    def __init__(self, trials=(), subj_id=None, source_path=None):
+        self._trials = list(trials)
+        self.subj_id = subj_id
+        self.source_path = source_path
+
+    @property
+    def trials(self):
+        return tuple(self._trials)
+
+    @property
+    def sorted_trials(self):
+        return tuple(sorted(self._trials, key=attrgetter('trial_id')))
+
+    def append(self, trial):
+        self._trials.append(trial)
+
+    def sort_trials(self):
+        self._trials.sort(key=attrgetter('trial_id'))
+
+    @property
+    def n_traj_points(self):
+        return sum([trial.n_traj_points for trial in self._trials])
+
+
+#--------------------------------------------------------------------------------------------------------------------
+class CodedTrial(object):
+    """
+    Information about one trial in the experiment, after coding.
+
+    The trial contains a series of characters
+    """
+
+    def __init__(self, trial_id, sub_trial_num, target_id, stimulus, traj_points, time_in_session, rc, response, self_correction,
+                 sound_file_length, traj_file_name, time_in_day, date):
+
+        self.trial_id = trial_id
+        self.sub_trial_num = sub_trial_num
+        self.target_id = target_id
+        self.stimulus = stimulus
+        self.traj_points = traj_points
+        self.time_in_session = time_in_session
+        self.rc = rc
+        self.source = None
+        self.response = response
+        self.self_correction = self_correction
+        self.sound_file_length = sound_file_length
+        self.traj_file_name = traj_file_name
+        self.time_in_day = time_in_day
+        self.date = date
+
+
+    @property
+    def on_paper_points(self):
+        return [pt for pt in self.traj_points if pt.z > 0]
+
+
+#--------------------------------------------------------------------------------------------------------------------
+class Character(object):
+    """
+    A character, including the above-paper movement before/after it
+    """
+
+    def __init__(self, char_num, strokes=(), pre_char_space=None, post_char_space=None, character=None):
+        """
+        :param strokes: a list of the strokes (on/above paper) comprising the character
+        :param pre_char_space: The above-paper stroke before the character
+        :param post_char_space: The above-paper stroke after the character
+        """
+        self.char_num = char_num
+        self.strokes = list(strokes)
+        self.pre_char_space = pre_char_space
+        self.post_char_space = post_char_space
+        self.character = character
+
+
+    @property
+    def duration(self):
+        """
+        The duration it took to write the character (excluding the pre/post-character delay)
+        """
+        t_0 = self.strokes[0].trajectory[0].t
+        t_n = self.strokes[-1].trajectory[-1].t
+        return t_n - t_0
+
+    @property
+    def pre_char_delay(self):
+        return 0 if self.pre_char_space is None else self.pre_char_space.duration
+
+
+    @property
+    def post_char_delay(self):
+        return 0 if self.post_char_space is None else self.post_char_space.duration
+
+
+#--------------------------------------------------------------------------------------------------------------------
+class Stroke(object):
+    """
+    A consecutive trajectory part in which the pen is touching the paper, or the movement (above paper) between two such
+    adjacent strokes.
+    """
+
+    def __init__(self, on_paper, char_num, trajectory):
+        self.on_paper = on_paper
+        self.char_num = char_num
+        self.trajectory = trajectory
+        self.correction = 0
+
+
+    @property
+    def n_traj_points(self):
+        return len(self.trajectory)
+
+
+    @property
+    def duration(self):
+        """
+        The duration (in ms) it took to complete this stroke
+        """
+        t_0 = float(self.trajectory[0].t)
+        t_n = float(self.trajectory[-1].t)
+        return t_n - t_0
+
+
+    def __iter__(self):
+        return self.trajectory.__iter__()
 
 
 #-------------------------------------------------------------------------------------
+def save_trial(trial, characters, sub_trial_num, out_dir):
+    """
+    Save the full trial
+    """
 
-"""
-***Unused!
+    traj_file_name = create_traj_file_name(out_dir, sub_trial_num, trial, trial.trial_id)
 
+    append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
+                          trial.response, trial.time_in_session, trial.rc, trial.self_correction,
+                          trial.sound_file_length, os.path.basename(traj_file_name), trial.time_in_day, trial.date)
 
-def save_experiment(exp, dir_name):
+    strokes = []
+    for c in characters:
+        trial.self_correction = c.correction
+        for stroke in c.strokes:
+            stroke.char_num = c.char_num
 
-    dataiooldrecorder.reset_trial_info_file(dir_name)
+        if not c.strokes[0].on_paper:
+            c.strokes[0].char_num = 0
 
-    for trial in exp.trials:
-        append_to_trial_index(dir_name, trial.trial_id, trial.sub_trial_num, trial.target_id, trial.stimulus,
-                              trial.response, trial.time_in_session, trial.rc, trial.self_correction)
-        _set_char_num_in_each_stroke(trial)
-        save_trajectory(trial.strokes, trial.trial_id, trial.sub_trial_num, dir_name)
-"""
+        if not c.strokes[-1].on_paper:
+            c.strokes[-1].char_num = 0
 
-#-------------------------------------------------
-def _set_char_num_in_each_stroke(trial):
-    for stroke in trial.strokes:
-        stroke.char_num = 0
-        for c in trial.characters:
-            if stroke in c.strokes:
-                stroke.char_num = c.char_num
-                break
+        strokes.extend(c.strokes)
+
+    save_trajectory(strokes, traj_file_name)
+    append_to_strokes_file(strokes, trial, sub_trial_num, out_dir)
+    save_characters_file(out_dir)
 
 
 #-------------------------------------------------------------------------------------
-def save_trajectory(strokes, trial_id, sub_trial_num, out_dir, trial):
+def save_trajectory(strokes, filename):
     """
     Save a single trial's trajectory to one file
 
@@ -83,13 +236,8 @@ def save_trajectory(strokes, trial_id, sub_trial_num, out_dir, trial):
     :param trial_id: Trial's serial number
     :param sub_trial_num: Usually 1, unless during coding we decided to split the trial into several sub-trials
     :param out_dir: Output directory
+    :param trial:
     """
-
-    trial_num_portion = "trial_{:}_target_{:}".format(trial_id, trial.target_id) if sub_trial_num == 1\
-        else "trial_{:}_target_{:}_part{:}".format(trial_id, trial.target_id, sub_trial_num)
-    filename = "{:}/trajectory_{:}.csv".format(out_dir, trial_num_portion)
-
-    '''trajectory_trial#_target#.csv'''
 
     with open(filename, 'w') as fp:
 
@@ -101,63 +249,47 @@ def save_trajectory(strokes, trial_id, sub_trial_num, out_dir, trial):
             stroke_num += 1
             for dot in stroke.trajectory:
                 row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down='1' if stroke.on_paper else '0',
-                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t), correction = stroke.correction)
+                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t), correction=stroke.correction)
                 writer.writerow(row)
 
     return filename
 
 
 #-------------------------------------------------------------------------------------
-
-def save_strokes_file(strokes, trial_id, sub_trial_num, out_dir, trial):
-
-    filename = "{:}/Encoded_Strokes.csv".format(out_dir)
-    index_fn = out_dir + os.sep + 'Encoded_Strokes.csv'
-    file_exists = os.path.isfile(index_fn)
-
-    with open(filename, 'a' if file_exists else 'w') as fp:
-        writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'stroke', 'correction'], lineterminator='\n')
-        if not file_exists:
-            writer.writeheader()
-        stroke_num = 0
-        for stroke in strokes:
-            stroke_num += 1
-            row = dict(trial_id = trial_id, char_num=stroke.char_num+1, stroke=stroke_num, correction=stroke.correction)
-            writer.writerow(row)
+def create_traj_file_name(out_dir, sub_trial_num, trial, trial_id):
+    trial_num_portion = "trial_{:}_target_{:}".format(trial_id, trial.target_id) if sub_trial_num == 1 \
+        else "trial_{:}_target_{:}_part{:}".format(trial_id, trial.target_id, sub_trial_num)
+    filename = "{:}/trajectory_{:}.csv".format(out_dir, trial_num_portion)
     return filename
 
 
-# -------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------
+def append_to_strokes_file(strokes, trial, sub_trial_num, out_dir):
 
-def save_characters_file(characters, strokes, trial_id, sub_trial_num, out_dir, trial):
-
-    extract_aggregate_measures.execute_agg_measures(out_dir)
-
-'''
-    index_fn = out_dir + os.sep + 'encoded_characters.csv'
+    index_fn = out_dir + os.sep + 'strokes.csv'
     file_exists = os.path.isfile(index_fn)
 
-    filename = "{:}/encoded_characters.csv".format(out_dir)
-    with open(filename, 'a' if file_exists else 'w') as fp:
-        writer = csv.DictWriter(fp, ['trial_id', 'char_num', 'correction'], lineterminator='\n')
+    with open(index_fn, 'a' if file_exists else 'w') as fp:
+        writer = csv.DictWriter(fp, ['trial_id', 'sub_trial_num', 'char_num', 'stroke', 'correction'], lineterminator='\n')
+
         if not file_exists:
             writer.writeheader()
-        char_num = 0
-        for c in characters:
-            char_num += 1
-            row = dict(trial_id = trial_id, char_num=c.char_num, correction= c.correction)
+
+        stroke_num = 0
+        for stroke in strokes:
+            stroke_num += 1
+            row = dict(trial_id=trial.trial_id, sub_trial_num=sub_trial_num, char_num=stroke.char_num+1,
+                       stroke=stroke_num, correction=stroke.correction)
             writer.writerow(row)
-'''
+
 
 #-------------------------------------------------------------------------------------
-
 def _load_trajectory_filenames(dir_name):
     """ Load the names of all trajectory files in the given directory """
 
     filenames = dict()
 
     for fn in os.listdir(dir_name):
-    #for traj_name in trials.raw_file_name:
         m = re.match('trajectory_(\\d+)(_part(\\d+))?.csv', fn)
         if m is None:
             continue
@@ -172,37 +304,14 @@ def _load_trajectory_filenames(dir_name):
 
 
 #-------------------------------------------------------------------------------------
+def _parse_trajectory(trial_id, traj_filename):
 
-def _load_encoded_trajectory_filenames(dir_name):
-    """ Load the names of all encoded trajectory files in the given directory """
+    if not os.path.isfile(traj_filename):
+        raise Exception('Error loading trial #{}: File {} does not exist'.format(trial_id, traj_filename))
 
-    filenames = dict()
-
-    for fn in os.listdir(dir_name):
-    #for traj_name in trials.raw_file_name:
-    #(_part(\\d+))?
-        m = re.match('trajectory_trial_(\d+)_target_(\w+)(_part(\\d+))?.csv', fn)
-        if m is None:
-            continue
-        trial_id = int(m.group(1))
-        sub_trial_num = 1 if m.group(3) is None else int(m.group(3))
-        filenames[(trial_id, sub_trial_num)] = fn
-
-    return filenames
-
-
-#-------------------------------------------------------------------------------------
-
-
-
-def _load_trajectory(trial_id, filename):
-
-    if not os.path.isfile(filename):
-        raise Exception('Error loading trial #{}: File {} does not exist'.format(trial_id, filename))
-
-    strokes_info = _load_strokes(filename)
-    _validate_char_nums(strokes_info, filename)
-    characters = _strokes_to_characters(filename, strokes_info)
+    strokes_info = _load_strokes(traj_filename)
+    _validate_char_nums(strokes_info, traj_filename)
+    characters = _strokes_to_characters(traj_filename, strokes_info)
 
     return characters, [si.stroke for si in strokes_info]
 
@@ -222,15 +331,14 @@ def _load_strokes(filename):
 
     with open(filename, 'r') as fp:
         reader = csv.DictReader(fp)
-        _validate_csv_format(filename, reader, ('char_num', 'x', 'y', 'pressure', 'time'))
+        validate_csv_format(filename, reader, ('char_num', 'x', 'y', 'pressure', 'time'))
 
         for row in reader:
-            char_num = _parse_int(row['char_num'], 'char_num', filename, reader.line_num)
+            location = 'line {:} in {:}'.format(reader.line_num, filename)
+
+            char_num = u.parse_int('char_num', row['char_num'], location)
             stroke_num = row['stroke']
-            on_paper = _parse_int(row['pen_down'], 'pen_down', filename, reader.line_num) != 0
-            # x = _parse_int(row['x'], 'x', filename, reader.line_num)
-            # y = _parse_int(row['y'], 'y', filename, reader.line_num)
-            # prs = _parse_int(row['pressure'], 'pressure', filename, reader.line_num)
+            on_paper = u.parse_int('pen_down', row['pen_down'], location) != 0
             x = row['x']
             y = row['y']
             prs = row['pressure']
@@ -242,10 +350,10 @@ def _load_strokes(filename):
                     strokes_info.append(StrokeInfo(curr_stroke, last_char_num))
                 last_stroke_num = stroke_num
                 last_char_num = char_num
-                curr_stroke = data.Stroke(on_paper, char_num, [])
+                curr_stroke = Stroke(on_paper, char_num, [])
 
             #-- Append point
-            pt = data.TrajectoryPoint(x, y, prs, t)
+            pt = commonio.TrajectoryPoint(x, y, prs, t)
             curr_stroke.trajectory.append(pt)
 
     if curr_stroke is not None:
@@ -255,7 +363,7 @@ def _load_strokes(filename):
 
 
 #---------------------------------
-def _validate_char_nums(strokes_info, filename):
+def _validate_char_nums(strokes_info, traj_filename):
 
     all_char_nums = [si.char_num for si in strokes_info]
 
@@ -264,7 +372,7 @@ def _validate_char_nums(strokes_info, filename):
     if all_char_nums_no0 != sorted(all_char_nums_no0):
         char_nums = ",".join([str(c) for c in all_char_nums_no0])
         raise Exception('Invalid trajectory in {}: the character numbers must be sorted, but they are: {}'
-                        .format(os.path.basename(filename), char_nums))
+                        .format(os.path.basename(traj_filename), char_nums))
 
     #-- character number 0 can only appear as space between strokes
     inds_of_0 = np.where(np.array(all_char_nums) == 0)[0]
@@ -274,8 +382,9 @@ def _validate_char_nums(strokes_info, filename):
             continue
 
         if all_char_nums[i - 1] + 1 != all_char_nums[i + 1]:
+            #todo bug: now that we allow for non-consecutive strokes/characters, should this be omitted?
             raise Exception('Invalid trajectory in {}: there is a space between non-consecutive characters {} and {}'
-                            .format(os.path.basename(filename), all_char_nums[i - 1], all_char_nums[i + 1]))
+                            .format(os.path.basename(traj_filename), all_char_nums[i-1], all_char_nums[i+1]))
 
 
 #-------------------------------------------------------------------------------------
@@ -305,40 +414,12 @@ def _strokes_to_characters(filename, strokes_info):
 
         else:
             # -- New character
-            curr_char = data.Character(char_num, [stroke], pre_char_space=pre_char_space)
+            curr_char = Character(char_num, [stroke], pre_char_space=pre_char_space)
             pre_char_space = None
             characters.append(curr_char)
             last_char_num = char_num
 
     return characters
-
-
-#------------------------------
-def _validate_csv_format(filename, reader, expected_fields):
-    missing_fields = [f for f in expected_fields if f not in reader.fieldnames]
-
-    #if (missing_fields == 'sub_trial_num' or 'self_correction' or 'response')
-
-
-    if len(missing_fields) > 0:
-        raise ValueError("Invalid format for CSV file {:}: the file does not contain the field/s {:} Einav"
-                         .format(filename, ", ".join(missing_fields)))
-
-
-#------------------------------
-def _parse_int(value, col_name, filename, line_num):
-    try:
-        return int(value)
-    except ValueError:
-        raise ValueError("Invalid format for column '{:}' in line {:} in {:}: expecting an integer value".format(col_name, line_num, filename))
-
-
-#------------------------------
-def _parse_float(value, col_name, filename, line_num):
-    try:
-        return float(value)
-    except ValueError:
-        raise ValueError("Invalid format for column '{:}' in line {:} in {:}: expecting an integer value".format(col_name, filename, line_num))
 
 
 #-------------------------------------------------------------------------------------------------
@@ -349,7 +430,8 @@ def reset_trial_info_file(dir_name):
 
 
 #-------------------------------------------------------------------------------------------------
-def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc,self_correction, sound_file_length,raw_file_name,time_in_day,date):
+def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc,
+                          self_correction, sound_file_length, traj_file_name, time_in_day, date):
     """
     Append a line to the trials.csv file
     """
@@ -367,8 +449,8 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  time_in_session=trial_start_time,
                  rc='' if rc is None else rc,
                  self_correction=self_correction,
-                 sound_file_length = sound_file_length,
-                 raw_file_name = raw_file_name,
+                 sound_file_length=sound_file_length,
+                 traj_file_name=traj_file_name,
                  time_in_day=time_in_day,
                  date=date
                  )
@@ -393,7 +475,7 @@ def remove_from_trial_index(dir_name, trial_id, sub_trial_num=None):
     if not file_exists:
         return
 
-    index = load_trials_index(dir_name)
+    index = _load_trials_index(dir_name)
 
     with open(index_fn, 'w', encoding="cp437", errors='ignore') as fp:
         writer = csv.DictWriter(fp, trials_index_fields, lineterminator='\n')
@@ -410,7 +492,7 @@ def trial_index_filename(dir_name):
 
 
 #----------------------------------------------------------
-def load_trials_index(dir_name):
+def _load_trials_index(dir_name):
     """
     Load information from the trials.csv file
     """
@@ -420,28 +502,110 @@ def load_trials_index(dir_name):
 
     with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
         reader = csv.DictReader(fp)
-        _validate_csv_format(index_fn, reader, trials_index_fields)
+        validate_csv_format(index_fn, reader, ['trial_id', 'sub_trial_num'])
 
         result = []
         for row in reader:
             location = 'line {:} in {:}'.format(reader.line_num, index_fn)
-            trial_id = _parse_config_int_value('trial_id', row['trial_id'], location)
-            sub_trial_num = _parse_config_int_value('sub_trial_num', row['sub_trial_num'], location)
-            target_id = row['target_id']
-            #target_id = _parse_config_int_value('target_id', row['target_id'], location, allow_empty=True)
-            time_in_session = row['time_in_session']
-            #time_in_session = _parse_config_float_value('time_in_session', row['time_in_session'], location, allow_empty=True)
-            rc = None if row['rc'] == '' else row['rc']
-            target = row['target']
-            response = row['response']
-            raw_file_name = row['raw_file_name']
-            time_in_day = row['time_in_day']
-            date= row['date']
-            self_correction = row['self_correction']
-            sound_file_length = row['sound_file_length']
 
+            row['trial_id'] = u.parse_int('trial_id', row['trial_id'], location)
+            row['sub_trial_num'] = u.parse_int('sub_trial_num', row['sub_trial_num'], location)
 
-            result.append(dict(trial_id=trial_id,target_id=target_id,sub_trial_num=sub_trial_num,target=target,response=response
-                               ,time_in_session=time_in_session,rc=rc,raw_file_name=raw_file_name,time_in_day=time_in_day,date=date,self_correction = self_correction, sound_file_length = sound_file_length))
+            if 'sound_file_length' in row and (row['sound_file_length'] is None or row['sound_file_length'] == ""):
+                row['sound_file_length'] = "0"
+
+            result.append(row)
 
     return result
+
+
+#----------------------------------------------------------
+def load_coded_trials_nums(dir_name):
+    """
+    Load information from the trials.csv file
+    """
+    index_fn = trial_index_filename(dir_name)
+    if not os.path.isfile(index_fn):
+        return []
+
+    with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
+        reader = csv.DictReader(fp)
+
+        result = []
+        for row in reader:
+            location = 'line {:} in {:}'.format(reader.line_num, index_fn)
+            trial_id = u.parse_int('trial_id', row['trial_id'], location)
+            result.append(trial_id)
+
+    return result
+
+
+#===================================================================================================
+#   Save characters info
+#===================================================================================================
+
+#-------------------------------------------------------
+# noinspection PyUnusedLocal
+def get_pre_char_delay(trial, character):
+    """
+    The delay between this character and the previous one
+    """
+    return round(character.pre_char_delay)
+
+
+#-------------------------------------------------------
+# noinspection PyUnusedLocal
+def get_post_char_delay(trial, character):
+    """
+    The delay between this character and the next one
+    """
+    return round(character.post_char_delay)
+
+
+#-------------------------------------------------------
+# noinspection PyUnusedLocal
+def get_pre_char_distance(trial, character, prev_agg):
+    """
+    The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box)
+    """
+    charnum = character.char_num
+    if not (charnum in prev_agg and charnum-1 in prev_agg):
+        return None
+
+    char_inf = prev_agg[charnum]
+    prev_char_inf = prev_agg[charnum - 1]
+    return char_inf['x'] - (prev_char_inf['x'] + prev_char_inf['width'])
+
+
+#-------------------------------------------------------
+# noinspection PyUnusedLocal
+def get_post_char_distance(trial, character, prev_agg):
+    """
+    The horizontal distance between this character and the next one (rely on the previously-calculated bounding box)
+    """
+    charnum = character.char_num
+    if not (charnum in prev_agg and charnum+1 in prev_agg):
+        return None
+
+    char_inf = prev_agg[charnum]
+    next_char_inf = prev_agg[charnum + 1]
+    return next_char_inf['x'] - (char_inf['x'] + char_inf['width'])
+
+
+#-- The list of the aggregations to perform (each becomes one or more columns in the resulting CSV file)
+_agg_func_specs = (
+    transform.AggFunc(transform.GetBoundingBox(1.0, 1.0), ('x', 'width', 'y', 'height')),
+    transform.AggFunc(get_pre_char_delay, 'pre_char_delay'),
+    transform.AggFunc(get_post_char_delay, 'post_char_delay'),
+    transform.AggFunc(get_pre_char_distance, 'pre_char_distance', get_prev_aggregations=True),
+    transform.AggFunc(get_post_char_distance, 'post_char_distance', get_prev_aggregations=True),
+)
+
+
+#--------------------------------------------------------------------
+def save_characters_file(out_dir):
+
+    exp = load_experiment(out_dir, trial_index_filter=lambda trial: trial['rc'] == 'OK')
+
+    transform.aggregate_characters(exp.trials, agg_func_specs=_agg_func_specs, trial_filter=lambda trial: trial.rc == 'OK',
+                                   out_filename=out_dir+'/characters.csv', save_as_attr=False)

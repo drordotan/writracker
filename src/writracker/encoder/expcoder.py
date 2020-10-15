@@ -7,9 +7,7 @@ import PySimpleGUI as sg
 from tkinter import messagebox
 import tkinter as tk
 
-from writracker import encoder
-from writracker.encoder import dataiooldrecorder
-from writracker.encoder.trialcoder import encode_one_trial
+import writracker
 from writracker import uiutil as uiu
 
 
@@ -69,17 +67,18 @@ def _load_raw_exp_ui():
         if raw_dir is None or raw_dir == '':
             return None
 
-        err_msg = dataiooldrecorder.is_invalid_data_directory(raw_dir)
+        err_msg = writracker.recorder.results.is_invalid_data_directory(raw_dir)
         if err_msg is not None:  # check if there suppose to be "not" before None
             print("Invalid raw-data directory")
             messagebox.showerror("Invalid raw-data directory", err_msg)
             return None
 
         #try:
-        exp = dataiooldrecorder.load_experiment(raw_dir)
+        exp = writracker.recorder.results.load_experiment(raw_dir)
         #print("try")
         return exp
 
+        #todo
         '''except Exception as e:
             print("Invalid raw-data directory 2")
             messagebox.showerror("Invalid raw-data directory 2", str(e))'''
@@ -95,13 +94,13 @@ def _trials_to_code(raw_exp, coded_dir):
     raw_trial_nums = tuple(sorted([t.trial_id for t in raw_exp.trials]))
 
 
-    if not os.path.isfile(encoder.dataio.trial_index_filename(coded_dir)):
+    if not os.path.isfile(writracker.encoder.dataio.trial_index_filename(coded_dir)):
         #-- There is no index file - coding has not started yet
         print("no index file")
         return True
 
-    coded_trials = encoder.dataio.load_trials_index(coded_dir)
-    coded_trial_nums = tuple(sorted(set([t['trial_id'] for t in coded_trials])))
+    coded_trial_nums = writracker.encoder.dataio.load_coded_trials_nums(coded_dir)
+    coded_trial_nums = tuple(sorted(set(coded_trial_nums)))
     try:
         max_coded = max(coded_trial_nums)
     except:
@@ -164,10 +163,10 @@ def code_experiment(trials, out_dir):
 
         trial = trials[i]
         print("trial is: " + str(trial))
-        encoder.dataio.remove_from_trial_index(out_dir, trial.trial_id)
+        writracker.encoder.dataio.remove_from_trial_index(out_dir, trial.trial_id)
 
         print('Processing trial #{}, source: {}'.format(i + 1, trial.source))
-        rc = encode_one_trial(trial, out_dir)
+        rc = writracker.encoder.trialcoder.encode_one_trial(trial, out_dir)
 
         if rc == 'quit':
             break

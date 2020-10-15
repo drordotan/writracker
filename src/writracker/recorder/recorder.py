@@ -10,21 +10,10 @@ from pygame import mixer           # handle sound files
 import pandas as pd
 import subprocess                  # This originally used only to check if WACOM tablet is connected on MAC
 import sys
-import csv
 import os
 
-from writracker.recorder import recorder_io
-from writracker.recorder import wintab
-
-
-# -------------------------------------------------------------------------------------------------------------
-
-def is_windows():
-    return os.name == 'nt'
-
-
-def _null_converter(v):
-    return str(v)
+from writracker.recorder import dataio, wintab
+import writracker.utils as u
 
 
 TABLET_POLL_TIME = 5    # defines the polling frequency for tablet packets, in milliseconds
@@ -52,7 +41,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.rotation_angle = 0             # Each rotate button press adds 90. used for rotating the traj file.
         self.x_resolution = app.desktop().screenGeometry().right()  # this value is for mirroring X coordinates
         # All files & paths
-        self.targets_file = None               # loaded by user, holds the targets.
+        self.targets_file_name = None
         self.remaining_targets_file = None     # keeps track of remaining targets, or targets to re-show.
         self.trials_file = None                # keeps track of each trajectory file
         self.current_active_trajectory = None  # saves X,Y, Pressure for each path
@@ -116,7 +105,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # ----------------------------------------------------------------------------
     def show_info_msg(self, title, msg):
 
-        if is_windows():
+        if u.is_windows():
             QMessageBox().about(self, title, msg)
 
         else:
@@ -124,6 +113,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             msgbox.setWindowTitle(title)
             msgbox.setText(msg)
             msgbox.exec()
+
 
     # ----------------------------------------------------------------------------
     # Read from recorder_ui.ui and connect each button to function
@@ -254,18 +244,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             if self.pop_folder_selector(continue_session=True):
                 if self.choose_targets_file(continue_session=True):
                     try:
-                        df = pd.read_csv(str(self.results_folder_path)+"/trials.csv")
+                        self.load_trials_csv()
+
                     except IOError:    # -- allow the user to exit the loop
                         msg = QMessageBox()
-                        answer = msg.question(self, "Error", "Couldn't load trials.csv \n"
-                                                             "would you like to try another folder?",
+                        answer = msg.question(self, "Error",
+                                              "Couldn't load {}\nWould you like to try another folder?".format(dataio.trials_csv_filename),
                                               msg.Yes | msg.No, msg.Yes)
                         if answer == msg.Yes:
                             continue
                         else:
                             return True
 
-                    self.parse_data_dataframe(df)
                     self.session_start_time = datetime.now().strftime("%H:%M:%S")
                     self.pop_config_menu()
                     self.session_started = True
@@ -433,19 +423,21 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(),
                                                                     "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
                 targets_file_path = targets_file_path_raw[0]
+
             else:
-                targets_file_path = self.results_folder_path+"/Original_targets_file_copy.csv"
+                targets_file_path = self.results_folder_path + "/Original_targets_file_copy.csv"
+
             if targets_file_path:
                 try:
-                    with open(targets_file_path) as self.targets_file:
-                        if not self.parse_targets(targets_file_path):
-                            raise IOError  # bad targets file format
+                    if self.load_targets(targets_file_path):
                         self.lbl_targetsfile.setText("<strong> Current targets file Path: </strong><div align=left>"
                                                      + targets_file_path + "</div>")
                         self.setWindowTitle(self.title + "   " + os.path.basename(targets_file_path))
                         return True
+
                 except IOError:
                     pass  # Handle IOError as general error, like closing the file selector.
+
             msg = QMessageBox()
             answer = msg.question(self, "Error", "Load targets file in order to start the session \n"
                                                  "would you like to try another file?",
@@ -463,8 +455,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             folder = str(QFileDialog.getExistingDirectory(self, "Select results directory"))
             if folder:
                 path_ok = os.access(folder, os.W_OK | os.X_OK)
-                if os.access(folder+"\\trials.csv", os.W_OK):
-                    error_str = "It already contains a 'trials.csv' file from an older session\n"
+                if os.access(folder + os.sep + dataio.trials_csv_filename, os.W_OK):
+                    error_str = "It already contains a '{}' file from an older session\n".format(dataio.trials_csv_filename)
+
                 if not continue_session:
                     if os.listdir(folder):  # verify the chosen folder is empty for a new session
                         QMessageBox.warning(self, "Folder is not empty",
@@ -600,11 +593,17 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.set_recording_on()
 
     # ----------------------------------------------------------------------------------
-    #todo: move to "io" package
-    # Input: Pandas dataframe. functionality: reads the database and restores session status
-    def parse_data_dataframe(self, df):
+    def load_trials_csv(self):
+        """
+        reads the database and restores session status
+        """
+
+        df = pd.read_csv(str(self.results_folder_path) + os.sep + dataio.trials_csv_filename)
+
         self.trial_unique_id = df.trial_id.max() + 1
+
         df['target'] = df.target.str.strip()  # remove space, might be added by pandas when converted to CSV
+
         # -- Fill targets list --
         for target in self.targets:  # fill in targets' rc property.
             if target.value in df.set_index('target').T.to_dict().keys():
@@ -622,12 +621,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 trials_dict = df.set_index('trial_id').query('target==' + "'" + str(target.value) + "'",
                                                              inplace=False).T.to_dict()
                 for key in trials_dict.keys():
-                    tmp_trial = recorder_io.Trial(trial_id=key, target_id=target.id, target=target.value,
-                                                  rc_code=trials_dict[key]['rc'],
-                                                  time_in_session=trials_dict[key]['time_in_session'],
-                                                  date=trials_dict[key]['date'],
-                                                  traj_file_name=trials_dict[key]['raw_file_name'],
-                                                  abs_time=trials_dict[key]['time_in_day'])
+                    tmp_trial = dataio.Trial(trial_id=key, target_id=target.id, target=target.value,
+                                             rc_code=trials_dict[key]['rc'],
+                                             time_in_session=trials_dict[key]['time_in_session'],
+                                             date=trials_dict[key]['date'],
+                                             traj_file_name=trials_dict[key]['raw_file_name'],
+                                             abs_time=trials_dict[key]['time_in_day'])
                     target.trials.append(tmp_trial)
 
         return True
@@ -658,7 +657,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.targets.clear()
         self.stats_update()
         self.targets_dict = {}
-        self.targets_file = None
+        self.targets_file_name = None
         self.remaining_targets_file = None
         self.trials_file = None
         self.trial_unique_id = 1
@@ -671,45 +670,21 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.skip_ok_targets = False
         self.cyclic_remaining_targets = True
 
-    # ----------------------------------------------------------------------------------
-    # todo: move to "io" package
-
+    #----------------------------------------------------------------------------------
     def save_trials_file(self):
         try:
-            with open(self.results_folder_path + os.sep + "trials.csv", mode='w', encoding='utf-8') as trials_file:
-                trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
-                                                               'time_in_session', 'date', 'time_in_day',
-                                                               'raw_file_name', 'sound_file_length'], lineterminator='\n')
-                trials_csv_file.writeheader()
-                sorted_trials = []
-                for target in self.targets:
-                    for trial in target.trials:
-                        sorted_trials.append(trial)
-                sorted_trials.sort(key=lambda x: x.id)    # sort by unique trial ID
-                for trial in sorted_trials:
-                    row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,
-                               rc=trial.rc_code, time_in_session=trial.time_in_session, date=trial.date,
-                               time_in_day=trial.abs_time, raw_file_name=trial.traj_file_name,
-                               sound_file_length=trial.sound_file_length)
-                    trials_csv_file.writerow(row)
+            dataio.save_trials(self.results_folder_path, self.targets)
+
         except (IOError, FileNotFoundError):
             QMessageBox().critical(self, "Warning! file access error",
                                    "WriTracker couldn't save trials file. Last trial information"
                                    " wasn't saved. If the problem repeats, restart the session.", QMessageBox.Ok)
 
-    # ----------------------------------------------------------------------------------
-    # todo: move to "io" package
-
+    #----------------------------------------------------------------------------------
     def save_remaining_targets_file(self):
         try:
-            with open(self.results_folder_path + os.sep + "remaining_targets.csv", mode='w', encoding='utf-8') as targets_file:
-                targets_file = csv.DictWriter(targets_file, ['target_id', 'target', 'sound_file_name'],
-                                              lineterminator='\n')
-                targets_file.writeheader()
-                for target in self.targets:
-                    if target.rc_code is not "OK":
-                        row = dict(target_id=target.id, target=target.value, sound_file_name=target.sound_file_name)
-                        targets_file.writerow(row)
+            dataio.save_remaining_targets_file(self.results_folder_path, self.targets)
+
         except (IOError, FileNotFoundError):
             QMessageBox().critical(self, "Warning! file access error",
                                    "WriTracker couldn't save remaining targets file. Last trial information"
@@ -729,12 +704,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             rc_code = self.combox_errors.currentText()
         # Add new a new completed Trial inside the current Target
         current_target = self.targets[self.curr_target_index]
-        traj_filename = "trajectory_target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id)
+        traj_filename = "trajectory_target_{}_trial_{}".format(current_target.id, current_target.next_trial_id)
         time_rel = datetime.strptime(self.current_trial_start_time, "%H:%M:%S") - datetime.strptime(self.session_start_time, "%H:%M:%S")
-        current_trial = recorder_io.Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
-                                          time_in_session=time_rel, traj_file_name=traj_filename, date=str(date.today()),
-                                          abs_time=datetime.now().strftime("%H:%M:%S"),
-                                          sound_file_length=current_target.sound_file_length)
+        #todo Diskin: time_in_session should be simply a number
+        current_trial = dataio.Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
+                                     time_in_session=time_rel, traj_file_name=traj_filename, date=str(date.today()),
+                                     abs_time=datetime.now().strftime("%H:%M:%S"),
+                                     sound_file_length=current_target.sound_file_length)
         current_target.trials.append(current_trial)
         current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
         self.trial_unique_id += 1
@@ -746,7 +722,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.stats['completed_error'] = 0
         self.stats['remaining'] = 0
 
-    # ----------------------------------------------------------------------------------
+    #----------------------------------------------------------------------------------
     # Calculate stats based on the the current working mode, and update QLabel fields
     def stats_update(self):
         self.stats_reset()
@@ -765,34 +741,29 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                    str(self.stats['completed_error']) + " Error")
         self.lbl_remaining.setText("Remaining targets: " + str(self.stats['remaining']))
 
-    # ----------------------------------------------------------------------------------
-    #todo: move to "io" package
-    # Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
-    def parse_targets(self, targets_file_path):
-        converters = dict(target_id=_null_converter, target=_null_converter, sound_file_name=_null_converter)
-        if targets_file_path.lower().split('.')[-1] != "csv":    # read as excel file
-            df = pd.read_excel(targets_file_path, converters=converters)
-        else:  # read as csv
-            df = pd.read_csv(targets_file_path, converters=converters)
+    #----------------------------------------------------------------------------------
+    def load_targets(self, targets_file_path):
+        """
+        Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
+        """
 
-        if not {'target_id', 'target'}.issubset(set(list(df))):  # Check targets file format
-            _warning("Wrong targets file format",
-                     "targets file must contain the following fields: 'target_id', 'target'.\nOptional field: 'sound_file_name'")
-            return False
+        targets, err_msg = dataio.load_targets(targets_file_path)
+        if err_msg is not None:
+            _warning(err_msg[0], err_msg[1])
+            raise IOError  # bad targets file format
 
-        for index, row in df.iterrows():
-            if "sound_file_name" in df.columns:
-                self.targets.append(recorder_io.Target(row["target_id"], row["target"].strip(),
-                                                       row["sound_file_name"] if str(row["sound_file_name"]) != 'nan' else ""))
-                self.allow_sound_play = True
-            else:
-                self.targets.append(recorder_io.Target(row["target_id"], row["target"].strip()))
-                self.allow_sound_play = False  # when no sound_file_column, the user is not allowed to choose sounds folder
-            self.combox_targets.addItem(str(row["target_id"]) + "-" + str(row["target"]))
+        self.targets.extend(targets)
+
+        for target in targets:
+            self.combox_targets.addItem(str(target.target_id)+"-"+target.value)
+            self.allow_sound_play = targets[0]['allow_sound_play']
+
+        self.targets_file_name = os.path.abspath(targets_file_path)
 
         return True
 
-    # ----------------------------------------------------------------------------------
+
+    #----------------------------------------------------------------------------------
     # toggle radio buttons
     def toggle_rb(self, state):
         if state is False:
@@ -817,24 +788,26 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     #todo: move to "io" package
     def create_dir_copy_targets(self):
         # If the file already exists, we assume the user chose "continue existing session". no need to create copies.
-        if os.path.isfile(self.results_folder_path+"\\Remaining_targets.csv"):
+        if os.path.isfile(self.results_folder_path+"\\remaining_targets.csv"):
             print("Recorder: Remaining_targets.csv file exists. Assuming this is a restored session")
             return True
         # copy original targets file twice, 1 for bup, 1 for remaining_targets
-        name = self.targets_file.name
+        name = self.targets_file_name
         file_type = name.split('.')[1]
+
         if file_type != "csv":
             # Remaining targets/Original Targets files should in any be converted to csv because we might use it later.
-            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path + os.sep + "Remaining_targets.csv", index=False)
-            pd.read_excel(self.targets_file.name).to_csv(self.results_folder_path + os.sep + "Original_targets_file_copy.csv", index=False)
+            pd.read_excel(self.targets_file_name).to_csv(self.results_folder_path + os.sep + "remaining_targets.csv", index=False)
+            pd.read_excel(self.targets_file_name).to_csv(self.results_folder_path + os.sep + "Original_targets_file_copy.csv", index=False)
+
         else:
-            copyfile(self.targets_file.name, self.results_folder_path + os.sep + "Original_targets_file_copy.csv")
-            copyfile(self.targets_file.name, self.results_folder_path + os.sep + "Remaining_targets.csv")
+            copyfile(self.targets_file_name, self.results_folder_path + os.sep + "Original_targets_file_copy.csv")
+            copyfile(self.targets_file_name, self.results_folder_path + os.sep + "remaining_targets.csv")
 
     # ----------------------------------------------------------------------------------
     def open_trajectory(self, unique_id):
         name = "trajectory_"+unique_id
-        self.current_active_trajectory = recorder_io.Trajectory(name, self.results_folder_path)
+        self.current_active_trajectory = dataio.Trajectory(name, self.results_folder_path)
         self.current_active_trajectory.open_traj_file("header")
 
     # ----------------------------------------------------------------------------------
@@ -991,7 +964,7 @@ def _critical_msg(title, msg):
 
 
 #---------------------------------------------------------------------------------------------------------
-def main():
+def run():
     global app
     app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv
     app.setStyle('Fusion')

@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
                 return False
 
 
-def main():
+def run():
     app = QApplication(sys.argv)
     mainform = MainWindow()
     # Set size and center in the middle of the screen:
@@ -198,9 +198,3 @@ def main():
     mainform.move(fr_gm.topLeft())
     mainform.show()
     sys.exit(app.exec_())
-
-
-if __name__ == '__main__':
-    main()
-
-

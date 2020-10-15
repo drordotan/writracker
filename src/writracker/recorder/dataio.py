@@ -3,9 +3,13 @@ from PyQt5.QtWidgets import *
 import pandas as pd
 import csv
 import os
+import math
 
 
-# -------------------------------------------------------------------------------------------------------------
+trials_csv_filename = 'trials.csv'
+
+
+#-------------------------------------------------------------------------------------------------------------
 class Target:
     def __init__(self, target_id, target, sound_file_name="", next_trial_id=1):
         self.id = target_id
@@ -24,10 +28,11 @@ class Target:
                self.rc_code + " | next trial ID: " + str(self.next_trial_id)
 
 
-# -------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
 class Trial:
     def __init__(self, trial_id, target_id, target, rc_code, time_in_session, traj_file_name,
                  date=str(date.today()), abs_time=datetime.now().strftime("%H:%M:%S"), sound_file_length=""):
+
         self.id = trial_id                      # unique ID, defined in the main exec loop
         self.target_id = target_id
         self.target = target
@@ -44,7 +49,7 @@ class Trial:
                + str(self.abs_time)+"|"
 
 
-# -------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
 class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
@@ -118,3 +123,78 @@ class Trajectory:
             QMessageBox().critical(None, "Warning! file access error",
                                    "Rotation was not applied to active trajectory", QMessageBox.Ok)
             return False
+
+
+#----------------------------------------------------------------------------------
+def save_trials(results_path, targets):
+    """
+    Save the trials.csv file
+    """
+
+    filename = results_path + os.sep + trials_csv_filename
+    with open(filename, mode='w', encoding='utf-8') as trials_file:
+        trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
+                                                       'time_in_session', 'date', 'time_in_day',
+                                                       'raw_file_name', 'sound_file_length'], lineterminator='\n')
+        trials_csv_file.writeheader()
+        sorted_trials = []
+        for target in targets:
+            for trial in target.trials:
+                sorted_trials.append(trial)
+
+        sorted_trials.sort(key=lambda x: x.id)  # sort by unique trial ID
+
+        for trial in sorted_trials:
+            row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,
+                       rc=trial.rc_code, time_in_session=trial.time_in_session, date=trial.date,
+                       time_in_day=trial.abs_time, raw_file_name=trial.traj_file_name,
+                       sound_file_length=trial.sound_file_length)
+
+            trials_csv_file.writerow(row)
+
+
+# ----------------------------------------------------------------------------------
+def save_remaining_targets_file(results_path, targets):
+    """
+    Save the remaining_targets.csv file
+    """
+
+    filename = results_path+os.sep+"remaining_targets.csv"
+
+    with open(filename, mode='w', encoding='utf-8') as targets_file:
+        targets_file = csv.DictWriter(targets_file, ['target_id', 'target', 'sound_file_name'], lineterminator='\n')
+        targets_file.writeheader()
+        for target in targets:
+            if target.rc_code is not "OK":
+                row = dict(target_id=target.id, target=target.value, sound_file_name=target.sound_file_name)
+                targets_file.writerow(row)
+
+
+#----------------------------------------------------------------------------------
+def load_targets(targets_file_path):
+    """
+    Load the targets file
+    """
+
+    if targets_file_path.lower().split('.')[-1] != "csv":    # read as excel file
+        df = pd.read_excel(targets_file_path, converters=_targets_file_converters)
+    else:  # read as csv
+        df = pd.read_csv(targets_file_path, converters=_targets_file_converters)
+
+    if not {'target_id', 'target'}.issubset(set(list(df))):  # Check targets file format
+        return None, ("Wrong targets file format",
+                      "targets file must contain the following fields: 'target_id', 'target'.\nOptional field: 'sound_file_name'")
+
+    targets = []
+
+    for index, row in df.iterrows():
+        sound_file_name = row["sound_file_name"] if ("sound_file_name" in df.columns) and not math.isnan(row["sound_file_name"]) else ""
+        targets.append(Target(row["target_id"], row["target"].strip(), sound_file_name))
+
+    return targets, None
+
+
+def _null_converter(v):
+    return str(v)
+
+_targets_file_converters = dict(target_id=_null_converter, target=_null_converter, sound_file_name=_null_converter)

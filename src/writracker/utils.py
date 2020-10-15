@@ -82,3 +82,51 @@ def is_windows():
 def newline():
     return '\r\n' if os.name == 'nt' else '\n'
 
+
+#------------------------------------------
+def parse_int(arg_name, arg_value, err_location='configuration file', allow_empty=False):
+    arg_value = arg_value.strip()
+    if arg_value == '' and allow_empty:
+        return None
+
+    try:
+        return int(arg_value)
+    except ValueError:
+        raise ValueError('Invalid parameter {:} in {:}: expecting a whole number, got "{:}"'.format(arg_name, err_location, arg_value))
+
+
+#------------------------------------------
+def parse_float(arg_name, arg_value, err_location='configuration file', allow_empty=False):
+
+    arg_value = arg_value.strip()
+
+    if arg_value == '' and allow_empty:
+        return None
+
+    try:
+        return float(arg_value)
+    except ValueError:
+        raise ValueError('Invalid parameter {:} in {:}: expecting a whole number, got "{:}"'.format(arg_name, err_location, arg_value))
+
+
+#------------------------------------------
+def parse_bool(arg_name, arg_value, err_location='configuration file', allow_empty=False):
+    arg_value = arg_value.strip()
+    if arg_value == '' and allow_empty:
+        return None
+    if arg_value.lower() in ('true', 'yes') or arg_value == '1':
+        value = True
+    elif arg_value.lower() in ('false', 'no') or arg_value == '0':
+        value = False
+    else:
+        raise ValueError('Invalid parameter {:} in {:}: expecting yes/no, got "{:}"'.format(arg_name, err_location, arg_value))
+
+    return value
+
+
+#------------------------------
+def validate_csv_format(filename, reader, expected_fields):
+    missing_fields = [f for f in expected_fields if f not in reader.fieldnames]
+    if len(missing_fields) > 0:
+        raise ValueError("Invalid format for CSV file {:}: the file does not contain the field/s {:} Einav"
+                         .format(filename, ", ".join(missing_fields)))

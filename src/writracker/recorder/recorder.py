@@ -458,7 +458,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def pop_folder_selector(self, continue_session=False):
         error_str = ""
         while True:
-            folder = str(QFileDialog.getExistingDirectory(self, caption="Select results directory"))
+            folder = QDir.toNativeSeparators(QFileDialog.getExistingDirectory(self, "Select results directory"))
+            folder = str(folder)
             if folder:
                 path_ok = os.access(folder, os.W_OK | os.X_OK)
                 if os.access(folder + os.sep + dataio.trials_csv_filename, os.W_OK):

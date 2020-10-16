@@ -9,7 +9,7 @@ from writracker import commonio
 import writracker.utils as u
 
 trials_csv_columns = tuple(sorted(['trial_id', 'target_id', 'target', 'rc', 'time_in_session', 'date',
-                                   'time_in_day', 'raw_file_name', 'sound_file_length']))
+                                   'time_in_day', 'traj_file_name', 'sound_file_length']))
 
 
 #-------------------------------------------------------------------------------------------------
@@ -28,12 +28,8 @@ def is_invalid_data_directory(dir_name):
     with open(trials_file_path, 'r', encoding="utf-8") as fp:
         reader = csv.DictReader(fp)
 
-        uncoded_raw_trial = (tuple(sorted(['trial_id','target_id','target','rc','time_in_session','date','time_in_day','raw_file_name','sound_file_length'])))
-        coded_trial = (tuple(sorted(['trial_id', 'target_id', 'sub_trial_num', 'target', 'response', 'time_in_session', 'rc','raw_file_name', 'time_in_day', 'date', 'self_correction', 'sound_file_length'])))
-
-        if tuple(sorted(reader.fieldnames)) != coded_trial:
-            if tuple(sorted(reader.fieldnames)) != uncoded_raw_trial:
-                return "Invalid directory - bad format of {:} ".format(dataio.trials_csv_filename)
+        if tuple(sorted(reader.fieldnames)) != trials_csv_columns:
+            return "Invalid directory - bad format of {:} ".format(dataio.trials_csv_filename)
 
     return None
 
@@ -46,7 +42,7 @@ class RawTrial(object):
 
     #-----------------------------------------------------------------
     def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None, self_correction = None,
-                 sound_file_length = None,raw_file_name = None, time_in_day = None, date = None):
+                 sound_file_length = None, traj_file_name = None, time_in_day = None, date = None):
 
         self.target_id = target_id
         self.trial_id = trial_id
@@ -58,7 +54,7 @@ class RawTrial(object):
         self.response = ''
         self.self_correction = self_correction
         self.sound_file_length = sound_file_length
-        self.raw_file_name = raw_file_name
+        self.traj_file_name = traj_file_name
         self.time_in_day = time_in_day
         self.date = date
 
@@ -128,7 +124,7 @@ def load_experiment(dir_name):
         trial = RawTrial(trial_id, trial_spec['target_id'], trial_spec['target'], points, time_in_session=trial_spec['time_in_session'],
                          rc=trial_spec['rc'], source=None, self_correction=trial_spec['self_correction'],
                          sound_file_length=trial_spec['sound_file_length'],
-                         raw_file_name=trial_spec['raw_file_name'], time_in_day=trial_spec['time_in_day'], date=trial_spec['date'])
+                         traj_file_name=trial_spec['traj_file_name'], time_in_day=trial_spec['time_in_day'], date=trial_spec['date'])
 
         trials.append(trial)
 
@@ -143,7 +139,7 @@ def _traj_filename_per_trial(dir_name, trials):
     for filename in os.listdir(dir_name):   # Names of trajectory files
         match = False
         for i in range(len(trials)):
-            raw_name = trials[i]['raw_file_name']+".csv"
+            raw_name = trials[i]['traj_file_name']+".csv"
             if filename == raw_name:
                 trial_id = trials[i]['trial_id']
                 match = True

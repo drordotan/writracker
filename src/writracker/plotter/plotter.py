@@ -141,8 +141,8 @@ class MainWindow(QMainWindow):
         trials_dict = df.set_index('trial_id').T.to_dict()
         for key in trials_dict.keys():
             combox_str = "Trial id: "+ str(key) + "| Target: " + trials_dict[key]['target'] +\
-                         " | file name: " + trials_dict[key]['raw_file_name']
-            self.combox_trials.addItem(combox_str, userData=traj_directory+os.sep+trials_dict[key]['raw_file_name'])
+                         " | file name: " + trials_dict[key]['traj_file_name']
+            self.combox_trials.addItem(combox_str, userData=traj_directory+os.sep+trials_dict[key]['traj_file_name'])
         return True
 
     def choose_trials_file(self):

@@ -27,6 +27,10 @@ class Target:
         return "id " + str(self.id) + " value:" + self.value + "| trials: [" + trial_arr + "]" + " | rc: " + \
                self.rc_code + " | next trial ID: " + str(self.next_trial_id)
 
+    @property
+    def has_sound(self):
+        return self.sound_file_name is not None and self.sound_file_name != ""
+
 
 #-------------------------------------------------------------------------------------------------------------
 class Trial:
@@ -54,12 +58,15 @@ class Trajectory:
     def __init__(self, filename, filepath):
         self.filename = filename
         self.filepath = filepath
-        self.full_path = self.filepath + os.sep + self.filename + ".csv"
         self.file_handle = None
         self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
     def __str__(self):
         return self.full_path
+
+    @property
+    def full_path(self):
+        return self.filepath + os.sep + self.filename
 
     def open_traj_file(self, row):
         try:
@@ -74,7 +81,7 @@ class Trajectory:
                                    "WriTracker couldn't save Trajectory file. Last trial trajectory"
                                    " wasn't saved. If the problem repeats, restart the session.",
                                    QMessageBox.Ok)
-            raise Exception("Error writing trajectory file in:" + self.filepath + os.sep + self.filename + ".csv")
+            raise Exception("Error writing trajectory file in:" + self.filepath + os.sep + self.filename)
 
     def add_row(self, x_cord, y_cord, pressure):
         time_abs = datetime.now().strftime("%M:%S:%f")[:-2]
@@ -135,7 +142,7 @@ def save_trials(results_path, targets):
     with open(filename, mode='w', encoding='utf-8') as trials_file:
         trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
                                                        'time_in_session', 'date', 'time_in_day',
-                                                       'raw_file_name', 'sound_file_length'], lineterminator='\n')
+                                                       'traj_file_name', 'sound_file_length'], lineterminator='\n')
         trials_csv_file.writeheader()
         sorted_trials = []
         for target in targets:
@@ -147,7 +154,7 @@ def save_trials(results_path, targets):
         for trial in sorted_trials:
             row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,
                        rc=trial.rc_code, time_in_session="{:.3f}".format(trial.time_in_session), date=trial.date,
-                       time_in_day=trial.abs_time, raw_file_name=trial.traj_file_name,
+                       time_in_day=trial.abs_time, traj_file_name=trial.traj_file_name,
                        sound_file_length=trial.sound_file_length)
 
             trials_csv_file.writerow(row)
@@ -188,7 +195,7 @@ def load_targets(targets_file_path):
     targets = []
 
     for index, row in df.iterrows():
-        sound_file_name = row["sound_file_name"] if ("sound_file_name" in df.columns) and not math.isnan(row["sound_file_name"]) else ""
+        sound_file_name = row["sound_file_name"] if ("sound_file_name" in df.columns) and str(row["sound_file_name"]) != 'nan' else ""
         targets.append(Target(row["target_id"], row["target"].strip(), sound_file_name))
 
     return targets, None

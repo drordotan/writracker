@@ -12,9 +12,11 @@ import subprocess                  # This originally used only to check if WACOM
 import sys
 import os
 import time
+from win32com.shell import shell, shellcon
 
 from writracker.recorder import dataio, wintab
 import writracker.utils as u
+import writracker.recorder
 
 
 TABLET_POLL_TIME = 5    # defines the polling frequency for tablet packets, in milliseconds
@@ -292,14 +294,17 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.stats_reset()
                 self.stats_update()
                 self.read_next_target()  # read first target
+
         mixer.init()            # must initialize once before playing sound files
+
+        beep_path = os.path.dirname(writracker.recorder.__file__) + "/sounds/beep_sound.mp3"
         try:
-            mixer.music.load("writracker/recorder/sounds/beep_sound.mp3")
+            mixer.music.load(beep_path)
             mixer.music.play(0)
-        except TypeError:
-            self.show_info_msg("Error!", "Error when trying to access sound file.")
-        except pgerr:
-            self.show_info_msg("Error!", "Error when trying to play sound file.")
+        except TypeError as e:
+            self.show_info_msg("Error!", "Error when trying to access internal sound file (ERR-SND-BEEP-1).")
+        except pgerr as e:
+            self.show_info_msg("Error!", "Error when trying to play sound file. (ERR-SND-BEEP-2)")
 
     #------------------------------------------------------------------------------------------
     def f_btn_reset(self):
@@ -421,7 +426,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def choose_targets_file(self, continue_session=False):
         while True:
             if not continue_session:
-                targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', os.getcwd(),
+                targets_file_path_raw = QFileDialog.getOpenFileName(self, 'Choose Targets file', user_documents_folder(),
                                                                     "XLSX files (*.xlsx);;XLS files (*.xls);;CSV files (*.csv);;")
                 targets_file_path = targets_file_path_raw[0]
 
@@ -453,7 +458,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def pop_folder_selector(self, continue_session=False):
         error_str = ""
         while True:
-            folder = str(QFileDialog.getExistingDirectory(self, "Select results directory"))
+            folder = str(QFileDialog.getExistingDirectory(self, caption="Select results directory"))
             if folder:
                 path_ok = os.access(folder, os.W_OK | os.X_OK)
                 if os.access(folder + os.sep + dataio.trials_csv_filename, os.W_OK):
@@ -613,8 +618,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 # If the target wasn't marked as OK even once, it's some kind of error. use it's value.
                 else:
                     target.rc_code = df.set_index('target')['rc'].to_dict()[target.value]
-                last_trial_file_name = df.set_index('target')['raw_file_name'].to_dict()[target.value]
-                num_idx = df.set_index('target')['raw_file_name'].to_dict()[target.value].rfind('l')
+                last_trial_file_name = df.set_index('target')['traj_file_name'].to_dict()[target.value]
+                num_idx = df.set_index('target')['traj_file_name'].to_dict()[target.value].rfind('l')
                 target.next_trial_id = int(last_trial_file_name[num_idx + 1:]) + 1
 
                 # -- Fill trials list per target --
@@ -626,7 +631,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                                              rc_code=trials_dict[key]['rc'],
                                              time_in_session=trials_dict[key]['time_in_session'],
                                              date=trials_dict[key]['date'],
-                                             traj_file_name=trials_dict[key]['raw_file_name'],
+                                             traj_file_name=trials_dict[key]['traj_file_name'],
                                              abs_time=trials_dict[key]['time_in_day'])
                     target.trials.append(tmp_trial)
 
@@ -705,10 +710,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             rc_code = self.combox_errors.currentText()
         # Add new a new completed Trial inside the current Target
         current_target = self.targets[self.curr_target_index]
-        traj_filename = "trajectory_target_{}_trial_{}".format(current_target.id, current_target.next_trial_id)
         time_in_session = self.current_trial_start_time - self.session_start_time
         current_trial = dataio.Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
-                                     time_in_session=time_in_session, traj_file_name=traj_filename, date=str(date.today()),
+                                     time_in_session=time_in_session,
+                                     traj_file_name=self.current_active_trajectory.filename,
+                                     date=str(date.today()),
                                      abs_time=datetime.now().strftime("%H:%M:%S"),
                                      sound_file_length=current_target.sound_file_length)
         current_target.trials.append(current_trial)
@@ -755,8 +761,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.targets.extend(targets)
 
         for target in targets:
-            self.combox_targets.addItem(str(target.target_id)+"-"+target.value)
-            self.allow_sound_play = targets[0]['allow_sound_play']
+            self.combox_targets.addItem(str(target.id)+"-"+target.value)
 
         self.targets_file_name = os.path.abspath(targets_file_path)
 
@@ -806,8 +811,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
     # ----------------------------------------------------------------------------------
     def open_trajectory(self, unique_id):
-        name = "trajectory_"+unique_id
-        self.current_active_trajectory = dataio.Trajectory(name, self.results_folder_path)
+        self.current_active_trajectory = dataio.Trajectory("trajectory_" + unique_id + ".csv", self.results_folder_path)
         self.current_active_trajectory.open_traj_file("header")
 
     # ----------------------------------------------------------------------------------
@@ -818,7 +822,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.toggle_buttons(False)
         current_target = self.targets[self.curr_target_index]
         self.clean_display()
-        self.open_trajectory("target" + str(current_target.id) + "_trial" + str(current_target.next_trial_id))
+        self.open_trajectory("trial_{}_target_{}".format(self.trial_unique_id, current_target.id))
 
     # ----------------------------------------------------------------------------------
     # ends recording and closes file
@@ -851,23 +855,29 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # ----------------------------------------------------------------------------------
     # Read next with rc_code not "OK".
     def read_next_error_target(self, read_backwards=False):
+
         if self.recording_on:
             self.save_trial_record_off()  # save files, set recording off
             self.targets[self.curr_target_index].next_trial_id += 1
+
         a = self.targets[self.curr_target_index:]
         b = self.targets[0:self.curr_target_index]
         circular_targets_list = a + b
         circular_targets_list.append(circular_targets_list.pop(0))  # Avoid restarting current error target
+
         if read_backwards:  # If lookup is in "previous" direction, need to manipulate circular list
             circular_targets_list.reverse()
             circular_targets_list.append(circular_targets_list.pop(0))
+
         for target in circular_targets_list:
             if target.rc_code != "OK":
                 self.curr_target_index = self.targets.index(target)
                 current_target = self.targets[self.curr_target_index]
                 self.update_target_textfields(current_target.value, current_target.id)
+                self.allow_sound_play = current_target.has_sound
                 break
-        else:   # No more error targets.
+
+        else:   # No more error targets.   # todo Diskin looks like an indentation bug here
             self.show_info_msg("End of targets",
                                'All the targets has been marked as OK. For target navigation, use "goto"')
             self.update_target_textfields("All targets marked OK", "")
@@ -886,9 +896,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     # the goto parameters allow goto button to use this function when jumping instead of duplicating most of the code
     # if from_goto is True, we also expects goto_index which is the index in targets[] to jump into.
     def read_next_target(self, from_goto=False, goto_index=0):
+
         if self.recording_on:
             self.save_trial_record_off()  # save files, set recording off
             self.targets[self.curr_target_index].next_trial_id += 1
+
         if self.curr_target_index < len(self.targets)-1 or from_goto is True:
             if from_goto is False:
                 self.curr_target_index += 1
@@ -896,9 +908,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.curr_target_index = goto_index
             current_target = self.targets[self.curr_target_index]
             self.update_target_textfields(current_target.value, current_target.id)
+            self.allow_sound_play = current_target.has_sound
+
         elif self.cyclic_remaining_targets:  # reached end of targets list. check config to decide how to continue.
             self.skip_ok_targets = True
             self.read_next_error_target()
+
         else:
             self.show_info_msg("End of targets",
                                'Reached the end of the targets file.\nClick "exit" to finish, or go back ' +
@@ -961,6 +976,10 @@ def _warning(title, msg):
 def _critical_msg(title, msg):
     # noinspection PyTypeChecker
     QMessageBox().critical(None, title, msg)
+
+#----------------------------------------
+def user_documents_folder():
+    return shell.SHGetFolderPath(0, shellcon.CSIDL_PERSONAL, None, 0)
 
 
 #---------------------------------------------------------------------------------------------------------

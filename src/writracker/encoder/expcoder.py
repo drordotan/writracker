@@ -63,7 +63,7 @@ def current_trial_index(trials, trial_to_start_from):
 def _load_raw_exp_ui():
 
     while True:
-        raw_dir = uiu.choose_directory("Select the raw-data folder (where WRecorder saved the handwriting)")
+        raw_dir = uiu.choose_directory("Select the raw-data folder (where WRecorder saved the handwriting)", initial_dir=os.path.expanduser('~'))
         if raw_dir is None or raw_dir == '':
             return None
 
@@ -150,6 +150,8 @@ def _trials_to_code(raw_exp, coded_dir):
 
 #-------------------------------------------------------------------------------------
 def code_experiment(trials, out_dir):
+
+    writracker.encoder.trialcoder.show_settings_screen()
 
     for trial in trials:
         trial.processed = False

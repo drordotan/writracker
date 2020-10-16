@@ -61,7 +61,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             return 'quit'
 
         elif rc == 'settings':
-            _open_settings(app_config)
+            show_settings_screen()
             trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
             sub_trial_num = 0
 
@@ -129,7 +129,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
 
 
 #-------------------------------------------------------------------------------------
-def _open_settings(config):
+def show_settings_screen():
     """
     Open the 'settings' window
     """
@@ -139,15 +139,15 @@ def _open_settings(config):
 
     while show_popup:
 
-        response_mandatory_cb = sg.Checkbox('Typing in the participants\'s response is mandatory', default=config['response_mandatory'])
-        max_within_char_overlap = sg.InputText('{:.1f}'.format(100 * config['max_within_char_overlap']))
-        error_codes = sg.InputText(','.join(config['error_codes']))
+        response_mandatory_cb = sg.Checkbox('Typing in the participants\'s response is mandatory', default=app_config['response_mandatory'])
+        max_within_char_overlap = sg.InputText('{:.1f}'.format(100 * app_config['max_within_char_overlap']))
+        error_codes = sg.InputText(','.join(app_config['error_codes']))
 
         layout = [
             [sg.Text(warning, text_color='red')],
             [response_mandatory_cb],
-            [sg.Text('Minimal overlap between 2 strokes in the same character (At least #%): '), max_within_char_overlap],
-            [sg.Text('Error codes: '), error_codes],
+            [sg.Text('Merge 2 strokes into one character if their horizontal overlap exceeds'), max_within_char_overlap, sg.Text('percent')],
+            [sg.Text('Error codes (comma-separated list): '), error_codes],
             [sg.Button('OK'), sg.Button('Cancel')],
         ]
 
@@ -182,9 +182,9 @@ def _open_settings(config):
                 warning = 'Error codes must be a comma-separated list of letter codes, without spaces'
                 continue
 
-            config['response_mandatory'] = response_mandatory
-            config['max_within_char_overlap'] = max_within_char_overlap / 100
-            config['error_codes'] = error_codes.split(',')
+            app_config['response_mandatory'] = response_mandatory
+            app_config['max_within_char_overlap'] = max_within_char_overlap / 100
+            app_config['error_codes'] = error_codes.split(',')
 
             show_popup = False
 
@@ -249,8 +249,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     while True:
 
         event, values = window.Read()
-        print("event is: " + str(event))
-
+        #print("event is: " + str(event))
 
         m = re.match('.+:(\\d+)', event)
         if m is not None:

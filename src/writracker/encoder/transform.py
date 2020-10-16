@@ -114,7 +114,7 @@ def _apply_aggregation_functions_to_trial(agg_func_specs, trial, char_filter, sa
                                 target_id=trial.target_id,
                                 target=trial.stimulus,
                                 char_num=character.char_num,
-                                char=trial.response[character.char_num-1])) for character in characters]
+                                char='' if (trial.response is None or trial.response == '') else trial.response[character.char_num-1])) for character in characters]
 
     #-- Apply aggregation functions
     for agg_func_spec in agg_func_specs:

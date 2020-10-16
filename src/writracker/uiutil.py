@@ -16,11 +16,11 @@ def screen_size():
 
 
 #---------------------------------------------------------------------
-def choose_directory(title=''):
+def choose_directory(title='', initial_dir=None):
     if os.name == 'posix' and title is not None and title != '':
         messagebox.showinfo(title='Choose a directory', message=title)
 
-    return filedialog.askdirectory(title=title)
+    return filedialog.askdirectory(title=title, initialdir=initial_dir)
 
 
 #---------------------------------------------------------------------

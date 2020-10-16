@@ -10,7 +10,8 @@ import pyautogui
 
 from writracker.encoder import dataio
 
-markup_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'))
+app_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'),
+                  response_mandatory=True)
 
 RED = ["#FF0000", "#FF8080", "#FFA0A0"]
 CYAN = ["#00FFFF", "#A0FFFF", "#C0FFFF"]
@@ -36,7 +37,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
     """
 
     #-- trial_queue usually contains just one element, unless we split a trial into 2 trials
-    trial_queue = [_create_default_characters(trial.traj_points, markup_config['max_within_char_overlap'])]
+    trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
     sub_trial_num = 0
 
     selection_handler = None
@@ -60,18 +61,19 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             return 'quit'
 
         elif rc == 'settings':
-            _open_settings(markup_config)
-            trial_queue = [_create_default_characters(trial.traj_points, markup_config['max_within_char_overlap'])]
+            _open_settings(app_config)
+            trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
             sub_trial_num = 0
 
         elif rc == 'choose_trial':
             return 'choose_trial'
 
         elif rc == 'reset_trial':
-            trial_queue = [_create_default_characters(trial.traj_points, markup_config['max_within_char_overlap'])]
+            trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
             dataio.remove_from_trial_index(out_dir, trial.trial_id)
             sub_trial_num = 0
             trial.self_correction = "0"
+            trial.processed = False
             show_command = None
 
         elif rc == 'split_trial':
@@ -137,11 +139,13 @@ def _open_settings(config):
 
     while show_popup:
 
+        response_mandatory_cb = sg.Checkbox('Typing in the participants\'s response is mandatory', default=config['response_mandatory'])
         max_within_char_overlap = sg.InputText('{:.1f}'.format(100 * config['max_within_char_overlap']))
         error_codes = sg.InputText(','.join(config['error_codes']))
 
         layout = [
             [sg.Text(warning, text_color='red')],
+            [response_mandatory_cb],
             [sg.Text('Minimal overlap between 2 strokes in the same character (At least #%): '), max_within_char_overlap],
             [sg.Text('Error codes: '), error_codes],
             [sg.Button('OK'), sg.Button('Cancel')],
@@ -160,8 +164,10 @@ def _open_settings(config):
         window.Close()
 
         if clicked_ok:
-            max_within_char_overlap_s = values[0]
-            error_codes = values[1]
+            response_mandatory = values[0]
+            max_within_char_overlap_s = values[1]
+            error_codes = values[2]
+
             try:
                 max_within_char_overlap = float(max_within_char_overlap_s)
             except ValueError:
@@ -176,6 +182,7 @@ def _open_settings(config):
                 warning = 'Error codes must be a comma-separated list of letter codes, without spaces'
                 continue
 
+            config['response_mandatory'] = response_mandatory
             config['max_within_char_overlap'] = max_within_char_overlap / 100
             config['error_codes'] = error_codes.split(',')
 
@@ -197,6 +204,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     if len(strokes) == 0:
         trial.rc = 'empty'
         dataio.save_trial(trial, characters, sub_trial_num, out_dir)
+        trial.processed = True
         return 'next_trial', None, None
 
     on_paper_chars = [c for c in characters if len(c.trajectory) > 0]
@@ -284,23 +292,16 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- OK - Accept current coding
         if event in ('a', 'A', 'accept', 65):
             trial.rc = "OK"
-            res = trial.response
-            if res is None or (res == "" or ''):
-                res = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)), 'No response entered')
-                trial.response = res
-                #sg.Popup('No response entered', 'Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)))
-            elif len(trial.response) != len(on_paper_chars):
-                res = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)),
-                                        'Unmatch number of characters')
-                trial.response = res
-            else:
+            _validate_good_response(on_paper_chars, trial)
+            if trial.response is not None or not app_config['response_mandatory']:
                 dataio.save_trial(trial, characters, sub_trial_num, out_dir)
+                trial.processed = True
                 window.Close()
                 return 'next_trial', None, None
 
         #-- Clicked on DropDown error
         elif event == 'error':
-            if values['error'] in markup_config["error_codes"]:
+            if values['error'] in app_config["error_codes"]:
                 window['accept_error'].update(disabled=False)
                 #window['accept'].update(disabled=True)
 
@@ -310,11 +311,10 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- Error - Accept current coding, set trial as error
         if event in ('o', 'O', 'accept_error', 79):
             trial.rc = values['error']
-            res = trial.response
-            if res is None or (res == "" or ''):
-                sg.Popup('No response entered', 'Please enter a response')
-            else:
+            _validate_good_response(on_paper_chars, trial, force_response_optional=True)
+            if trial.response is not None or not app_config['response_mandatory']:
                 dataio.save_trial(trial, characters, sub_trial_num, out_dir)
+                trial.processed = True
                 window.Close()
                 return 'next_trial', None, None
 
@@ -386,9 +386,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 current_command = 'delete_stroke'
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
-        elif event == 'response':
-            text = sg.popup_get_text('The participant wrote {:} characters'.format(len(on_paper_chars)), 'Please enter response:')
-            trial.response = text
+        elif event == 'enter_response':
+            trial.response = _user_enter_response(len(on_paper_chars))
             # window.Close()
             # return 'response', characters, None
 
@@ -467,6 +466,30 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
 
 #-------------------------------------------------------------------------------------
+def _validate_good_response(on_paper_chars, trial, force_response_optional=False):
+
+    if trial.response is not None and len(trial.response) != len(on_paper_chars):
+        re_enter_response = True
+
+    elif app_config['response_mandatory'] and not force_response_optional:
+        re_enter_response = True
+
+    else:
+        re_enter_response = False
+
+    if re_enter_response:
+        trial.response = _user_enter_response(len(on_paper_chars))
+
+
+#-------------------------------------------------------------------------------------
+def _user_enter_response(n_chars):
+    res = ''
+    while res is not None and len(res) != n_chars:
+        res = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(n_chars), 'No response entered')
+    return res
+
+
+#-------------------------------------------------------------------------------------
 def _create_window_for_markup(screen_size, title):
 
     commands_m = [
@@ -486,11 +509,11 @@ def _create_window_for_markup(screen_size, title):
         sg.Text('Navigation / decision: '),
         sg.Button('(A)ccept as OK', key='accept'),
         sg.Button('Err(o)r:', key='accept_error'),
-        sg.DropDown(markup_config['error_codes'], key='error', enable_events=True, readonly=True),
+        sg.DropDown(app_config['error_codes'], key='error', enable_events=True, readonly=True),
         sg.Button('s(K)ip current trial', key='skip_trial'),
         sg.Button('(P)revious trial', key='prev_trial'),
         sg.Button('(G)o to specific trial', key='choose_trial'),
-        sg.Button('Enter response', key='response'),
+        sg.Button('Enter response', key='enter_response'),
         #sg.Txt('Enter response:'),
         #sg.Input(key = 'text_response', enable_events= True),
     ]

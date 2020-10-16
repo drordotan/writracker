@@ -146,7 +146,7 @@ def save_trials(results_path, targets):
 
         for trial in sorted_trials:
             row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,
-                       rc=trial.rc_code, time_in_session=trial.time_in_session, date=trial.date,
+                       rc=trial.rc_code, time_in_session="{:.3f}".format(trial.time_in_session), date=trial.date,
                        time_in_day=trial.abs_time, raw_file_name=trial.traj_file_name,
                        sound_file_length=trial.sound_file_length)
 

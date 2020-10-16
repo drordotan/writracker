@@ -20,11 +20,11 @@ def run():
     root = tk.Tk()
     root.withdraw()
 
-    raw_exp = _load_raw_exp_ui()
+    raw_exp, raw_exp_dir = _load_raw_exp_ui()
     if raw_exp is None:
         return
 
-    results_dir = uiu.choose_directory('Select the encoded-data (results) folder')
+    results_dir = uiu.choose_directory('Select the encoded-data (results) folder', os.path.dirname(raw_exp_dir))
     if results_dir is None or results_dir == '':
         return
 
@@ -73,15 +73,12 @@ def _load_raw_exp_ui():
             messagebox.showerror("Invalid raw-data directory", err_msg)
             return None
 
-        #try:
-        exp = writracker.recorder.results.load_experiment(raw_dir)
-        #print("try")
-        return exp
+        try:
+            exp = writracker.recorder.results.load_experiment(raw_dir)
+            return exp, raw_dir
 
-        #todo
-        '''except Exception as e:
-            print("Invalid raw-data directory 2")
-            messagebox.showerror("Invalid raw-data directory 2", str(e))'''
+        except Exception as e:
+            messagebox.showerror("Invalid raw-data folder", str(e))
 
 
 #-------------------------------------------------------------------------------------
@@ -152,14 +149,13 @@ def _trials_to_code(raw_exp, coded_dir):
 
 
 #-------------------------------------------------------------------------------------
-
-
-
 def code_experiment(trials, out_dir):
+
+    for trial in trials:
+        trial.processed = False
 
     i = 0
     while i < len(trials):
-
 
         trial = trials[i]
         print("trial is: " + str(trial))
@@ -194,10 +190,12 @@ def code_experiment(trials, out_dir):
 #-------------------------------------------------------------------------------------
 def _open_choose_trial(curr_trial, all_trials):
     """
-    Open the 'settings' window
+    Open the 'choose trial number' window
     """
 
     trial_nums = [t.trial_id for t in all_trials]
+    trial_desc = ["{}: {}{}".format(t.trial_id, t.stimulus, " (already encoded)" if t.processed else "") for t in all_trials]
+    trial_desc_to_num = {d: n for d, n in zip(trial_desc, trial_nums)}
 
     show_popup = True
     warning = ''
@@ -206,8 +204,7 @@ def _open_choose_trial(curr_trial, all_trials):
 
         layout = [
             [sg.Text(warning, text_color='red', font=('Arial', 18))],
-            [sg.Text('Go to trial number: '), sg.InputText(str(curr_trial.trial_id)),
-             sg.Text('({:} - {:})'.format(min(trial_nums), max(trial_nums)))],
+            [sg.Text('Go to trial number: '), sg.Combo(trial_desc, readonly=True)],
             [sg.Button('OK'), sg.Button('Cancel')],
         ]
 
@@ -225,7 +222,7 @@ def _open_choose_trial(curr_trial, all_trials):
 
         if apply:
             try:
-                trial_id = int(values[0])
+                trial_id = trial_desc_to_num[values[0]]
             except ValueError:
                 warning = 'Invalid trial: please write a whole number'
                 continue

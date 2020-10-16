@@ -165,7 +165,7 @@ def _load_trials_index(dir_name):
     if not os.path.isfile(index_fn):
         return []
 
-    with open(index_fn, 'r', errors='ignore', encoding="cp437") as fp:
+    with open(index_fn, 'r', errors='ignore', encoding="utf-8") as fp:
 
         reader = csv.DictReader(fp)
         u.validate_csv_format(index_fn, reader, trials_csv_columns)

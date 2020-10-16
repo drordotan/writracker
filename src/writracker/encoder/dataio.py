@@ -456,7 +456,7 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  )
 
 
-    with open(index_fn, 'a' if file_exists else 'w', encoding="cp437", errors='ignore') as fp:
+    with open(index_fn, 'a' if file_exists else 'w', encoding="utf-8", errors='ignore') as fp:
         writer = csv.DictWriter(fp, trials_index_fields, lineterminator='\n')
         if not file_exists:
             writer.writeheader()
@@ -477,7 +477,7 @@ def remove_from_trial_index(dir_name, trial_id, sub_trial_num=None):
 
     index = _load_trials_index(dir_name)
 
-    with open(index_fn, 'w', encoding="cp437", errors='ignore') as fp:
+    with open(index_fn, 'w', encoding="utf-8", errors='ignore') as fp:
         writer = csv.DictWriter(fp, trials_index_fields, lineterminator='\n')
         writer.writeheader()
         for entry in index:
@@ -500,7 +500,8 @@ def _load_trials_index(dir_name):
     if not os.path.isfile(index_fn):
         return []
 
-    with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
+    #with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
+    with open(index_fn, 'r', encoding="utf-8", errors='ignore') as fp:
         reader = csv.DictReader(fp)
         validate_csv_format(index_fn, reader, ['trial_id', 'sub_trial_num'])
 
@@ -528,7 +529,8 @@ def load_coded_trials_nums(dir_name):
     if not os.path.isfile(index_fn):
         return []
 
-    with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
+    #with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
+    with open(index_fn, 'r', encoding="utf-8", errors='ignore') as fp:
         reader = csv.DictReader(fp)
 
         result = []

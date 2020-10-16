@@ -11,6 +11,7 @@ import pandas as pd
 import subprocess                  # This originally used only to check if WACOM tablet is connected on MAC
 import sys
 import os
+import time
 
 from writracker.recorder import dataio, wintab
 import writracker.utils as u
@@ -256,7 +257,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                         else:
                             return True
 
-                    self.session_start_time = datetime.now().strftime("%H:%M:%S")
+                    self.session_start_time = time.time()
                     self.pop_config_menu()
                     self.session_started = True
                     self.toggle_buttons(True)
@@ -281,7 +282,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         if self.choose_targets_file():
             if self.pop_folder_selector():
                 self.pop_config_menu()
-                self.session_start_time = datetime.now().strftime("%H:%M:%S")
+                self.session_start_time = time.time()
                 self.session_started = True
                 self.toggle_buttons(True)
                 self.menu_add_error.setEnabled(True)
@@ -589,7 +590,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def start_trial(self):
         print("Writracker: Starting new trial\n")
         self.trial_started = True
-        self.current_trial_start_time = datetime.now().strftime("%H:%M:%S")
+        self.current_trial_start_time = time.time()
         self.set_recording_on()
 
     # ----------------------------------------------------------------------------------
@@ -705,10 +706,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # Add new a new completed Trial inside the current Target
         current_target = self.targets[self.curr_target_index]
         traj_filename = "trajectory_target_{}_trial_{}".format(current_target.id, current_target.next_trial_id)
-        time_rel = datetime.strptime(self.current_trial_start_time, "%H:%M:%S") - datetime.strptime(self.session_start_time, "%H:%M:%S")
-        #todo Diskin: time_in_session should be simply a number
+        time_in_session = self.current_trial_start_time - self.session_start_time
         current_trial = dataio.Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
-                                     time_in_session=time_rel, traj_file_name=traj_filename, date=str(date.today()),
+                                     time_in_session=time_in_session, traj_file_name=traj_filename, date=str(date.today()),
                                      abs_time=datetime.now().strftime("%H:%M:%S"),
                                      sound_file_length=current_target.sound_file_length)
         current_target.trials.append(current_trial)

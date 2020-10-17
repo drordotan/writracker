@@ -270,6 +270,25 @@ def code_experiment(trials, out_dir):
         else:
             raise Exception('Invalid RC {:}'.format(rc))
 
+    if _all_trials_are_coded(out_dir, trials):
+        messagebox.showinfo('Finished encoding', 'Congratulations! You have finished encoding this session. The results are in\n{}'.format(out_dir))
+
+
+#-------------------------------------------------------------------------------------
+def _all_trials_are_coded(encoded_dir, raw_trials):
+
+    raw_trial_nums = set([t.trial_id for t in raw_trials])
+
+    try:
+        coded_trial_nums = writracker.encoder.dataio.load_coded_trials_nums(encoded_dir)
+    except Exception as e:
+        messagebox.showerror('Error reading the encoded trials', 'Error: {}'.format(e))
+        return False
+
+    coded_trial_nums = set(coded_trial_nums)
+
+    return raw_trial_nums == coded_trial_nums
+
 
 #-------------------------------------------------------------------------------------
 def _open_choose_trial(curr_trial, all_trials):

@@ -298,8 +298,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- OK - Accept current coding
         if event in ('a', 'A', 'accept', 65):
             trial.rc = "OK"
-            _validate_good_response(on_paper_chars, trial)
-            if trial.response is not None or not app_config['response_mandatory']:
+            got_response = get_valid_user_response(trial, on_paper_chars, get_if_already_exists=False)
+            if got_response:
                 dataio.save_trial(trial, characters, sub_trial_num, out_dir)
                 trial.processed = True
                 window.Close()
@@ -317,7 +317,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         #-- Error - Accept current coding, set trial as error
         if event in ('o', 'O', 'accept_error', 79):
             trial.rc = values['error']
-            _validate_good_response(on_paper_chars, trial, force_response_optional=True)
             if trial.response is not None or not app_config['response_mandatory']:
                 dataio.save_trial(trial, characters, sub_trial_num, out_dir)
                 trial.processed = True
@@ -393,8 +392,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
         elif event == 'enter_response':
-            trial.response = _user_enter_response(len(on_paper_chars))
-            # window.Close()
+            get_valid_user_response(trial, on_paper_chars, get_if_already_exists=True)
+            # window.Close()  # todo dror: needed?
             # return 'response', characters, None
 
         #-- Mouse click
@@ -471,27 +470,38 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
 
 #-------------------------------------------------------------------------------------
-def _validate_good_response(on_paper_chars, trial, force_response_optional=False):
-
-    if trial.response is not None and len(trial.response) != len(on_paper_chars):
-        re_enter_response = True
-
-    elif app_config['response_mandatory'] and not force_response_optional:
-        re_enter_response = True
-
+def response_ok(response, on_paper_chars):
+    n_chars = len(on_paper_chars)
+    if response is None or response == '':
+        return not app_config['response_mandatory']
     else:
-        re_enter_response = False
-
-    if re_enter_response:
-        trial.response = _user_enter_response(len(on_paper_chars))
+        return len(response) == n_chars
 
 
 #-------------------------------------------------------------------------------------
-def _user_enter_response(n_chars):
-    res = ''
-    while res is not None and len(res) != n_chars:
-        res = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(n_chars), 'No response entered')
-    return res
+def get_valid_user_response(trial, on_paper_chars, get_if_already_exists=True):
+    """
+    Get a response from the user, update the trial.
+
+    :param trial:
+    :param on_paper_chars:
+    :param get_if_already_exists: Whether to get a response if the trial already contains a valid response
+    :return: True if a valid response was entered. False if CANCEL was clicked.
+    """
+
+    resp = trial.response
+
+    force_get = get_if_already_exists
+    while force_get or not response_ok(resp, on_paper_chars):
+        resp = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)),
+                                title='Enter response', default_text=trial.response)
+        if resp is None:
+            return False
+
+        force_get = False
+
+    trial.response = resp
+    return True
 
 
 #-------------------------------------------------------------------------------------

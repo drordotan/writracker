@@ -12,7 +12,6 @@ from operator import attrgetter
 from writracker.encoder import transform
 import writracker.utils as u
 from writracker import commonio
-from writracker.utils import validate_csv_format
 
 StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 
@@ -187,6 +186,24 @@ class Stroke(object):
 
 
 #-------------------------------------------------------------------------------------
+def is_encoder_results_directory(dir_name):
+
+    index_fn = dir_name + os.sep + 'trials.csv'
+    if not os.path.isfile(index_fn):
+        return False
+
+
+    with open(index_fn, 'r') as fp:
+        reader = csv.DictReader(fp)
+        try:
+            u.validate_csv_format(index_fn, reader, trials_index_fields)
+        except ValueError:
+            return False
+
+    return True
+
+
+#-------------------------------------------------------------------------------------
 def save_trial(trial, characters, sub_trial_num, out_dir):
     """
     Save the full trial
@@ -322,7 +339,7 @@ def _load_strokes(filename):
 
     with open(filename, 'r') as fp:
         reader = csv.DictReader(fp)
-        validate_csv_format(filename, reader, ('char_num', 'x', 'y', 'pressure', 'time'))
+        u.validate_csv_format(filename, reader, ('char_num', 'x', 'y', 'pressure', 'time'))
 
         for row in reader:
             location = 'line {:} in {:}'.format(reader.line_num, filename)
@@ -494,7 +511,7 @@ def _load_trials_index(dir_name):
     #with open(index_fn, 'r', encoding="cp437", errors='ignore') as fp:
     with open(index_fn, 'r', encoding="utf-8", errors='ignore') as fp:
         reader = csv.DictReader(fp)
-        validate_csv_format(index_fn, reader, ['trial_id', 'sub_trial_num'])
+        u.validate_csv_format(index_fn, reader, ['trial_id', 'sub_trial_num'])
 
         result = []
         for row in reader:

@@ -76,6 +76,13 @@ def _load_raw_exp_ui():
 
 
 #-------------------------------------------------------------------------------------
+def _is_recorder_results_dir(dir_name):
+    if writracker.encoder.dataio.is_encoder_results_directory(dir_name):
+        return False
+
+    return writracker.recorder.results.is_invalid_data_directory(dir_name) is None
+
+#-------------------------------------------------------------------------------------
 def _trials_to_code(raw_exp, coded_dir):
     """
     Get the list of trials that should be coded in WEncoder.
@@ -92,7 +99,7 @@ def _trials_to_code(raw_exp, coded_dir):
         print("no index file")
         return raw_exp.trials
 
-    if writracker.recorder.results.is_invalid_data_directory(coded_dir) is None:
+    if _is_recorder_results_dir(coded_dir):
         messagebox.showerror("Invalid folder",
                              "The output directory you selected contains data from a WRecorder (not WEncoder) session. " +
                              "Please choose a separate directory for storing the encoded session.")

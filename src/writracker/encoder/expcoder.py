@@ -82,6 +82,7 @@ def _is_recorder_results_dir(dir_name):
 
     return writracker.recorder.results.is_invalid_data_directory(dir_name) is None
 
+
 #-------------------------------------------------------------------------------------
 def _trials_to_code(raw_exp, coded_dir):
     """
@@ -180,7 +181,8 @@ def _ask_when_target_directory_contains_data(coded_dir, question):
     """
 
     while True:
-        resp = show_question(question, ["Quit WEncoder", "Delete any encoded trial and start over", "Go on (encoded trials will override previous encoding)"],
+        resp = show_question(question, ["Quit WEncoder", "Delete any encoded trial and start over",
+                                        "Go on (encoded trials will override previous encoding)"],
                              answers_in_one_line=False)
         if resp == 0:  # Quit WEncoder
             return 'quit'
@@ -243,7 +245,6 @@ def code_experiment(trials, out_dir):
 
         trial = trials[i]
         print("trial is: " + str(trial))
-        writracker.encoder.dataio.remove_from_trial_index(out_dir, trial.trial_id)
 
         print('Processing trial #{}, source: {}'.format(i + 1, trial.source))
         rc = writracker.encoder.trialcoder.encode_one_trial(trial, out_dir)
@@ -252,16 +253,12 @@ def code_experiment(trials, out_dir):
             break
 
         elif rc == 'next':
-            # f i == (len(trials)-1):
-            #     continue
             i += 1
-
 
         elif rc == 'prev':
             if i == 0:
                 continue
             i -= 1
-
 
         elif rc == 'choose_trial':
             next_trial = _open_choose_trial(trial, trials)
@@ -271,9 +268,11 @@ def code_experiment(trials, out_dir):
             raise Exception('Invalid RC {:}'.format(rc))
 
     if _all_trials_are_coded(out_dir, trials):
-        messagebox.showinfo('Finished encoding', 'Congratulations! You have finished encoding this session. The results are in\n{}'.format(out_dir))
+        messagebox.showinfo('Finished encoding',
+                            'Congratulations! You have finished encoding this session. The results are in\n{}'.format(out_dir))
     else:
-        messagebox.showinfo('Finished encoding', 'You have finished encoding this session, but not all trials were encoded. The results are in\n{}'.format(out_dir))
+        messagebox.showinfo('Finished encoding',
+                            'You have finished encoding this session, but not all trials were encoded. The results are in\n{}'.format(out_dir))
 
 
 #-------------------------------------------------------------------------------------

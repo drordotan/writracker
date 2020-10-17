@@ -32,6 +32,7 @@ width, height = pyautogui.size()
 def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), margin=25):
     """
     fully encode one trial.
+    If the trial is split in two: encode both halves
 
     Return what to do next: quit, next, prev, or choose_trial
     """
@@ -122,7 +123,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
 
 
         else:
-            raise Exception('Bug: unknown rc ({:})'.format(rc))
+            raise Exception('Bug: unknown rc ({})'.format(rc))
 
     return 'next'
 
@@ -205,8 +206,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
     #-- Skipping empty trials
     if len(strokes) == 0:
-        trial.rc = 'empty'
-        dataio.save_trial(trial, characters, sub_trial_num, out_dir)
+        dataio.save_trial(trial, '', 'empty', characters, sub_trial_num, out_dir)
         trial.processed = True
         return 'next_trial', None, None
 
@@ -215,7 +215,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
     expand_ratio, offset, screen_size = _get_expand_ratio(all_markup_dots, screen_size, margin)
 
-    title = 'Trial #{:}, target={:} ({:} characters, {:} strokes) '\
+    title = 'Trial #{}, target={} ({} characters, {} strokes) '\
         .format(trial.trial_id, trial.stimulus, len(on_paper_chars), len(on_paper_strokes))
 
 
@@ -250,6 +250,9 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         window['self_correction'].update(disabled=True)
     else:
         window['self_correction'].update(disabled=False)
+
+    #-- Info of encoded trial
+    response = None
 
     while True:
 
@@ -297,10 +300,11 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
         #-- OK - Accept current coding
         if event in ('a', 'A', 'accept', 65):
-            trial.rc = "OK"
-            got_response = get_valid_user_response(trial, on_paper_chars, get_if_already_exists=False)
-            if got_response:
-                dataio.save_trial(trial, characters, sub_trial_num, out_dir)
+            response = get_valid_user_response(response, on_paper_chars, get_if_already_exists=False)
+            if response is not None:
+                if sub_trial_num == 1:
+                    dataio.remove_from_trial_index(out_dir, trial.trial_id)
+                dataio.save_trial(trial, response, "OK", characters, sub_trial_num, out_dir)
                 trial.processed = True
                 window.Close()
                 return 'next_trial', None, None
@@ -316,9 +320,10 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
         #-- Error - Accept current coding, set trial as error
         if event in ('o', 'O', 'accept_error', 79):
-            trial.rc = values['error']
             if trial.response is not None or not app_config['response_mandatory']:
-                dataio.save_trial(trial, characters, sub_trial_num, out_dir)
+                if sub_trial_num == 1:
+                    dataio.remove_from_trial_index(out_dir, trial.trial_id)
+                dataio.save_trial(trial, response, values['error'], characters, sub_trial_num, out_dir)
                 trial.processed = True
                 window.Close()
                 return 'next_trial', None, None
@@ -392,7 +397,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
         elif event == 'enter_response':
-            get_valid_user_response(trial, on_paper_chars, get_if_already_exists=True)
+            response = get_valid_user_response(response, on_paper_chars, get_if_already_exists=True)
             # window.Close()  # todo dror: needed?
             # return 'response', characters, None
 
@@ -464,7 +469,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         '''
                 else:
             if len(event) == 1:
-                print("Clicked #{:}".format(ord(event)))
+                print("Clicked #{}".format(ord(event)))
             instructions.Update('UNKNOWN COMMAND')
         '''
 
@@ -479,7 +484,7 @@ def response_ok(response, on_paper_chars):
 
 
 #-------------------------------------------------------------------------------------
-def get_valid_user_response(trial, on_paper_chars, get_if_already_exists=True):
+def get_valid_user_response(response , on_paper_chars, get_if_already_exists=True):
     """
     Get a response from the user, update the trial.
 
@@ -489,19 +494,22 @@ def get_valid_user_response(trial, on_paper_chars, get_if_already_exists=True):
     :return: True if a valid response was entered. False if CANCEL was clicked.
     """
 
-    resp = trial.response
+    orig_response = response
+    if response is None:
+        response = ''
 
     force_get = get_if_already_exists
-    while force_get or not response_ok(resp, on_paper_chars):
-        resp = sg.popup_get_text('Please enter a response with exactly {:} characters.'.format(len(on_paper_chars)),
-                                title='Enter response', default_text=trial.response)
-        if resp is None:
-            return False
+    while force_get or not response_ok(response , on_paper_chars):
+        response = sg.popup_get_text('Please enter a response with exactly {} characters.'.format(len(on_paper_chars)),
+                                title='Enter response', default_text=response)
+        if response is None: # CANCEL clicked
+            return orig_response
+        elif response == '':
+            return ''
 
         force_get = False
 
-    trial.response = resp
-    return True
+    return response
 
 
 #-------------------------------------------------------------------------------------

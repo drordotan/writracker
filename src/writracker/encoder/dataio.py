@@ -204,17 +204,18 @@ def is_encoder_results_directory(dir_name):
 
 
 #-------------------------------------------------------------------------------------
-def save_trial(trial, characters, sub_trial_num, out_dir):
+def save_trial(raw_trial, response, trial_rc, characters, sub_trial_num, out_dir):
     """
     Save the full trial
     """
 
-    traj_file_name = create_traj_file_name(out_dir, sub_trial_num, trial, trial.trial_id)
+    traj_file_name = create_traj_file_name(out_dir, sub_trial_num, raw_trial, raw_trial.trial_id)
 
     has_self_corrections = 1 if sum([c.correction for c in characters]) > 0 else 0
 
-    append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus, trial.response, trial.time_in_session, trial.rc,
-                          trial.sound_file_length, os.path.basename(traj_file_name), trial.time_in_day, trial.date, has_self_corrections)
+    append_to_trial_index(out_dir, raw_trial.trial_id, sub_trial_num, raw_trial.target_id,
+                          raw_trial.stimulus, response, raw_trial.time_in_session, trial_rc,
+                          raw_trial.sound_file_length, os.path.basename(traj_file_name), raw_trial.time_in_day, raw_trial.date, has_self_corrections)
 
     strokes = []
     for c in characters:
@@ -231,7 +232,7 @@ def save_trial(trial, characters, sub_trial_num, out_dir):
         strokes.extend(c.strokes)
 
     save_trajectory(strokes, traj_file_name)
-    append_to_strokes_file(strokes, trial, sub_trial_num, out_dir)
+    append_to_strokes_file(strokes, raw_trial, sub_trial_num, out_dir)
     save_characters_file(out_dir)
 
 
@@ -265,9 +266,9 @@ def save_trajectory(strokes, filename):
 
 #-------------------------------------------------------------------------------------
 def create_traj_file_name(out_dir, sub_trial_num, trial, trial_id):
-    trial_num_portion = "trial_{:}_target_{:}".format(trial_id, trial.target_id) if sub_trial_num == 1 \
-        else "trial_{:}_target_{:}_part{:}".format(trial_id, trial.target_id, sub_trial_num)
-    filename = "{:}/trajectory_{:}.csv".format(out_dir, trial_num_portion)
+    trial_num_portion = "trial_{}_target_{}".format(trial_id, trial.target_id) if sub_trial_num == 1 \
+        else "trial_{}_{}_target_{}".format(trial_id, sub_trial_num, trial.target_id)
+    filename = "{}/trajectory_{}.csv".format(out_dir, trial_num_portion)
     return filename
 
 
@@ -342,7 +343,7 @@ def _load_strokes(filename):
         u.validate_csv_format(filename, reader, ('char_num', 'x', 'y', 'pressure', 'time'))
 
         for row in reader:
-            location = 'line {:} in {:}'.format(reader.line_num, filename)
+            location = 'line {} in {}'.format(reader.line_num, filename)
 
             char_num = u.parse_int('char_num', row['char_num'], location)
             stroke_num = row['stroke']
@@ -453,7 +454,7 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  sub_trial_num=sub_trial_num,
                  target_id=target_id,
                  target=target,
-                 response=response,
+                 response='' if response is None else '',
                  time_in_session=trial_start_time,
                  rc='' if rc is None else rc,
                  sound_file_length=sound_file_length,
@@ -515,7 +516,7 @@ def _load_trials_index(dir_name):
 
         result = []
         for row in reader:
-            location = 'line {:} in {:}'.format(reader.line_num, index_fn)
+            location = 'line {} in {}'.format(reader.line_num, index_fn)
 
             row['trial_id'] = u.parse_int('trial_id', row['trial_id'], location)
             row['sub_trial_num'] = u.parse_int('sub_trial_num', row['sub_trial_num'], location)
@@ -545,7 +546,7 @@ def load_coded_trials_nums(dir_name):
 
         result = []
         for row in reader:
-            location = 'line {:} in {:}'.format(reader.line_num, index_fn)
+            location = 'line {} in {}'.format(reader.line_num, index_fn)
             trial_id = u.parse_int('trial_id', row['trial_id'], location)
             result.append(trial_id)
 

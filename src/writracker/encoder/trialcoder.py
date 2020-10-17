@@ -72,7 +72,6 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
             dataio.remove_from_trial_index(out_dir, trial.trial_id)
             sub_trial_num = 0
-            trial.self_correction = "0"
             trial.processed = False
             show_command = None
 
@@ -129,7 +128,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
 
 
 #-------------------------------------------------------------------------------------
-def show_settings_screen():
+def show_settings_screen(show_cancel_button=True):
     """
     Open the 'settings' window
     """
@@ -143,12 +142,16 @@ def show_settings_screen():
         max_within_char_overlap = sg.InputText('{:.1f}'.format(100 * app_config['max_within_char_overlap']))
         error_codes = sg.InputText(','.join(app_config['error_codes']))
 
+        buttons = [sg.Button('OK')]
+        if show_cancel_button:
+            buttons.append(sg.Button('Cancel'))
+
         layout = [
             [sg.Text(warning, text_color='red')],
             [response_mandatory_cb],
             [sg.Text('Merge 2 strokes into one character if their horizontal overlap exceeds'), max_within_char_overlap, sg.Text('percent')],
             [sg.Text('Error codes (comma-separated list): '), error_codes],
-            [sg.Button('OK'), sg.Button('Cancel')],
+            buttons,
         ]
 
         window = sg.Window('Settings', layout)
@@ -221,6 +224,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     if len(on_paper_chars) < 2:
         window['merge_chars'].update(disabled=True)
         window['split_trial'].update(disabled=True)
+
     window['accept_error'].update(disabled=True)
 
     graph = window.Element('graph')
@@ -232,8 +236,9 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     current_command = None
 
     #window['show_correction'].enable_events = True
-    if trial.self_correction == "1":
-        window['show_correction'].update(disabled=False)
+    #todo dror: not sure why the following lines were here
+    #if trial.self_correction == "1":
+    #    window['show_correction'].update(disabled=False)
 
     if show_command is True:
         window.FindElement('show_correction').Update(disabled=False, value=True)
@@ -256,8 +261,10 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             event = int(m.group(1))
 
         #-- Enables self correction checkbox
-        if trial.self_correction == "1":
-            window['show_correction'].update(disabled=False)
+        #todo dror: why??
+        #if trial.self_correction == "1":
+        #    window['show_correction'].update(disabled=False)
+        window['show_correction'].update(disabled=False)
 
         #-- Window was closed: reset the trial
         if event is None:
@@ -427,7 +434,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             elif current_command == 'self_correction':
                 if selection_handler.selected is None:
                     return 'continue', characters, None
-                trial.self_correction = "1"
                 chars1 = _self_correction(characters, selection_handler, window, current_command)
                 window.Close()
                 return 'self_correction', chars1, last_selection_handler

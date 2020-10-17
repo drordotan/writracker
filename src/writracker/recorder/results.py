@@ -28,8 +28,10 @@ def is_invalid_data_directory(dir_name):
     with open(trials_file_path, 'r', encoding="utf-8") as fp:
         reader = csv.DictReader(fp)
 
-        if tuple(sorted(reader.fieldnames)) != trials_csv_columns:
-            return "Invalid directory - bad format of {:} ".format(dataio.trials_csv_filename)
+        try:
+            u.validate_csv_format(trials_file_path, reader, trials_csv_columns)
+        except ValueError as e:
+            return str(e)
 
     return None
 
@@ -41,8 +43,8 @@ class RawTrial(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None, self_correction = None,
-                 sound_file_length = None, traj_file_name = None, time_in_day = None, date = None):
+    def __init__(self, trial_id, target_id, stimulus, traj_points, time_in_session=None, rc=None, source=None,
+                 sound_file_length=None, traj_file_name=None, time_in_day=None, date=None):
 
         self.target_id = target_id
         self.trial_id = trial_id
@@ -52,7 +54,6 @@ class RawTrial(object):
         self.rc = rc
         self.source = source
         self.response = ''
-        self.self_correction = self_correction
         self.sound_file_length = sound_file_length
         self.traj_file_name = traj_file_name
         self.time_in_day = time_in_day
@@ -110,45 +111,21 @@ def load_experiment(dir_name):
     """
 
     trials_info = _load_trials_index(dir_name)
-    traj_filenames = _traj_filename_per_trial(dir_name, trials_info)
 
     trials = []
     for trial_spec in trials_info:
         trial_id = trial_spec['trial_id']
 
-        if trial_id not in traj_filenames:
-            raise Exception('Invalid experiment directory {:}: there is no file for trial #{:} '.format(dir_name, trial_id))
-
-        points = commonio.load_trajectory(dir_name + os.sep + traj_filenames[trial_id])
+        points = commonio.load_trajectory(dir_name + os.sep + trial_spec['traj_file_name'])
 
         trial = RawTrial(trial_id, trial_spec['target_id'], trial_spec['target'], points, time_in_session=trial_spec['time_in_session'],
-                         rc=trial_spec['rc'], source=None, self_correction=trial_spec['self_correction'],
+                         rc=trial_spec['rc'], source=None,
                          sound_file_length=trial_spec['sound_file_length'],
                          traj_file_name=trial_spec['traj_file_name'], time_in_day=trial_spec['time_in_day'], date=trial_spec['date'])
 
         trials.append(trial)
 
     return Experiment(trials, source_path=dir_name)
-
-
-#-------------------------------------------------------------------------------------------------
-def _traj_filename_per_trial(dir_name, trials):
-
-    result = dict()
-
-    for filename in os.listdir(dir_name):   # Names of trajectory files
-        match = False
-        for i in range(len(trials)):
-            raw_name = trials[i]['traj_file_name']+".csv"
-            if filename == raw_name:
-                trial_id = trials[i]['trial_id']
-                match = True
-                result[trial_id] = filename
-
-        if match is not True:
-            continue
-
-    return result
 
 
 #----------------------------------------------------------

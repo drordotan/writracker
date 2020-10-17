@@ -18,7 +18,7 @@ StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 
 
 trials_index_fields = 'trial_id', 'target_id', 'sub_trial_num', 'target', 'response', 'time_in_session', \
-                      'rc', 'traj_file_name', 'time_in_day', 'date', 'self_correction', 'sound_file_length'
+                      'rc', 'has_self_corrections', 'traj_file_name', 'time_in_day', 'date', 'sound_file_length'
 
 
 #-------------------------------------------------------------------------------------------------
@@ -36,19 +36,10 @@ def load_experiment(dir_name, trial_index_filter=None):
         traj_filename = dir_name+os.sep+trial_spec['traj_file_name']
         points = commonio.load_trajectory(traj_filename)
 
-        trial = CodedTrial(trial_id=trial_spec['trial_id'],
-                           sub_trial_num=trial_spec['sub_trial_num'],
-                           target_id=trial_spec['target_id'],
-                           stimulus=trial_spec['target'],
-                           traj_points=points,
-                           time_in_session=trial_spec['time_in_session'],
-                           rc=trial_spec['rc'],
-                           response=trial_spec['response'],
-                           self_correction=trial_spec['self_correction'],
-                           sound_file_length=trial_spec['sound_file_length'],
-                           traj_file_name=trial_spec['traj_file_name'],
-                           time_in_day=trial_spec['time_in_day'],
-                           date=trial_spec['date'])
+        trial = CodedTrial(trial_id=trial_spec['trial_id'], sub_trial_num=trial_spec['sub_trial_num'], target_id=trial_spec['target_id'],
+                           stimulus=trial_spec['target'], traj_points=points, time_in_session=trial_spec['time_in_session'], rc=trial_spec['rc'],
+                           response=trial_spec['response'], sound_file_length=trial_spec['sound_file_length'],
+                           traj_file_name=trial_spec['traj_file_name'], time_in_day=trial_spec['time_in_day'], date=trial_spec['date'])
 
         trial_key = trial.trial_id, trial.sub_trial_num
 
@@ -101,8 +92,8 @@ class CodedTrial(object):
     The trial contains a series of characters
     """
 
-    def __init__(self, trial_id, sub_trial_num, target_id, stimulus, traj_points, time_in_session, rc, response, self_correction,
-                 sound_file_length, traj_file_name, time_in_day, date):
+    def __init__(self, trial_id, sub_trial_num, target_id, stimulus, traj_points, time_in_session, rc, response, sound_file_length, traj_file_name,
+                 time_in_day, date):
 
         self.trial_id = trial_id
         self.sub_trial_num = sub_trial_num
@@ -113,7 +104,6 @@ class CodedTrial(object):
         self.rc = rc
         self.source = None
         self.response = response
-        self.self_correction = self_correction
         self.sound_file_length = sound_file_length
         self.traj_file_name = traj_file_name
         self.time_in_day = time_in_day
@@ -204,13 +194,14 @@ def save_trial(trial, characters, sub_trial_num, out_dir):
 
     traj_file_name = create_traj_file_name(out_dir, sub_trial_num, trial, trial.trial_id)
 
-    append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus,
-                          trial.response, trial.time_in_session, trial.rc, trial.self_correction,
-                          trial.sound_file_length, os.path.basename(traj_file_name), trial.time_in_day, trial.date)
+    has_self_corrections = 1 if sum([c.correction for c in characters]) > 0 else 0
+
+    append_to_trial_index(out_dir, trial.trial_id, sub_trial_num, trial.target_id, trial.stimulus, trial.response, trial.time_in_session, trial.rc,
+                          trial.sound_file_length, os.path.basename(traj_file_name), trial.time_in_day, trial.date, has_self_corrections)
 
     strokes = []
     for c in characters:
-        trial.self_correction = c.correction
+
         for stroke in c.strokes:
             stroke.char_num = c.char_num
 
@@ -430,8 +421,8 @@ def reset_trial_info_file(dir_name):
 
 
 #-------------------------------------------------------------------------------------------------
-def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc,
-                          self_correction, sound_file_length, traj_file_name, time_in_day, date):
+def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc, sound_file_length, traj_file_name,
+                          time_in_day, date, has_self_corrections):
     """
     Append a line to the trials.csv file
     """
@@ -448,8 +439,8 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  response=response,
                  time_in_session=trial_start_time,
                  rc='' if rc is None else rc,
-                 self_correction=self_correction,
                  sound_file_length=sound_file_length,
+                 has_self_corrections=has_self_corrections,
                  traj_file_name=traj_file_name,
                  time_in_day=time_in_day,
                  date=date
@@ -533,6 +524,8 @@ def load_coded_trials_nums(dir_name):
     with open(index_fn, 'r', encoding="utf-8", errors='ignore') as fp:
         reader = csv.DictReader(fp)
 
+        u.validate_csv_format(index_fn, reader, trials_index_fields)
+
         result = []
         for row in reader:
             location = 'line {:} in {:}'.format(reader.line_num, index_fn)
@@ -611,3 +604,13 @@ def save_characters_file(out_dir):
 
     transform.aggregate_characters(exp.trials, agg_func_specs=_agg_func_specs, trial_filter=lambda trial: trial.rc == 'OK',
                                    out_filename=out_dir+'/characters.csv', save_as_attr=False)
+
+
+#-------------------------------------------------------------------------------------
+def delete_all_files_from(directory):
+    """
+    Remove all files in the directory.
+    DANGEROUS FUNCTION!!!
+    """
+    for file in os.listdir(directory):
+        os.remove(directory + os.sep + file)

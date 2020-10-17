@@ -272,6 +272,8 @@ def code_experiment(trials, out_dir):
 
     if _all_trials_are_coded(out_dir, trials):
         messagebox.showinfo('Finished encoding', 'Congratulations! You have finished encoding this session. The results are in\n{}'.format(out_dir))
+    else:
+        messagebox.showinfo('Finished encoding', 'You have finished encoding this session, but not all trials were encoded. The results are in\n{}'.format(out_dir))
 
 
 #-------------------------------------------------------------------------------------

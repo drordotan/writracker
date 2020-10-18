@@ -40,8 +40,6 @@ def load_experiment(dir_name, trial_index_filter=None):
                            response=trial_spec['response'], sound_file_length=trial_spec['sound_file_length'],
                            traj_file_name=trial_spec['traj_file_name'], time_in_day=trial_spec['time_in_day'], date=trial_spec['date'])
 
-        trial_key = trial.trial_id, trial.sub_trial_num
-
         characters, strokes = _parse_trajectory(trial.trial_id, traj_filename)
 
         #dataio.validate_trial(trial, characters, strokes)
@@ -163,7 +161,7 @@ class Stroke(object):
         self.on_paper = on_paper
         self.char_num = char_num
         self.trajectory = trajectory
-        self.correction = 0
+        self.correction = False
 
 
     @property
@@ -211,7 +209,7 @@ def save_trial(raw_trial, response, trial_rc, characters, sub_trial_num, out_dir
 
     traj_file_name = create_traj_file_name(out_dir, sub_trial_num, raw_trial, raw_trial.trial_id)
 
-    has_self_corrections = 1 if sum([c.correction for c in characters]) > 0 else 0
+    has_self_corrections = 1 if sum([c.has_corrections for c in characters]) > 0 else 0
 
     append_to_trial_index(out_dir, raw_trial.trial_id, sub_trial_num, raw_trial.target_id,
                           raw_trial.stimulus, response, raw_trial.time_in_session, trial_rc,
@@ -250,15 +248,15 @@ def save_trajectory(strokes, filename):
 
     with open(filename, 'w') as fp:
 
-        writer = csv.DictWriter(fp, ['char_num', 'stroke', 'pen_down', 'x', 'y', 'pressure', 'time', 'correction'], lineterminator='\n')
+        writer = csv.DictWriter(fp, ['char_num', 'stroke', 'pen_down', 'x', 'y', 'pressure', 'time'], lineterminator='\n')
         writer.writeheader()
 
         stroke_num = 0
         for stroke in strokes:
             stroke_num += 1
             for dot in stroke.trajectory:
-                row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down='1' if stroke.on_paper else '0',
-                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t), correction=stroke.correction)
+                row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down=1 if stroke.on_paper else 0,
+                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t))
                 writer.writerow(row)
 
     return filename
@@ -279,7 +277,7 @@ def append_to_strokes_file(strokes, trial, sub_trial_num, out_dir):
     file_exists = os.path.isfile(index_fn)
 
     with open(index_fn, 'a' if file_exists else 'w') as fp:
-        writer = csv.DictWriter(fp, ['trial_id', 'sub_trial_num', 'char_num', 'stroke', 'correction'], lineterminator='\n')
+        writer = csv.DictWriter(fp, ['trial_id', 'sub_trial_num', 'char_num', 'stroke', 'on_paper', 'correction'], lineterminator='\n')
 
         if not file_exists:
             writer.writeheader()
@@ -287,8 +285,8 @@ def append_to_strokes_file(strokes, trial, sub_trial_num, out_dir):
         stroke_num = 0
         for stroke in strokes:
             stroke_num += 1
-            row = dict(trial_id=trial.trial_id, sub_trial_num=sub_trial_num, char_num=stroke.char_num+1,
-                       stroke=stroke_num, correction=stroke.correction)
+            row = dict(trial_id=trial.trial_id, sub_trial_num=sub_trial_num, char_num=stroke.char_num,
+                       stroke=stroke_num, on_paper=1 if stroke.on_paper else 0, correction=1 if stroke.correction else 0)
             writer.writerow(row)
 
 
@@ -454,7 +452,7 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  sub_trial_num=sub_trial_num,
                  target_id=target_id,
                  target=target,
-                 response='' if response is None else '',
+                 response='' if response is None else response,
                  time_in_session=trial_start_time,
                  rc='' if rc is None else rc,
                  sound_file_length=sound_file_length,
@@ -559,7 +557,16 @@ def load_coded_trials_nums(dir_name):
 
 #-------------------------------------------------------
 # noinspection PyUnusedLocal
-def get_pre_char_delay(trial, character):
+def _get_response(trial, character):
+    """
+    The delay between this character and the previous one
+    """
+    return trial.response
+
+
+#-------------------------------------------------------
+# noinspection PyUnusedLocal
+def _get_pre_char_delay(trial, character):
     """
     The delay between this character and the previous one
     """
@@ -568,7 +575,7 @@ def get_pre_char_delay(trial, character):
 
 #-------------------------------------------------------
 # noinspection PyUnusedLocal
-def get_post_char_delay(trial, character):
+def _get_post_char_delay(trial, character):
     """
     The delay between this character and the next one
     """
@@ -577,7 +584,7 @@ def get_post_char_delay(trial, character):
 
 #-------------------------------------------------------
 # noinspection PyUnusedLocal
-def get_pre_char_distance(trial, character, prev_agg):
+def _get_pre_char_distance(trial, character, prev_agg):
     """
     The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box)
     """
@@ -592,7 +599,7 @@ def get_pre_char_distance(trial, character, prev_agg):
 
 #-------------------------------------------------------
 # noinspection PyUnusedLocal
-def get_post_char_distance(trial, character, prev_agg):
+def _get_post_char_distance(trial, character, prev_agg):
     """
     The horizontal distance between this character and the next one (rely on the previously-calculated bounding box)
     """
@@ -608,10 +615,11 @@ def get_post_char_distance(trial, character, prev_agg):
 #-- The list of the aggregations to perform (each becomes one or more columns in the resulting CSV file)
 _agg_func_specs = (
     transform.AggFunc(transform.GetBoundingBox(1.0, 1.0), ('x', 'width', 'y', 'height')),
-    transform.AggFunc(get_pre_char_delay, 'pre_char_delay'),
-    transform.AggFunc(get_post_char_delay, 'post_char_delay'),
-    transform.AggFunc(get_pre_char_distance, 'pre_char_distance', get_prev_aggregations=True),
-    transform.AggFunc(get_post_char_distance, 'post_char_distance', get_prev_aggregations=True),
+    transform.AggFunc(_get_response, 'response'),
+    transform.AggFunc(_get_pre_char_delay, 'pre_char_delay'),
+    transform.AggFunc(_get_post_char_delay, 'post_char_delay'),
+    transform.AggFunc(_get_pre_char_distance, 'pre_char_distance', get_prev_aggregations=True),
+    transform.AggFunc(_get_post_char_distance, 'post_char_distance', get_prev_aggregations=True),
 )
 
 

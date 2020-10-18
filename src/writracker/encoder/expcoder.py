@@ -181,7 +181,8 @@ def _ask_when_target_directory_contains_data(coded_dir, question):
     """
 
     while True:
-        resp = show_question(question, ["Quit WEncoder", "Delete any encoded trial and start over",
+        resp = show_question('Target directory is not empty',
+                             question, ["Quit WEncoder", "Delete any encoded trial and start over",
                                         "Go on (encoded trials will override previous encoding)"],
                              answers_in_one_line=False)
         if resp == 0:  # Quit WEncoder
@@ -215,7 +216,8 @@ def _ask_when_session_partially_encoded(coded_dir, last_coded_trial, some_trials
     msg += '.'
 
     while True:
-        resp = show_question(['Some of the trials in this session were already encoded.', msg, 'What do you want to do?'],
+        resp = show_question('Target directory is not empty',
+                             ['Some of the trials in this session were already encoded.', msg, 'What do you want to do?'],
                              ["Quit WEncoder", "Delete any encoded trial and start over", "Start encoding from trial {}".format(last_coded_trial+1)],
                              answers_in_one_line=False)
         if resp == 0:   # Quit WEncoder
@@ -250,7 +252,7 @@ def code_experiment(trials, out_dir):
         rc = writracker.encoder.trialcoder.encode_one_trial(trial, out_dir)
 
         if rc == 'quit':
-            break
+            return
 
         elif rc == 'next':
             i += 1
@@ -347,7 +349,7 @@ def _open_choose_trial(curr_trial, all_trials):
 
 
 #-----------------------------------------------------------------------------------------
-def show_question(question_text, answer_options, answers_in_one_line=True):
+def show_question(title, question_text, answer_options, answers_in_one_line=True):
 
     if isinstance(question_text, str):
         question_text = [question_text]
@@ -360,10 +362,12 @@ def show_question(question_text, answer_options, answers_in_one_line=True):
         for a in answer_options:
             layout.append([sg.Button(a)])
 
-    window = sg.Window('Settings', layout)
+    window = sg.Window(title, layout)
 
     event = None
     while event is None:
         event, values = window.Read()
+
+    window.Close()
 
     return answer_options.index(event)

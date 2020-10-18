@@ -7,8 +7,9 @@ import re
 import PySimpleGUI as sg
 import tkinter as tk
 import pyautogui
+from tkinter import messagebox
 
-from writracker.encoder import dataio
+from writracker.encoder import dataio, manip
 
 app_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'),
                   response_mandatory=True)
@@ -38,8 +39,8 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
     """
 
     #-- trial_queue usually contains just one element, unless we split a trial into 2 trials
-    trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
-    sub_trial_num = 0
+    trial_queue = _init_trial_queue(trial)
+    sub_trial_num = 1
 
     selection_handler = None
     show_command = None
@@ -48,7 +49,6 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
 
         # noinspection PyUnresolvedReferences
         characters = trial_queue.pop(0)
-        sub_trial_num += 1
 
         #-- This small loop runs the trial-encoding screen
         rc = 'continue'
@@ -63,16 +63,16 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
 
         elif rc == 'settings':
             show_settings_screen()
-            trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
-            sub_trial_num = 0
+            trial_queue = _init_trial_queue(trial)
+            sub_trial_num = 1
 
         elif rc == 'choose_trial':
             return 'choose_trial'
 
         elif rc == 'reset_trial':
-            trial_queue = [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
+            trial_queue = _init_trial_queue(trial)
+            sub_trial_num = 1
             dataio.remove_from_trial_index(out_dir, trial.trial_id)
-            sub_trial_num = 0
             trial.processed = False
             show_command = None
 
@@ -80,9 +80,9 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             # noinspection PyUnboundLocalVariable
             trial_queue.insert(0, extra_info)
             trial_queue.insert(0, characters)
-            sub_trial_num -= 1
 
         elif rc == 'next_trial':
+            sub_trial_num += 1
             pass
 
         elif rc == 'prev_trial':
@@ -94,12 +94,10 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             if dot is not None:
                 characters = _apply_split_stroke(characters, stroke, dot)
             trial_queue.insert(0, characters)
-            sub_trial_num -= 1
 
-        elif rc == 'self_correction':
+        elif rc == 'self_correction':  # todo dror: fix this
             show_command = True
             trial_queue.insert(0, characters)
-            sub_trial_num -= 1
             selection_handler = extra_info
 
         elif rc == 'show_correction':
@@ -110,22 +108,18 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             trial_queue.insert(0, characters)
             selection_handler = extra_info
 
-        elif rc == 'delete_stroke':
+        elif rc == 'rerun':
             trial_queue.insert(0, characters)
             selection_handler = None
-
-        elif rc == 'response':
-            trial_queue.insert(0, characters)
-            selection_handler = None
-
-        elif rc == 'error_codes':
-            trial_queue.insert(0, characters)
-
 
         else:
             raise Exception('Bug: unknown rc ({})'.format(rc))
 
     return 'next'
+
+
+def _init_trial_queue(trial):
+    return [_create_default_characters(trial.traj_points, app_config['max_within_char_overlap'])]
 
 
 #-------------------------------------------------------------------------------------
@@ -255,6 +249,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     response = None
 
     while True:
+
+        cleanup_selection_handler = False
 
         event, values = window.Read()
         #print("event is: " + str(event))
@@ -398,8 +394,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
         elif event == 'enter_response':
             response = get_valid_user_response(response, on_paper_chars, get_if_already_exists=True)
-            # window.Close()  # todo dror: needed?
-            # return 'response', characters, None
 
         #-- Mouse click
         elif event == 'graph':
@@ -443,31 +437,36 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 return 'self_correction', chars1, last_selection_handler
 
             elif current_command == 'delete_stroke':
-                updated_characters = _delete_stroke(characters, selection_handler)
-                answer = sg.Popup('Delete stroke', 'Are you sure you want to delete this stroke?', button_type=1)
-                if answer == "Yes":
-                    window.Close()
-                    return 'delete_stroke', updated_characters, selection_handler.selected
-                # else:
-                #     return 'continue', None, None
+                window.Close()
+                try:
+                    characters, err_msg = manip.delete_stroke(characters, selection_handler)
+                    if err_msg is not None:
+                        messagebox.showerror('Invalid deletion attempt', err_msg)
+                    return 'rerun', characters, None
+                except Exception as e:
+                    messagebox.showerror('Error in WEncoder', 'Error when trying to delete a character: {}'.format(e))
+                    return 'rerun', characters, None
 
             else:
-                raise Exception('Bug')
+                messagebox.showerror('Error in WEncoder', 'General error (ENC-GEN-01)\nQuitting')
+                return 'quit', None, None
 
         #-- ESC clicked: cancel the currently-running command
         #elif len(event) == 1 and ord(event) == 27:                         #Original line!!!
 
         if current_command is not None and (event == 27 or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)):
+            cleanup_selection_handler = True
+
+        if cleanup_selection_handler:
             instructions.Update('')
             current_command = None
             #if selection_handler is not None:
             selection_handler.cleanup()
             selection_handler = None
 
-
         #-- Just for debug
         '''
-                else:
+        else:
             if len(event) == 1:
                 print("Clicked #{}".format(ord(event)))
             instructions.Update('UNKNOWN COMMAND')
@@ -484,11 +483,11 @@ def response_ok(response, on_paper_chars):
 
 
 #-------------------------------------------------------------------------------------
-def get_valid_user_response(response , on_paper_chars, get_if_already_exists=True):
+def get_valid_user_response(response, on_paper_chars, get_if_already_exists=True):
     """
     Get a response from the user, update the trial.
 
-    :param trial:
+    :param response:
     :param on_paper_chars:
     :param get_if_already_exists: Whether to get a response if the trial already contains a valid response
     :return: True if a valid response was entered. False if CANCEL was clicked.
@@ -499,10 +498,10 @@ def get_valid_user_response(response , on_paper_chars, get_if_already_exists=Tru
         response = ''
 
     force_get = get_if_already_exists
-    while force_get or not response_ok(response , on_paper_chars):
+    while force_get or not response_ok(response, on_paper_chars):
         response = sg.popup_get_text('Please enter a response with exactly {} characters.'.format(len(on_paper_chars)),
-                                title='Enter response', default_text=response)
-        if response is None: # CANCEL clicked
+                                     title='Enter response', default_text=response)
+        if response is None:  # CANCEL clicked
             return orig_response
         elif response == '':
             return ''
@@ -577,7 +576,7 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
 
         for i in range(len(strokes)):
             stroke = strokes[i]
-            if stroke.correction != 1:
+            if not stroke.correction:
                 stroke.color = color[i] if i < len(color) else color[-1]
 
             for dot in stroke.trajectory:
@@ -587,7 +586,7 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
                 #x = screen_size[1] - x
                 dot.screen_x = x
                 dot.screen_y = y
-                if stroke.correction == 1:
+                if stroke.correction:
                     if dot_num % 2 == 0:
                         dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill="red")
                     else:
@@ -696,7 +695,7 @@ def _plot_dots_for_split(dot_list, graph, screen_size, expand_ratio, offset, mar
         color = "#" + ("%02x" % color) * 3
 
         for dot in curr_level_dots:
-            uidot = _DotForSplit(dot, color)
+            uidot = UiTrajPointForSplit(dot, color)
 
             x = (dot.x - offset[0]) * expand_ratio + margin
             y = (dot.y - offset[1]) * expand_ratio + margin
@@ -712,7 +711,7 @@ def _plot_dots_for_split(dot_list, graph, screen_size, expand_ratio, offset, mar
 
 
 #-------------------------------------------------------------------------------------
-class _DotForSplit(object):
+class UiTrajPointForSplit(object):
 
     def __init__(self, markup, color):
         self.markup = markup
@@ -733,10 +732,11 @@ class _DotForSplit(object):
 
 
 #-------------------------------------------------------------------------------------
-class _Dot(object):
+class UiTrajPoint(object):
 
     def __init__(self, dot):
         self.dot = dot
+        self.ui = None
 
     @property
     def x(self):
@@ -756,13 +756,12 @@ class _Dot(object):
 
 
 #-------------------------------------------------------------------------------------
-class _Stroke(dataio.Stroke):
+class UiStroke(dataio.Stroke):
 
     def __init__(self, dots, stroke_num, on_paper):
         super().__init__(on_paper, None, dots)
         self.stroke_num = stroke_num
         self.is_seen = True
-        # self.correction = correction
 
     @property
     def xlim(self):
@@ -771,12 +770,15 @@ class _Stroke(dataio.Stroke):
 
 
 #-------------------------------------------------------------------------------------
-class _Character(object):
+class UiCharacter(object):
+    """
+    Represents a character in the application.
+    Inter-character space strokes are appended to the preceding character.
+    """
 
-    def __init__(self, char_num, strokes, correction):
+    def __init__(self, char_num, strokes):
         self.char_num = char_num
         self.strokes = strokes
-        self.correction = correction
 
     @property
     def on_paper_strokes(self):
@@ -789,6 +791,13 @@ class _Character(object):
     @property
     def trajectory(self):
         return [d for stroke in self.strokes for d in stroke]
+
+    @property
+    def has_corrections(self):
+        if len(self.strokes) > 0:
+            return sum([s.correction for s in self.strokes]) > 0
+        else:
+            return False
 
 
 #-------------------------------------------------------------------------------------
@@ -879,9 +888,8 @@ class _MultiStrokeSelector(object):
         for c in self.strokes:
             _set_stroke_color(c, None, self.graph)
 
+
 #-------------------------------------------------------------------------------------
-
-
 class _CharSelector(object):
     """
     Handles click to select one character
@@ -965,12 +973,13 @@ def _create_default_characters(dots, max_within_char_overlap):
             #-- First stroke in a the number: always in the first character
             create_new_char = True
         elif not stroke.on_paper or not curr_char_has_on_paper_strokes:
+            #-- A not-on-paper stroke goes into the existing character
             create_new_char = False
         else:
             create_new_char = len(stroke.trajectory) == 0 or _x_overlap_ratio(curr_char.on_paper_dots, stroke.trajectory) < max_within_char_overlap
 
         if create_new_char:
-            curr_char = _Character(len(characters) + 1, [stroke], correction)
+            curr_char = UiCharacter(len(characters)+1, [stroke])
             curr_char_has_on_paper_strokes = stroke.on_paper
             characters.append(curr_char)
         else:
@@ -996,13 +1005,13 @@ def _split_dots_into_strokes(dots):
         if prev_on_paper != on_paper:
             #-- Pen lifted from paper or put on it
             curr_stroke_num += 1
-            strokes.append(_Stroke(curr_stroke_dots, curr_stroke_num, prev_on_paper))
+            strokes.append(UiStroke(curr_stroke_dots, curr_stroke_num, prev_on_paper))
             curr_stroke_dots = []
 
-        curr_stroke_dots.append(_Dot(dot))
+        curr_stroke_dots.append(UiTrajPoint(dot))
         prev_on_paper = on_paper
 
-    strokes.append(_Stroke(curr_stroke_dots, curr_stroke_num + 1, prev_on_paper))
+    strokes.append(UiStroke(curr_stroke_dots, curr_stroke_num+1, prev_on_paper))
 
     return strokes
 
@@ -1137,8 +1146,8 @@ def _apply_split_character(characters, selection_handler):
     char2_strokes = [s for s in char.strokes if s.stroke_num > last_char1_stroke_num]
 
     correction = stroke.correction
-    char1 = _Character(char.char_num, char1_strokes, correction)
-    char2 = _Character(char.char_num + 1, char2_strokes, correction)
+    char1 = UiCharacter(char.char_num, char1_strokes)
+    char2 = UiCharacter(char.char_num+1, char2_strokes)
 
     #-- Remove the chara that was split
     characters.pop(char_ind)
@@ -1185,9 +1194,7 @@ def _apply_merge_characters_updated(characters, selection_handler):
         selected_char_index = on_pen_chars.index(selection_handler.selected[i])
         selected_char = selection_handler.selected[i]
 
-        correction = max(char1.correction, selected_char.correction)
-
-        merged_char = _Character(char1_ind, char1.strokes + selected_char.strokes, correction)
+        merged_char = UiCharacter(char1_ind, char1.strokes+selected_char.strokes)
 
         char1_ind = characters.index(char1)
         characters[char1_ind] = merged_char
@@ -1212,9 +1219,7 @@ def _apply_merge_characters_old(characters, selection_handler):
 
     char2 = on_pen_chars[char1_ind + 1]
 
-    correction = max(char1.correction, char2.correction)
-
-    merged_char = _Character(char1_ind, char1.strokes + char2.strokes, correction)
+    merged_char = UiCharacter(char1_ind, char1.strokes+char2.strokes)
 
     char1_ind = characters.index(char1)
     characters[char1_ind] = merged_char
@@ -1258,22 +1263,21 @@ def _apply_split_stroke(characters, stroke, dot):
 
     correction = stroke.correction
 
-
     dots1 = stroke.trajectory[:dot_ind+1]
     dots2 = stroke.trajectory[dot_ind+1:]
 
-    stroke1 = _Stroke(dots1, 0, True)
-    stroke2 = _Stroke(dots2, 0, True)
+    stroke1 = UiStroke(dots1, 0, True)
+    stroke2 = UiStroke(dots2, 0, True)
 
     stroke_ind = char.strokes.index(stroke)
 
     char1_strokes = char.strokes[:stroke_ind]
     char1_strokes.append(stroke1)
-    char1 = _Character(0, char1_strokes, correction)
+    char1 = UiCharacter(0, char1_strokes)
 
     char2_strokes = char.strokes[stroke_ind+1:]
     char2_strokes.insert(0, stroke2)
-    char2 = _Character(0, char2_strokes, correction)
+    char2 = UiCharacter(0, char2_strokes)
 
     characters = list(characters)
     characters[char_ind] = char1
@@ -1285,7 +1289,6 @@ def _apply_split_stroke(characters, stroke, dot):
 
 
 #-------------------------------------------------------------------------------------
-
 def _self_correction(characters, selection_handler, window, current_command):
     test_char = characters
     if current_command == 'show_correction':
@@ -1306,23 +1309,8 @@ def _self_correction(characters, selection_handler, window, current_command):
             for s in c.strokes:
                 if s == selection_handler.selected:
                     s.on_paper = True
-                    s.correction = 1
-                    c.correction = 1
+                    s.correction = True
 
     return test_char
 
 
-def _delete_stroke(characters, selection_handler):
-    test_char = characters
-    for c in test_char:
-        for s in c.strokes:
-            if s == selection_handler.selected:
-                c.strokes.remove(s)
-
-                '''if len(c.on_paper_strokes) > 1:                  #Check if the character has more than 1 stroke. Else error.
-                    c.strokes.remove(s)
-                else:
-                    sg.Popup('Char has only 1 stroke', 'Choose a Character with more than 1 stroke')
-                    break'''
-
-    return test_char

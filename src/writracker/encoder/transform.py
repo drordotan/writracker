@@ -8,6 +8,8 @@ from copy import copy
 
 import math
 
+import writracker.utils as u
+
 CharInfo = namedtuple('CharInfo', ['character', 'csv_row'])
 
 
@@ -29,7 +31,7 @@ class AggFunc(object):
 
         if isinstance(out_fields, str):
             out_fields = [out_fields]
-        elif is_collection(out_fields):
+        elif u.is_collection(out_fields):
             out_fields = tuple(out_fields)
         else:
             raise ValueError('Invalid "out_fields" argument - expecting either a field name or a list of field names')
@@ -114,7 +116,8 @@ def _apply_aggregation_functions_to_trial(agg_func_specs, trial, char_filter, sa
                                 target_id=trial.target_id,
                                 target=trial.stimulus,
                                 char_num=character.char_num,
-                                char='' if (trial.response is None or trial.response == '') else trial.response[character.char_num-1])) for character in characters]
+                                char='' if (trial.response is None or trial.response == '') else trial.response[character.char_num-1]))
+                  for character in characters]
 
     #-- Apply aggregation functions
     for agg_func_spec in agg_func_specs:
@@ -197,7 +200,7 @@ def get_bounding_box(character, fraction_of_x_points=None, fraction_of_y_points=
     The function returns a tuple: (x, width, y, height)
     x and y indicate the rectangle's midpoint
 
-    :param trajectory: List of trajectory points
+    :param character:
     :param fraction_of_x_points: Percentage of x coordinates that must be in the trajectory. Value between 0 and 1.
     :param fraction_of_y_points: Percentage of y coordinates that must be in the trajectory. Value between 0 and 1.
     """
@@ -236,7 +239,7 @@ def _get_bounding_box_traj(trajectory, fraction_of_x_points=None, fraction_of_y_
     w = xmax - xmin
     h = ymax - ymin
 
-    return  xmin + w / 2, w, ymin + h / 2, h, xmin, ymin
+    return xmin + w / 2, w, ymin + h / 2, h, xmin, ymin
 
 
 #----------------------------------------------------------------
@@ -275,30 +278,3 @@ def find_interval_containing(values, p_contained, in_place=False):
         ind = min_inds[i - 1]
 
     return values[ind], values[ind + n_required_values - 1]
-
-
-#--------------------------------------
-def is_collection(value, allow_set=True, element_type=None, element_validator=None):
-    """
-    Check whether a given value is a collection object
-    :param value:
-    :param allow_set: Whether a set is considered as a collection or not
-    :param element_type: All elements must be of this type
-    :param element_validator: A function that returns True for valid elements
-    """
-    val_methods = dir(value)
-    if not ("__len__" in val_methods and "__iter__" in val_methods and
-            (allow_set or "__getitem__" in val_methods) and not isinstance(value, str)):
-        return False
-
-    if element_type is not None:
-        for elem in value:
-            if not isinstance(elem, element_type):
-                return False
-
-    if element_validator is not None:
-        for elem in value:
-            if not element_validator(elem):
-                return False
-
-    return True

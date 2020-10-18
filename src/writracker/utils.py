@@ -130,3 +130,30 @@ def validate_csv_format(filename, reader, expected_fields):
     if len(missing_fields) > 0:
         raise ValueError("Invalid format for CSV file {:}: the file does not contain the field/s {:} Einav"
                          .format(filename, ", ".join(missing_fields)))
+
+
+#--------------------------------------
+def is_collection(value, allow_set=True, element_type=None, element_validator=None):
+    """
+    Check whether a given value is a collection object
+    :param value:
+    :param allow_set: Whether a set is considered as a collection or not
+    :param element_type: All elements must be of this type
+    :param element_validator: A function that returns True for valid elements
+    """
+    val_methods = dir(value)
+    if not ("__len__" in val_methods and "__iter__" in val_methods and
+            (allow_set or "__getitem__" in val_methods) and not isinstance(value, str)):
+        return False
+
+    if element_type is not None:
+        for elem in value:
+            if not isinstance(elem, element_type):
+                return False
+
+    if element_validator is not None:
+        for elem in value:
+            if not element_validator(elem):
+                return False
+
+    return True

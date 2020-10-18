@@ -28,10 +28,12 @@ def _change_stroke_to_space(char, deleted_stroke_ind):
     If the preceding/following strokes are space, merge them
     """
 
-    if not char.strokes[deleted_stroke_ind].on_paper:
+    deleted_stroke = char.strokes[deleted_stroke_ind]
+    if not deleted_stroke.on_paper:
         raise Exception("Stroke #{}.{} cannot be deleted - it's already a deleted stroke".format(char.char_num, deleted_stroke_ind+1))
 
-    char.strokes[deleted_stroke_ind].on_paper = False
+    deleted_stroke.on_paper = False
+    deleted_stroke.correction = False
 
     #-- Merge with previous stroke if it's space
     stroke1_deleted = _merge_consecutive_space_strokes(char, deleted_stroke_ind - 1)

@@ -345,7 +345,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
             if current_command is None:
                 instructions.Update('Select a character to split to 2 different characters. ENTER=confirm, ESC=abort')
                 current_command = 'split_char'
-                selection_handler = _MultiStrokeSelector(graph, characters)
+                selection_handler = _MultiStrokeSelector(graph, characters, 'before')
 
         #-- Split the trial into 2 trials
         elif event in ('t', 'T', 'split_trial', 84):
@@ -360,7 +360,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
             if current_command is None:
                 instructions.Update('Select/unselect a self-correction stroke. ENTER=confirm, ESC=abort')
                 current_command = 'set_self_correction'
-                selection_handler = _SelfCorrectionSelector(graph, strokes)
+                selection_handler = _SelfCorrectionSelector(graph, characters)
 
         # -- Show Self correction
         elif event == 'show_self_corrections':
@@ -414,7 +414,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 return 'split_trial', chars1, chars2
 
             elif current_command == 'set_self_correction':
-                if selection_handler.selected is None:
+                if selection_handler.selected_stroke is None:
                     return 'continue', characters, None
                 _update_self_correction(selection_handler)
                 window.Close()
@@ -547,7 +547,6 @@ def _create_window_for_markup(screen_size, title, user_response):
 
     window = sg.Window(title, layout, return_keyboard_events=True,  resizable=True)
     window.Finalize()
-    #window.Maximize()
     return window
 
 
@@ -790,7 +789,7 @@ class UiCharacter(object):
 #-------------------------------------------------------------------------------------
 class _SingleStrokeSelector(object):
     """
-    Handles click to select one stroke
+    Handles clicks to select one stroke
     """
 
     def __init__(self, graph, strokes):
@@ -827,7 +826,7 @@ class _SingleStrokeSelector(object):
 
 
 #-------------------------------------------------------------------------------------
-class _SelfCorrectionSelector(_SingleStrokeSelector):
+class _SelfCorrectionSelector1(_SingleStrokeSelector):
 
     def _set_clicked_stroke_color(self, clicked_stroke):
 
@@ -847,15 +846,18 @@ class _SelfCorrectionSelector(_SingleStrokeSelector):
 #-------------------------------------------------------------------------------------
 class _MultiStrokeSelector(object):
     """
-    Handles click to split a character into two sets of strokes
+    Handles clicks to select several strokes: the user selects one of them, and the selection applies to all strokes before/after
+    the selected one.
     """
 
-    def __init__(self, graph, characters):
+    def __init__(self, graph, characters, select):
+        assert select in ('before', 'after')
         self.graph = graph
         self.characters = [c for c in characters if len(c.on_paper_dots) > 0]
         self.strokes = [s for c in characters for s in c.on_paper_strokes]
         self.selected_stroke = None
         self.selected_char = None
+        self._get_strokes_to_highlight = self._get_strokes_before if select == 'before' else self._get_strokes_after
 
 
     def clicked(self, values):
@@ -873,18 +875,31 @@ class _MultiStrokeSelector(object):
             self.selected_stroke = None
             return
 
-        self.selected_stroke = _find_clicked_stroke(self.selected_char.on_paper_strokes, click_coord)
-        self.highlight_selected()
+        clicked_stroke = _find_clicked_stroke(self.selected_char.on_paper_strokes, click_coord)
+        self._set_clicked_stroke_color(clicked_stroke)
 
 
-    def highlight_selected(self):
+    def _set_clicked_stroke_color(self, clicked_stroke):
+        self.selected_stroke = clicked_stroke
+        self.highlight_selected(GREEN)
+
+
+    def highlight_selected(self, color):
         if self.selected_stroke != self.selected_char.strokes[-1]:
-            strokes_to_highlight = [s for s in self.selected_char.on_paper_strokes if s.stroke_num <= self.selected_stroke.stroke_num]
+            strokes_to_highlight = self._get_strokes_to_highlight()
         else:
             strokes_to_highlight = [self.selected_stroke]
 
         for s in strokes_to_highlight:
-            _set_stroke_color(s, "#00FF00", self.graph)
+            _set_stroke_color(s, color, self.graph)
+
+
+    def _get_strokes_before(self):
+        return [s for s in self.selected_char.on_paper_strokes if s.stroke_num <= self.selected_stroke.stroke_num]
+
+
+    def _get_strokes_after(self):
+        return [s for s in self.selected_char.on_paper_strokes if s.stroke_num >= self.selected_stroke.stroke_num]
 
 
     def cleanup(self):
@@ -893,6 +908,33 @@ class _MultiStrokeSelector(object):
 
         for c in self.strokes:
             _set_stroke_color(c, None, self.graph)
+
+
+#-------------------------------------------------------------------------------------
+class _SelfCorrectionSelector(_MultiStrokeSelector):
+
+    def __init__(self, graph, characters):
+        super().__init__(graph, characters, 'after')
+
+
+    def _set_clicked_stroke_color(self, clicked_stroke):
+
+        if clicked_stroke == self.selected_stroke:  # second click on the same stroke
+            self.cleanup()
+            self.selected_stroke = None
+            self.selected_char = None
+
+        else:
+            self.cleanup()  # clean previous stroke color
+            self.selected_stroke = clicked_stroke
+
+            if clicked_stroke.correction:   # colors the selected stroke
+                #-- A correction stroke was selected. Unselect all correction strokes from this character
+                correction_strokes = [s for s in self.selected_char.strokes if s.correction]
+                self.selected_stroke = correction_strokes[0]
+                self.highlight_selected(GREEN)  # Resetting a correction stroke
+            else:
+                self.highlight_selected(YELLOW)  # Marking a correction stroke
 
 
 #-------------------------------------------------------------------------------------
@@ -1296,32 +1338,10 @@ def _apply_split_stroke(characters, stroke, dot):
 
 #-------------------------------------------------------------------------------------
 def _update_self_correction(selection_handler):
-    correction_stroke = selection_handler.selected
-    correction_stroke.correction = not correction_stroke.correction
 
+    first_correction_stroke = selection_handler.selected_stroke
+    correction = not first_correction_stroke.correction
 
-def _self_correction(characters, selection_handler, window, current_command):
-    test_char = characters
-    if current_command == 'show_correction':
-        if window['show_correction'].Get():  # Checkbox function
-            for c in test_char:
-                for s in c.strokes:
-                    if s == selection_handler.selected:
-                        s.on_paper = True
-        else:
-            for c in test_char:
-                for s in c.strokes:
-                    if s == selection_handler.selected:
-                        s.on_paper = False
-
-    else:  # Self correction button function
-        window.FindElement('show_correction').Update(disabled=False, value=True)
-        for c in test_char:
-            for s in c.strokes:
-                if s == selection_handler.selected:
-                    s.on_paper = True
-                    s.correction = True
-
-    return test_char
-
-
+    for stroke in selection_handler.selected_char.strokes:
+        if stroke.stroke_num >= first_correction_stroke.stroke_num:
+            stroke.correction = correction

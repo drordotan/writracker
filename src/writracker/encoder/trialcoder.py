@@ -11,13 +11,21 @@ from tkinter import messagebox
 
 from writracker.encoder import dataio, manip
 
-app_config = dict(max_within_char_overlap=0.25, error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'),
-                  response_mandatory=True)
+app_config = dict(max_within_char_overlap=0.25,
+                  error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'),
+                  response_mandatory=True,
+                  show_self_corrections=True,
+                  dot_radius=3)
 
-RED = ["#FF0000", "#FF8080", "#FFA0A0"]
-CYAN = ["#00FFFF", "#A0FFFF", "#C0FFFF"]
-ORANGE = ["DarkOrange1", "DarkOrange2", "DarkOrange3"]
+CYANS = ["#00FFFF", "#A0FFFF", "#C0FFFF"]
+PURPLES = ["#BF0FF8", "#CE54F5", "#E191FA"]
 
+ORANGES = ["DarkOrange1", "DarkOrange2", "DarkOrange3"]
+REDS = ["#FF0000", "#FF8080", "#FFA0A0"]
+
+RED = "#FF0000"
+GREEN = "#00FF00"
+YELLOW = "#FFFF00"
 
 # root = tk.Tk()
 # screen_width = root.winfo_screenwidth()
@@ -30,7 +38,7 @@ width, height = pyautogui.size()
 
 
 #-------------------------------------------------------------------------------------
-def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), margin=25):
+def encode_one_trial(trial, out_dir, screen_size=(1000, 800), margin=25):
     """
     fully encode one trial.
     If the trial is split in two: encode both halves
@@ -42,8 +50,7 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
     trial_queue = _init_trial_queue(trial)
     sub_trial_num = 1
 
-    selection_handler = None
-    show_command = None
+    user_response_as_text = None
 
     while len(trial_queue) > 0:
 
@@ -53,8 +60,10 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
         #-- This small loop runs the trial-encoding screen
         rc = 'continue'
         while rc == 'continue':
-            rc, characters, extra_info = _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius,
-                                                           screen_size, margin, selection_handler, show_command)
+            rc, characters, extra_info = \
+                _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, margin, user_response_as_text)
+
+        user_response_as_text = None
 
         #-- Check what to do next: continue to another trial, or open another popup for the same trial
 
@@ -74,7 +83,6 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
             sub_trial_num = 1
             dataio.remove_from_trial_index(out_dir, trial.trial_id)
             trial.processed = False
-            show_command = None
 
         elif rc == 'split_trial':
             # noinspection PyUnboundLocalVariable
@@ -95,27 +103,30 @@ def encode_one_trial(trial, out_dir, dot_radius=2, screen_size=(1000, 800), marg
                 characters = _apply_split_stroke(characters, stroke, dot)
             trial_queue.insert(0, characters)
 
-        elif rc == 'self_correction':  # todo dror: fix this
-            show_command = True
-            trial_queue.insert(0, characters)
-            selection_handler = extra_info
-
-        elif rc == 'show_correction':
-            if show_command:
-                show_command = False
-            else:
-                show_command = True
-            trial_queue.insert(0, characters)
-            selection_handler = extra_info
-
         elif rc == 'rerun':
             trial_queue.insert(0, characters)
-            selection_handler = None
+            user_response_as_text = extra_info
 
         else:
             raise Exception('Bug: unknown rc ({})'.format(rc))
 
     return 'next'
+
+
+"""
+elif rc == 'self_correction':  # todo dror: fix this
+    show_command = True
+    trial_queue.insert(0, characters)
+    selection_handler = extra_info
+
+elif rc == 'show_correction':
+    if show_command:
+        show_command = False
+    else:
+        show_command = True
+    trial_queue.insert(0, characters)
+    selection_handler = extra_info
+    """
 
 
 def _init_trial_queue(trial):
@@ -146,6 +157,8 @@ def show_settings_screen(show_cancel_button=True):
             [response_mandatory_cb],
             [sg.Text('Merge 2 strokes into one character if their horizontal overlap exceeds'), max_within_char_overlap, sg.Text('percent')],
             [sg.Text('Error codes (comma-separated list): '), error_codes],
+            [sg.Text('The size of dots for plotting the trajectories: '),
+             sg.DropDown(['1', '2', '3', '4', '5'], readonly=True, key='dot_radius', default_value=str(app_config['dot_radius']))],
             buttons,
         ]
 
@@ -165,6 +178,7 @@ def show_settings_screen(show_cancel_button=True):
             response_mandatory = values[0]
             max_within_char_overlap_s = values[1]
             error_codes = values[2]
+            dot_radius = values['dot_radius']
 
             try:
                 max_within_char_overlap = float(max_within_char_overlap_s)
@@ -183,6 +197,7 @@ def show_settings_screen(show_cancel_button=True):
             app_config['response_mandatory'] = response_mandatory
             app_config['max_within_char_overlap'] = max_within_char_overlap / 100
             app_config['error_codes'] = error_codes.split(',')
+            app_config['dot_radius'] = int(dot_radius)
 
             show_popup = False
 
@@ -191,7 +206,7 @@ def show_settings_screen(show_cancel_button=True):
 
 
 #-------------------------------------------------------------------------------------
-def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, screen_size, margin, last_selection_handler, show_command):
+def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, margin, response):
     """"
     returns in this order: rc, characters, extra_info
     """
@@ -213,7 +228,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         .format(trial.trial_id, trial.stimulus, len(on_paper_chars), len(on_paper_strokes))
 
 
-    window = _create_window_for_markup(screen_size, title)
+    window = _create_window_for_markup(screen_size, title, response or '')
 
     if len(on_paper_chars) < 2:
         window['merge_chars'].update(disabled=True)
@@ -224,29 +239,10 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
     graph = window.Element('graph')
     instructions = window.Element('instructions')
 
-    _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, margin, dot_radius)
+    _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, margin)
 
     selection_handler = None
     current_command = None
-
-    #window['show_correction'].enable_events = True
-    #todo dror: not sure why the following lines were here
-    #if trial.self_correction == "1":
-    #    window['show_correction'].update(disabled=False)
-
-    if show_command is True:
-        window.FindElement('show_correction').Update(disabled=False, value=True)
-    elif show_command is False:
-        window.FindElement('show_correction').Update(disabled=False, value=False)
-
-    # -- Enables self correction button only for 2 or more strokes in a trial
-    if len(on_paper_strokes) < 2:
-        window['self_correction'].update(disabled=True)
-    else:
-        window['self_correction'].update(disabled=False)
-
-    #-- Info of encoded trial
-    response = None
 
     while True:
 
@@ -259,19 +255,12 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
         if m is not None:
             event = int(m.group(1))
 
-        #-- Enables self correction checkbox
-        #todo dror: why??
-        #if trial.self_correction == "1":
-        #    window['show_correction'].update(disabled=False)
-        window['show_correction'].update(disabled=False)
-
         #-- Window was closed: reset the trial
         if event is None:
             return 'reset_trial', None, None
 
         #-- Reset the trial
         elif event in ('r', 'R', 'reset_trial', 82):
-            window.FindElement('show_correction').Update(disabled=True)
             answer = sg.Popup('Reset trial', 'Are you sure you want to reset the current trial?', button_type=1)
             if answer == "Yes":
                 window.Close()
@@ -319,7 +308,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
             if trial.response is not None or not app_config['response_mandatory']:
                 if sub_trial_num == 1:
                     dataio.remove_from_trial_index(out_dir, trial.trial_id)
-                dataio.save_trial(trial, response, values['error'], characters, sub_trial_num, out_dir)
+                dataio.save_trial(trial, response, values['error_code'], characters, sub_trial_num, out_dir)
                 trial.processed = True
                 window.Close()
                 return 'next_trial', None, None
@@ -367,24 +356,17 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
 
         #-- Self correction
-        elif event in ('f', 'F', 'self_correction', 70):
+        elif event in ('f', 'F', 'set_self_correction', 70):
             if current_command is None:
-                instructions.Update('Select the correct character. ENTER=confirm, ESC=abort')
-                #window['show_correction'].update(disabled=False)
-                current_command = 'self_correction'
-                selection_handler = _SingleStrokeSelector(graph, strokes)
-                last_selection_handler = selection_handler
+                instructions.Update('Select/unselect a self-correction stroke. ENTER=confirm, ESC=abort')
+                current_command = 'set_self_correction'
+                selection_handler = _SelfCorrectionSelector(graph, strokes)
 
         # -- Show Self correction
-        elif event == 'show_correction':
-            current_command = 'show_correction'
-            chars1 = _self_correction(characters, last_selection_handler, window, current_command)
-            if (window['show_correction']).Get():
-                window.FindElement('show_correction').Update(value=True)
-            else:
-                window.FindElement('show_correction').Update(value=True)
+        elif event == 'show_self_corrections':
+            app_config['show_self_corrections'] = values['show_self_corrections']
             window.Close()
-            return 'show_correction', chars1, last_selection_handler
+            return 'rerun', characters, None
 
         elif event in ('d', 'D', 'delete_stroke', 68):
             if current_command is None:
@@ -394,6 +376,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
 
         elif event == 'enter_response':
             response = get_valid_user_response(response, on_paper_chars, get_if_already_exists=True)
+            window.Close()
+            return 'rerun', characters, response
 
         #-- Mouse click
         elif event == 'graph':
@@ -429,12 +413,12 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, dot_radius, scr
                 window.Close()
                 return 'split_trial', chars1, chars2
 
-            elif current_command == 'self_correction':
+            elif current_command == 'set_self_correction':
                 if selection_handler.selected is None:
                     return 'continue', characters, None
-                chars1 = _self_correction(characters, selection_handler, window, current_command)
+                _update_self_correction(selection_handler)
                 window.Close()
-                return 'self_correction', chars1, last_selection_handler
+                return 'rerun', characters, None
 
             elif current_command == 'delete_stroke':
                 window.Close()
@@ -512,7 +496,7 @@ def get_valid_user_response(response, on_paper_chars, get_if_already_exists=True
 
 
 #-------------------------------------------------------------------------------------
-def _create_window_for_markup(screen_size, title):
+def _create_window_for_markup(screen_size, title, user_response):
 
     commands_m = [
         sg.Text('Manipulations: '),
@@ -522,8 +506,8 @@ def _create_window_for_markup(screen_size, title):
         sg.Button('(M)erge characters', key='merge_chars'),
         sg.Button('(R)eset current trial', key='reset_trial'),
         sg.Button('(D)elete stroke', key='delete_stroke'),
-        sg.Button('Sel(f) correction', key='self_correction'),
-        sg.Checkbox('Show correction strokes', key='show_correction', enable_events=True, disabled=True),
+        sg.Button('Sel(f) correction', key='set_self_correction'),
+        sg.Checkbox('Show correction strokes', key='show_self_corrections', enable_events=True, default=app_config['show_self_corrections']),
 
     ]
 
@@ -531,13 +515,16 @@ def _create_window_for_markup(screen_size, title):
         sg.Text('Navigation / decision: '),
         sg.Button('(A)ccept as OK', key='accept'),
         sg.Button('Err(o)r:', key='accept_error'),
-        sg.DropDown(app_config['error_codes'], key='error', enable_events=True, readonly=True),
+        sg.DropDown(app_config['error_codes'], key='error_code', enable_events=True, readonly=True, background_color='#FFFFFF'),
         sg.Button('s(K)ip current trial', key='skip_trial'),
         sg.Button('(P)revious trial', key='prev_trial'),
         sg.Button('(G)o to specific trial', key='choose_trial'),
-        sg.Button('Enter response', key='enter_response'),
-        #sg.Txt('Enter response:'),
-        #sg.Input(key = 'text_response', enable_events= True),
+    ]
+
+    commands_resp = [
+        sg.Txt('User response:'),
+        sg.Input(default_text=user_response, key='user_response', readonly=True, background_color='#CFCFCF'),
+        sg.Button('Update...', key='enter_response'),
     ]
 
     commands_general = [
@@ -550,6 +537,7 @@ def _create_window_for_markup(screen_size, title):
         [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)],
         commands_m,
         commands_nav,
+        commands_resp,
         commands_general
     ]
 
@@ -564,7 +552,9 @@ def _create_window_for_markup(screen_size, title):
 
 
 #-------------------------------------------------------------------------------------
-def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, margin, dot_radius):
+def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, margin):
+
+    dot_radius = app_config['dot_radius']
 
     dot_num = 0
     char_index = 0
@@ -572,12 +562,15 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
         char_index += 1
         strokes = char.on_paper_strokes
 
-        color = ORANGE if char.char_num % 2 == 1 else CYAN
-
         for i in range(len(strokes)):
             stroke = strokes[i]
-            if not stroke.correction:
-                stroke.color = color[i] if i < len(color) else color[-1]
+
+            if stroke.correction:
+                color = REDS if char.char_num%2 == 1 else PURPLES
+            else:
+                color = ORANGES if char.char_num%2 == 1 else CYANS
+
+            stroke.color = color[i] if i < len(color) else color[-1]
 
             for dot in stroke.trajectory:
                 x = (dot.x - offset[0]) * expand_ratio + margin
@@ -586,13 +579,7 @@ def _plot_dots_for_markup(characters, graph, screen_size, expand_ratio, offset, 
                 #x = screen_size[1] - x
                 dot.screen_x = x
                 dot.screen_y = y
-                if stroke.correction:
-                    if dot_num % 2 == 0:
-                        dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill="red")
-                    else:
-                        dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill="yellow")
-                else:
-                    dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill=stroke.color)
+                dot.ui = graph.TKCanvas.create_oval(x - dot_radius, y - dot_radius, x + dot_radius, y + dot_radius, fill=stroke.color)
                 dot_num = dot_num + 1
 
             # noinspection PyUnboundLocalVariable
@@ -819,23 +806,42 @@ class _SingleStrokeSelector(object):
             return
 
         clicked_stroke = _find_clicked_stroke(self.strokes, click_coord)  # finds the selected stroke
+        self._set_clicked_stroke_color(clicked_stroke)
 
-        if clicked_stroke == self.selected:   # second click on the same stroke
+    def _set_clicked_stroke_color(self, clicked_stroke):
+        if clicked_stroke == self.selected:  # second click on the same stroke
             self.cleanup()
             self.selected = None
         else:
             self.cleanup()  # clean previous stroke color
             self.selected = clicked_stroke
-            self.highlight_selected()  # colors the selected stroke
+            self.highlight_selected(GREEN)  # colors the selected stroke
 
-
-    def highlight_selected(self):
-        _set_stroke_color(self.selected, "#00FF00", self.graph)
+    def highlight_selected(self, color):
+        _set_stroke_color(self.selected, color, self.graph)
 
 
     def cleanup(self):
         if self.selected is not None:
             _set_stroke_color(self.selected, None, self.graph)
+
+
+#-------------------------------------------------------------------------------------
+class _SelfCorrectionSelector(_SingleStrokeSelector):
+
+    def _set_clicked_stroke_color(self, clicked_stroke):
+
+        if clicked_stroke == self.selected:  # second click on the same stroke
+            self.cleanup()
+            self.selected = None
+
+        else:
+            self.cleanup()  # clean previous stroke color
+            self.selected = clicked_stroke
+            if clicked_stroke.correction:   # colors the selected stroke
+                self.highlight_selected(GREEN)  # Resetting a correction stroke
+            else:
+                self.highlight_selected(YELLOW)  # Marking a correction stroke
 
 
 #-------------------------------------------------------------------------------------
@@ -1289,6 +1295,11 @@ def _apply_split_stroke(characters, stroke, dot):
 
 
 #-------------------------------------------------------------------------------------
+def _update_self_correction(selection_handler):
+    correction_stroke = selection_handler.selected
+    correction_stroke.correction = not correction_stroke.correction
+
+
 def _self_correction(characters, selection_handler, window, current_command):
     test_char = characters
     if current_command == 'show_correction':

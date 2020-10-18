@@ -97,7 +97,6 @@ def _trials_to_code(raw_exp, coded_dir):
 
     if not os.path.isfile(writracker.encoder.dataio.trial_index_filename(coded_dir)):
         #-- There is no index file - coding has not started yet
-        print("no index file")
         return raw_exp.trials
 
     if _is_recorder_results_dir(coded_dir):

@@ -133,13 +133,15 @@ def _load_strokes_file(dir_name):
 
 #--------------------------------------------------------------------------------------------------------------------
 def _load_trajectory(traj_filename, trial_strokes):
+    """
+    Load the trajectory points, update them on the strokes
+    """
 
     all_stroke_nums = {s.stroke_num for s in trial_strokes}
 
-    #-- Load trajectory, update strokes
     points_per_stroke = _load_traj_points(traj_filename)
     for stroke in trial_strokes:
-        if stroke.stroke_num not in points_per_stroke:
+        if stroke.stroke_num not in all_stroke_nums:
             raise ValueError('Error in trajectory file {}: stroke #{} has no points'.format(traj_filename, stroke.stroke_num))
 
         stroke.trajectory = points_per_stroke[stroke.stroke_num]
@@ -472,7 +474,7 @@ def save_trajectory(strokes, filename):
             stroke_num += 1
             for dot in stroke.trajectory:
                 row = dict(char_num=stroke.char_num, stroke=stroke_num, pen_down=1 if stroke.on_paper else 0,
-                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.0f}".format(dot.t))
+                           x=dot.x, y=dot.y, pressure=max(0, dot.z), time="{:.3f}".format(dot.t))
                 writer.writerow(row)
 
     return filename
@@ -516,7 +518,6 @@ def _load_trajectory_filenames(dir_name):
         m = re.match('trajectory_(\\d+)(_part(\\d+))?.csv', fn)
         if m is None:
             continue
-
 
         trial_id = int(m.group(1))
         sub_trial_num = 1 if m.group(3) is None else int(m.group(3))
@@ -629,7 +630,7 @@ def _get_pre_char_delay(trial, character):
     """
     The delay between this character and the previous one
     """
-    return round(character.pre_char_delay)
+    return round(character.pre_char_delay, 3)
 
 
 #-------------------------------------------------------
@@ -638,7 +639,7 @@ def _get_post_char_delay(trial, character):
     """
     The delay between this character and the next one
     """
-    return round(character.post_char_delay)
+    return round(character.post_char_delay, 3)
 
 
 #-------------------------------------------------------

@@ -28,19 +28,17 @@ def run():
     if results_dir is None or results_dir == '':
         return
 
-    trials_to_code = _trials_to_code(raw_exp, results_dir)
+    for trial in raw_exp.trials:
+        trial.processed = False
 
-    if trials_to_code is None:
+    if not _mark_processed_trials(raw_exp, results_dir):
         return
 
-    code_experiment(trials_to_code, results_dir)
-    '''
     try:
-        code_experiment(trials_to_code, results_dir)
+        code_experiment(raw_exp.trials, results_dir)
 
     except Exception as e:
         messagebox.showerror('Error in WEncoder', str(e))
-        '''
 
 
 #-------------------------------------------------------------------------------------
@@ -87,12 +85,16 @@ def _is_recorder_results_dir(dir_name):
 
 
 #-------------------------------------------------------------------------------------
-def _trials_to_code(raw_exp, coded_dir):
+def _mark_processed_trials(raw_exp, coded_dir):
     """
-    Get the list of trials that should be coded in WEncoder.
+    Mark trials that were already coded and should not be coded by default in WEncoder.
+
+    This is done by updating the "processed" property of some trials to False, thereby excluding them.
 
     Compare raw and results directory. If the experiment was already partially/fully coded, ask user whether
     to recode all/some of the trials, quit, or delete everything and start over.
+
+    Returns True if should proceed, false if should stop.
     """
 
     raw_trial_nums = tuple(sorted([t.trial_id for t in raw_exp.trials]))
@@ -106,20 +108,20 @@ def _trials_to_code(raw_exp, coded_dir):
         messagebox.showerror("Invalid folder",
                              "The output directory you selected contains data from a WRecorder (not WEncoder) session. " +
                              "Please choose a separate directory for storing the encoded session.")
-        return None
+        return False
 
     try:
         coded_trial_nums = writracker.encoder.dataio.load_coded_trials_nums(coded_dir)
     except Exception as e:
         messagebox.showerror('Invalid target directory', 'Error: {}'.format(e))
-        return None
+        return False
 
     coded_trial_nums = tuple(sorted(set(coded_trial_nums)))
     n_coded_trials = len(coded_trial_nums)
     max_coded = max(coded_trial_nums) if n_coded_trials > 0 else 0
 
     if n_coded_trials == 0:
-        return raw_exp.trials
+        return True
 
     #-- All trials were already coded
     if raw_trial_nums == coded_trial_nums:
@@ -127,9 +129,9 @@ def _trials_to_code(raw_exp, coded_dir):
         ans = _ask_when_target_directory_contains_data(coded_dir, ['The destination folder seems to contains the coding of all trials.',
                                                                    'What would you like to do?'])
         if ans == 'quit':
-            return None
-        else:
-            return raw_exp.trials
+            return False
+
+        return True
 
     #-- Coding has reached the last trial, but some trials are missing along the way
     elif max_coded == max(raw_trial_nums):
@@ -137,11 +139,7 @@ def _trials_to_code(raw_exp, coded_dir):
                                                                    'It looks as if the session was already encoded, but some trials were skipped.'
                                                                    'What would you like to do?'])
         if ans == 'quit':
-            return None
-        elif ans == 'all':
-            return raw_exp.trials
-        else:
-            return [t for t in raw_exp.trials if t.trial_id not in coded_trial_nums]
+            return False
 
     #-- More coded than raw trials
     elif max_coded > max(raw_trial_nums):
@@ -149,37 +147,33 @@ def _trials_to_code(raw_exp, coded_dir):
                              'The encoded-data folder contains the coding of MORE trials than exist in the session. ' +
                              'It could be that you have selected mismatching directories. ' +
                              'Please verify and re-run WEncoder')
-        return None
+        return False
 
     #-- All trials up to trial #N were coded. The remaining trials were not
     elif raw_trial_nums[:len(coded_trial_nums)] == coded_trial_nums:
         ans = _ask_when_session_partially_encoded(coded_dir, max_coded, False)
         if ans == 'quit':
-            return None
-
-        elif ans == 'all':
-            return raw_exp.trials
-
-        else:
-            return [t for t in raw_exp.trials if t.trial_id > max_coded]
+            return False
 
     #-- Coding was done up to trial #N, but some trials were skipped and not coded
     else:
         ans = _ask_when_session_partially_encoded(coded_dir, max_coded, True)
         if ans == 'quit':
-            return None
+            return False
 
-        elif ans == 'all':
-            return raw_exp.trials
+    #-- Here there are 2 alternatives: recode all trials or only some of them
+    if ans == 'some':
+        for t in raw_exp.trials:
+            if t.trial_id in coded_trial_nums:
+                t.processed = True
 
-        else:
-            return [t for t in raw_exp.trials if t.trial_id > max_coded]
+    return True
 
 
 #-------------------------------------------------------------------------------------
 def _ask_when_target_directory_contains_data(coded_dir, question):
     """
-    Return True if program should quit
+    Return a string desribing what to do
     """
 
     while True:
@@ -241,13 +235,18 @@ def code_experiment(trials, out_dir):
 
     writracker.encoder.trialcoder.show_settings_screen(show_cancel_button=False)
 
-    for trial in trials:
-        trial.processed = False
+    i = -1
+    reprocess_trial = False
+    delta = 1
 
-    i = 0
     while i < len(trials):
 
+        i += delta
+
         trial = trials[i]
+        if trial.processed and not reprocess_trial:
+            continue
+
         print("trial is: " + str(trial))
 
         print('Processing trial #{}, source: {}'.format(i + 1, trial.source))
@@ -257,16 +256,20 @@ def code_experiment(trials, out_dir):
             return
 
         elif rc == 'next':
-            i += 1
+            delta = 1
+            reprocess_trial = False
 
         elif rc == 'prev':
             if i == 0:
                 continue
-            i -= 1
+            delta = -1
+            reprocess_trial = False
 
         elif rc == 'choose_trial':
             next_trial = _open_choose_trial(trial, trials)
             i = trials.index(next_trial)
+            delta = 0
+            reprocess_trial = True
 
         else:
             raise Exception('Invalid RC {:}'.format(rc))
@@ -305,6 +308,8 @@ def _open_choose_trial(curr_trial, all_trials):
     trial_desc = ["{}: {}{}".format(t.trial_id, t.stimulus, " (already encoded)" if t.processed else "") for t in all_trials]
     trial_desc_to_num = {d: n for d, n in zip(trial_desc, trial_nums)}
 
+    curr_trial_ind = all_trials.index(curr_trial)
+
     show_popup = True
     warning = ''
 
@@ -312,7 +317,7 @@ def _open_choose_trial(curr_trial, all_trials):
 
         layout = [
             [sg.Text(warning, text_color='red', font=('Arial', 18))],
-            [sg.Text('Go to trial number: '), sg.Combo(trial_desc, readonly=True)],
+            [sg.Text('Go to trial number: '), sg.DropDown(trial_desc, default_value=trial_desc[curr_trial_ind], readonly=True)],
             [sg.Button('OK'), sg.Button('Cancel')],
         ]
 

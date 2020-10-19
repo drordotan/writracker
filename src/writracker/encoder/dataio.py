@@ -208,7 +208,7 @@ def save_trial(raw_trial, response, trial_rc, characters, sub_trial_num, out_dir
 
     traj_file_name = create_traj_file_name(out_dir, sub_trial_num, raw_trial, raw_trial.trial_id)
 
-    has_corrections = 1 if sum([c.has_corrections for c in characters]) > 0 else 0
+    has_corrections = 1 if sum([c.extends is not None for c in characters]) > 0 else 0
 
     append_to_trial_index(out_dir, raw_trial.trial_id, sub_trial_num, raw_trial.target_id,
                           raw_trial.stimulus, response, raw_trial.time_in_session, trial_rc,
@@ -556,11 +556,8 @@ def load_coded_trials_nums(dir_name):
 
 #-------------------------------------------------------
 # noinspection PyUnusedLocal
-def _get_response(trial, character):
-    """
-    The delay between this character and the previous one
-    """
-    return trial.response
+def _get_extends(trial, character):
+    return '' if character.extends is None else character.extends
 
 
 #-------------------------------------------------------
@@ -614,7 +611,8 @@ def _get_post_char_distance(trial, character, prev_agg):
 #-- The list of the aggregations to perform (each becomes one or more columns in the resulting CSV file)
 _agg_func_specs = (
     transform.AggFunc(transform.GetBoundingBox(1.0, 1.0), ('x', 'width', 'y', 'height')),
-    transform.AggFunc(_get_response, 'response'),
+    transform.AggFunc(lambda t, c: t.response, 'response'),
+#todo dror    transform.AggFunc(_get_extends, 'extends'),
     transform.AggFunc(_get_pre_char_delay, 'pre_char_delay'),
     transform.AggFunc(_get_post_char_delay, 'post_char_delay'),
     transform.AggFunc(_get_pre_char_distance, 'pre_char_distance', get_prev_aggregations=True),

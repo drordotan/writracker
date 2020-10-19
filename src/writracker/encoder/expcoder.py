@@ -33,12 +33,14 @@ def run():
     if trials_to_code is None:
         return
 
+    code_experiment(trials_to_code, results_dir)
+    '''
     try:
         code_experiment(trials_to_code, results_dir)
 
     except Exception as e:
         messagebox.showerror('Error in WEncoder', str(e))
-
+    '''
 
 #-------------------------------------------------------------------------------------
 def working_directories(raw_input_dir, output_dir):

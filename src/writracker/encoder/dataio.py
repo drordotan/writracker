@@ -17,7 +17,7 @@ StrokeInfo = namedtuple('StrokeInfo', ['stroke', 'char_num'])
 
 
 trials_index_fields = 'trial_id', 'target_id', 'sub_trial_num', 'target', 'response', 'time_in_session', \
-                      'rc', 'has_self_corrections', 'traj_file_name', 'time_in_day', 'date', 'sound_file_length'
+                      'rc', 'has_corrections', 'traj_file_name', 'time_in_day', 'date', 'sound_file_length'
 
 
 #-------------------------------------------------------------------------------------------------
@@ -161,7 +161,6 @@ class Stroke(object):
         self.on_paper = on_paper
         self.char_num = char_num
         self.trajectory = trajectory
-        self.correction = False
 
 
     @property
@@ -209,11 +208,11 @@ def save_trial(raw_trial, response, trial_rc, characters, sub_trial_num, out_dir
 
     traj_file_name = create_traj_file_name(out_dir, sub_trial_num, raw_trial, raw_trial.trial_id)
 
-    has_self_corrections = 1 if sum([c.has_corrections for c in characters]) > 0 else 0
+    has_corrections = 1 if sum([c.has_corrections for c in characters]) > 0 else 0
 
     append_to_trial_index(out_dir, raw_trial.trial_id, sub_trial_num, raw_trial.target_id,
                           raw_trial.stimulus, response, raw_trial.time_in_session, trial_rc,
-                          raw_trial.sound_file_length, os.path.basename(traj_file_name), raw_trial.time_in_day, raw_trial.date, has_self_corrections)
+                          raw_trial.sound_file_length, os.path.basename(traj_file_name), raw_trial.time_in_day, raw_trial.date, has_corrections)
 
     strokes = []
     for c in characters:
@@ -277,7 +276,7 @@ def append_to_strokes_file(strokes, trial, sub_trial_num, out_dir):
     file_exists = os.path.isfile(index_fn)
 
     with open(index_fn, 'a' if file_exists else 'w') as fp:
-        writer = csv.DictWriter(fp, ['trial_id', 'sub_trial_num', 'char_num', 'stroke', 'on_paper', 'correction'], lineterminator='\n')
+        writer = csv.DictWriter(fp, ['trial_id', 'sub_trial_num', 'char_num', 'stroke', 'on_paper'], lineterminator='\n')
 
         if not file_exists:
             writer.writeheader()
@@ -286,7 +285,7 @@ def append_to_strokes_file(strokes, trial, sub_trial_num, out_dir):
         for stroke in strokes:
             stroke_num += 1
             row = dict(trial_id=trial.trial_id, sub_trial_num=sub_trial_num, char_num=stroke.char_num,
-                       stroke=stroke_num, on_paper=1 if stroke.on_paper else 0, correction=1 if stroke.correction else 0)
+                       stroke=stroke_num, on_paper=1 if stroke.on_paper else 0)
             writer.writerow(row)
 
 
@@ -438,7 +437,7 @@ def reset_trial_info_file(dir_name):
 
 #-------------------------------------------------------------------------------------------------
 def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, response, trial_start_time, rc, sound_file_length, traj_file_name,
-                          time_in_day, date, has_self_corrections):
+                          time_in_day, date, has_corrections):
     """
     Append a line to the trials.csv file
     """
@@ -456,7 +455,7 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
                  time_in_session=trial_start_time,
                  rc='' if rc is None else rc,
                  sound_file_length=sound_file_length,
-                 has_self_corrections=has_self_corrections,
+                 has_corrections=has_corrections,
                  traj_file_name=traj_file_name,
                  time_in_day=time_in_day,
                  date=date

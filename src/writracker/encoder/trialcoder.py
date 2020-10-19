@@ -3,6 +3,7 @@ coding strokes & characters in one trial
 """
 import numpy as np
 import re
+import enum
 # noinspection PyPep8Naming
 import PySimpleGUI as sg
 import tkinter as tk
@@ -11,9 +12,18 @@ from tkinter import messagebox
 
 from writracker.encoder import dataio, manip
 
+
+class ResponseMandatory(enum.Enum):
+    Optional = 0
+    Mandatory = 1
+    MandatoryForAll = 2
+
+_response_mandatory_options = ['Optional', 'Mandatory only for correct trials', 'Mandatory for correct and error trials']
+
+
 app_config = dict(max_within_char_overlap=0.25,
                   error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'),
-                  response_mandatory=True,
+                  response_mandatory=ResponseMandatory.Mandatory,
                   show_extending=True,
                   dot_radius=3)
 
@@ -135,7 +145,11 @@ def show_settings_screen(show_cancel_button=True):
         layout = [
             [sg.Text(warning, text_color='red')],
 
-            [sg.Checkbox('Typing in the participants\'s response is mandatory', default=app_config['response_mandatory'], key='response_mandatory')],
+            [sg.Text('Typing in the participants\'s response is '),
+             sg.DropDown(_response_mandatory_options,
+                         default_value=_response_mandatory_options[app_config['response_mandatory'].value],
+                         readonly=True,
+                         key='response_mandatory')],
 
             [sg.Text('Merge 2 strokes into one character if their horizontal overlap exceeds'),
              sg.InputText('{:.1f}'.format(100*app_config['max_within_char_overlap']), key='max_within_char_overlap'),
@@ -161,13 +175,9 @@ def show_settings_screen(show_cancel_button=True):
         window.Close()
 
         if clicked_ok:
-            response_mandatory = values['response_mandatory']
-            max_within_char_overlap_s = values['max_within_char_overlap']
-            error_codes = values['error_codes']
-            dot_radius = values['dot_radius']
 
             try:
-                max_within_char_overlap = float(max_within_char_overlap_s)
+                max_within_char_overlap = float(values['max_within_char_overlap'])
             except ValueError:
                 warning = 'Invalid "Maximal overlap" value'
                 continue
@@ -176,14 +186,15 @@ def show_settings_screen(show_cancel_button=True):
                 warning = 'Invalid "Maximal overlap" value (expecting a value between 0 and 100)'
                 continue
 
+            error_codes = values['error_codes']
             if not re.match('([a-zA-Z_]+)(,[a-zA-Z_]+)*', error_codes):
                 warning = 'Error codes must be a comma-separated list of letter codes, without spaces'
                 continue
 
-            app_config['response_mandatory'] = response_mandatory
+            app_config['response_mandatory'] = ResponseMandatory(_response_mandatory_options.index(values['response_mandatory']))
             app_config['max_within_char_overlap'] = max_within_char_overlap / 100
             app_config['error_codes'] = error_codes.split(',')
-            app_config['dot_radius'] = int(dot_radius)
+            app_config['dot_radius'] = int(values['dot_radius'])
 
             show_popup = False
 
@@ -269,8 +280,11 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
 
         #-- OK - Accept current coding
         if event in ('a', 'A', 'accept', 65, 'ש'):
-            response = get_valid_user_response(response, on_paper_chars, get_if_already_exists=False)
-            if response is not None:
+            resp_optional = app_config['response_mandatory'] == ResponseMandatory.Optional
+            if not resp_optional:
+                response = get_valid_user_response(response, on_paper_chars, trial.stimulus, get_if_already_exists=False)
+
+            if resp_optional or response is not None:
                 if sub_trial_num == 1:
                     dataio.delete_trial(out_dir, trial.trial_id)
                 dataio.save_trial(trial, response, "OK", characters, sub_trial_num, out_dir)
@@ -289,7 +303,11 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
 
         #-- Error - Accept current coding, set trial as error
         elif event in ('o', 'O', 'accept_error', 79, 'ם'):
-            if trial.response is not None or not app_config['response_mandatory']:
+            resp_optional = app_config['response_mandatory'] != ResponseMandatory.MandatoryForAll
+            if not resp_optional:
+                response = get_valid_user_response(response, on_paper_chars, trial.stimulus, get_if_already_exists=False)
+
+            if resp_optional or response is not None:
                 if sub_trial_num == 1:
                     dataio.delete_trial(out_dir, trial.trial_id)
                 dataio.save_trial(trial, response, values['error_code'], characters, sub_trial_num, out_dir)
@@ -356,7 +374,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
         elif event == 'enter_response':
-            response = get_valid_user_response(response, on_paper_chars, get_if_already_exists=True)
+            response = get_valid_user_response(response, on_paper_chars, trial.stimulus, get_if_already_exists=True)
             window.Close()
             return 'rerun', characters, response
 
@@ -435,8 +453,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
 
 
 #-------------------------------------------------------------------------------------
-def response_ok(response, on_paper_chars):
-    n_chars = len(on_paper_chars)
+def response_ok(response, n_chars):
     if response is None or response == '':
         return not app_config['response_mandatory']
     else:
@@ -444,7 +461,7 @@ def response_ok(response, on_paper_chars):
 
 
 #-------------------------------------------------------------------------------------
-def get_valid_user_response(response, on_paper_chars, get_if_already_exists=True):
+def get_valid_user_response(response, on_paper_chars, target=None, get_if_already_exists=True):
     """
     Get a response from the user, update the trial.
 
@@ -454,14 +471,21 @@ def get_valid_user_response(response, on_paper_chars, get_if_already_exists=True
     :return: True if a valid response was entered. False if CANCEL was clicked.
     """
 
+    n_chars = len([c for c in on_paper_chars if c.extends is None])
+
     orig_response = response
     if response is None:
         response = ''
 
+    #-- If there's no response and the number of characters matches the target, set it as the default
+    default_resp = ''
+    if response == '' and target is not None and len(target) == n_chars:
+        default_resp = target
+
     force_get = get_if_already_exists
-    while force_get or not response_ok(response, on_paper_chars):
-        response = sg.popup_get_text('Please enter a response with exactly {} letters/digits.'.format(len(on_paper_chars)),
-                                     title='Enter response')
+    while force_get or not response_ok(response, n_chars):
+        response = sg.popup_get_text('Please enter a response with exactly {} characters.'.format(n_chars),
+                                     title='Enter response', default_text=default_resp)
         if response is None:  # CANCEL clicked
             return orig_response
         elif response == '':

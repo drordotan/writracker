@@ -120,15 +120,16 @@ def _apply_aggregation_functions_to_trial(agg_func_specs, trial, char_filter, sa
     characters = trial.characters if (char_filter is None) else [c for c in trial.characters if char_filter(c, trial)]
 
     #-- Create result object (not yet filled) per character
-    valid_response = trial.response is not None and len(trial.response) == len(characters)
     char_infos = [CharInfo(character,
                            dict(trial_id=trial.trial_id,
                                 sub_trial_num=trial.sub_trial_num,
                                 target_id=trial.target_id,
                                 target=trial.stimulus,
                                 char_num=character.char_num,
-                                char=trial.response[i] if valid_response else ''))
+                                char=''))
                   for i, character in enumerate(characters)]
+
+    _populate_response(char_infos, trial)
 
     #-- Apply aggregation functions
     for agg_func_spec in agg_func_specs:
@@ -161,6 +162,22 @@ def _apply_aggregation_functions_to_trial(agg_func_specs, trial, char_filter, sa
 
 
     return [ci.csv_row for ci in char_infos]
+
+
+#--------------------------------------------------
+def _populate_response(char_infos, trial):
+
+    #-- Save response character on non-extending characters
+    non_extending_chars = [c for c in char_infos if c.character.extends is None]
+    if trial.response is not None and len(trial.response) == len(non_extending_chars):
+        for i, c in enumerate(non_extending_chars):
+            c.csv_row['char'] = trial.response[i]
+
+    #-- copy response characrer to extending characters
+    chars_by_num = {c.character.char_num : c.csv_row for c in char_infos}
+    for char in char_infos:
+        if char.character.extends is not None and char.character.extends in chars_by_num:
+            char.csv_row['char'] = chars_by_num[char.character.extends]['char']
 
 
 #--------------------------------------------------

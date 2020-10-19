@@ -40,7 +40,8 @@ def run():
 
     except Exception as e:
         messagebox.showerror('Error in WEncoder', str(e))
-    '''
+        '''
+
 
 #-------------------------------------------------------------------------------------
 def working_directories(raw_input_dir, output_dir):

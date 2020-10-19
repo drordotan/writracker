@@ -128,7 +128,7 @@ def parse_bool(arg_name, arg_value, err_location='configuration file', allow_emp
 def validate_csv_format(filename, reader, expected_fields):
     missing_fields = [f for f in expected_fields if f not in reader.fieldnames]
     if len(missing_fields) > 0:
-        raise ValueError("Invalid format for CSV file {:}: the file does not contain the field/s {:} Einav"
+        raise ValueError("Invalid format for CSV file {:}: the file does not contain the field/s {:}"
                          .format(filename, ", ".join(missing_fields)))
 
 

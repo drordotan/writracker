@@ -2,6 +2,7 @@
 Transform the encoder data
 """
 import csv
+import os
 import numpy as np
 from collections import namedtuple
 from copy import copy
@@ -46,7 +47,8 @@ class AggFunc(object):
 
 
 #-----------------------------------------------------------------------------------------------------
-def aggregate_characters(trials, agg_func_specs=(), trial_filter=None, char_filter=None, out_filename=None, save_as_attr=False):
+def aggregate_characters(trials, agg_func_specs=(), trial_filter=None, char_filter=None, out_filename=None, append=False,
+                         save_as_attr=False):
     """
     Compute an aggregate value (or values) per trajectory section, and potentially save to CSV
 
@@ -96,9 +98,17 @@ def aggregate_characters(trials, agg_func_specs=(), trial_filter=None, char_filt
     if out_filename is not None:
         csv_fieldnames = ['trial_id', 'sub_trial_num', 'target_id', 'target', 'char_num', 'char'] + \
                         [field for func_spec in agg_func_specs for field in func_spec.out_fields]
-        with open(out_filename, 'w') as fp:
+
+        if not os.path.exists(out_filename):
+            append = False
+
+        with open(out_filename, 'a' if append else 'w') as fp:
+
             writer = csv.DictWriter(fp, csv_fieldnames, lineterminator='\n')
-            writer.writeheader()
+
+            if not append:
+                writer.writeheader()
+
             for row in csv_rows:
                 writer.writerow(row)
 
@@ -110,14 +120,15 @@ def _apply_aggregation_functions_to_trial(agg_func_specs, trial, char_filter, sa
     characters = trial.characters if (char_filter is None) else [c for c in trial.characters if char_filter(c, trial)]
 
     #-- Create result object (not yet filled) per character
+    valid_response = trial.response is not None and len(trial.response) == len(characters)
     char_infos = [CharInfo(character,
                            dict(trial_id=trial.trial_id,
                                 sub_trial_num=trial.sub_trial_num,
                                 target_id=trial.target_id,
                                 target=trial.stimulus,
                                 char_num=character.char_num,
-                                char='' if (trial.response is None or trial.response == '') else trial.response[character.char_num-1]))
-                  for character in characters]
+                                char=trial.response[i] if valid_response else ''))
+                  for i, character in enumerate(characters)]
 
     #-- Apply aggregation functions
     for agg_func_spec in agg_func_specs:

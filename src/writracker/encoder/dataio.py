@@ -337,7 +337,7 @@ class Character(object):
     A character, including the above-paper movement before/after it
     """
 
-    def __init__(self, char_num, strokes=(), pre_char_space=None, post_char_space=None, character=None):
+    def __init__(self, char_num, strokes=(), pre_char_space=None, post_char_space=None, character=None, extends=None):
         """
         :param strokes: a list of the strokes (on/above paper) comprising the character
         :param pre_char_space: The above-paper stroke before the character
@@ -348,6 +348,7 @@ class Character(object):
         self.pre_char_space = pre_char_space
         self.post_char_space = post_char_space
         self.character = character
+        self.extends = extends
 
 
     @property
@@ -455,7 +456,7 @@ def save_trial(raw_trial, response, trial_rc, characters, sub_trial_num, out_dir
 
     save_trajectory(strokes, traj_file_name)
     append_to_strokes_file(strokes, raw_trial, sub_trial_num, out_dir)
-    save_characters_file(out_dir)
+    append_to_characters_file(out_dir, raw_trial, sub_trial_num, trial_rc, response, characters, strokes)
 
 
 #-------------------------------------------------------------------------------------
@@ -534,8 +535,7 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
     Append a line to the trials.csv file
     """
 
-    remove_from_trial_index(dir_name, trial_id, sub_trial_num)
-    #todo dror: also remove from strokes file
+    delete_trial(dir_name, trial_id, sub_trial_num)
 
     index_fn = trial_index_filename(dir_name)
     file_exists = os.path.isfile(index_fn)
@@ -563,26 +563,63 @@ def append_to_trial_index(dir_name, trial_id, sub_trial_num, target_id, target, 
 
 
 #----------------------------------------------------------
-def remove_from_trial_index(dir_name, trial_id, sub_trial_num=None):
+def delete_trial(dir_name, trial_id, sub_trial_num=None):
     """
-    Remove a trial from the trials.csv index file
+    Remove a trial from the output directory
     """
 
-    index_fn = trial_index_filename(dir_name)
-    file_exists = os.path.isfile(index_fn)
+    trajfiles = traj_filenames(trial_index_filename(dir_name), trial_id, sub_trial_num)
+    for filename in trajfiles:
+        full_path = dir_name + os.sep + filename
+        if os.path.isfile(full_path):
+            os.remove(full_path)
 
+    remove_trial_from_index_file(trial_index_filename(dir_name), trial_id, sub_trial_num)
+    remove_trial_from_index_file(dir_name + os.sep + 'strokes.csv', trial_id, sub_trial_num)
+    remove_trial_from_index_file(dir_name + os.sep + 'characters.csv', trial_id, sub_trial_num)
+
+
+#----------------------------------------------------------
+def traj_filenames(filename, trial_id, sub_trial_num=None):
+    """
+    Get trajectory file names for this trial
+    """
+
+    file_exists = os.path.isfile(filename)
+    if not file_exists:
+        return []
+
+    def relevant_row(r):
+        return int(r['trial_id']) == trial_id and (sub_trial_num is None or int(r['sub_trial_num']) == sub_trial_num)
+
+    with open(filename, 'r', encoding="utf-8") as fp:
+        reader = csv.DictReader(fp)
+        u.validate_csv_format(filename, reader, ['trial_id', 'sub_trial_num', 'traj_file_name'])
+        return [row['traj_filename'] for row in reader if relevant_row(row)]
+
+
+#----------------------------------------------------------
+def remove_trial_from_index_file(filename, trial_id, sub_trial_num=None):
+    """
+    Remove a trial from an index file
+    """
+
+    file_exists = os.path.isfile(filename)
     if not file_exists:
         return
 
-    index = _load_trials_index(dir_name)
+    with open(filename, 'r', encoding="utf-8") as fp:
+        reader = csv.DictReader(fp)
+        u.validate_csv_format(filename, reader, ['trial_id', 'sub_trial_num'])
+        data = [row for row in reader]
 
-    with open(index_fn, 'w', encoding="utf-8", errors='ignore') as fp:
-        writer = csv.DictWriter(fp, trials_index_cols, lineterminator='\n')
+    with open(filename, 'w', encoding="utf-8") as fp:
+        writer = csv.DictWriter(fp, reader.fieldnames, lineterminator='\n')
         writer.writeheader()
-        for entry in index:
-            to_remove = trial_id == entry['trial_id'] and (sub_trial_num is None or entry['sub_trial_num'] == sub_trial_num)
-            if not to_remove:
-                writer.writerow(entry)
+        for r in data:
+            should_discard = int(r['trial_id']) == trial_id and (sub_trial_num is None or int(r['sub_trial_num']) == sub_trial_num)
+            if not should_discard:
+                writer.writerow(r)
 
 
 #----------------------------------------------------------
@@ -676,11 +713,11 @@ def _get_post_char_distance(trial, character, prev_agg):
 _agg_func_specs = (
     transform.AggFunc(transform.GetBoundingBox(1.0, 1.0), ('x', 'width', 'y', 'height')),
     transform.AggFunc(lambda t, c: t.response, 'response'),
-#todo dror    transform.AggFunc(_get_extends, 'extends'),
     transform.AggFunc(_get_pre_char_delay, 'pre_char_delay'),
     transform.AggFunc(_get_post_char_delay, 'post_char_delay'),
     transform.AggFunc(_get_pre_char_distance, 'pre_char_distance', get_prev_aggregations=True),
     transform.AggFunc(_get_post_char_distance, 'post_char_distance', get_prev_aggregations=True),
+    transform.AggFunc(_get_extends, 'extends'),
 )
 
 
@@ -692,6 +729,48 @@ def save_characters_file(out_dir):
     transform.aggregate_characters(exp.trials, agg_func_specs=_agg_func_specs, trial_filter=lambda trial: trial.rc == 'OK',
                                    out_filename=out_dir+'/characters.csv', save_as_attr=False)
 
+
+#--------------------------------------------------------------------
+def append_to_characters_file(out_dir, raw_trial, sub_trial_num, trial_rc, response, ui_characters, ui_strokes):
+
+    strokes = _ui_to_coded_strokes(ui_strokes)
+
+    chars = _create_characters(strokes, raw_trial.trial_id)
+    for i, (coded_char, ui_char) in enumerate(zip(chars, ui_characters)):
+        coded_char.extends = ui_char.extends
+
+    coded_trial = CodedTrial(raw_trial.trial_id,
+                             sub_trial_num=sub_trial_num,
+                             target_id=raw_trial.target_id,
+                             stimulus=raw_trial.stimulus,
+                             time_in_session=raw_trial.time_in_session,
+                             rc=trial_rc,
+                             response=response,
+                             sound_file_length=raw_trial.sound_file_length,
+                             traj_file_name=None,
+                             time_in_day=raw_trial.time_in_day,
+                             date=raw_trial.date,
+                             characters=chars,
+                             strokes=strokes)
+
+    transform.aggregate_characters([coded_trial], agg_func_specs=_agg_func_specs, out_filename=out_dir + os.sep + '/characters.csv', append=True)
+
+
+#--------------------------------------------------------------------------------------------------------------------
+def _ui_to_coded_strokes(ui_strokes):
+    """
+    Convert the UiStroke objects (used in the app) to Stroke objects
+    """
+
+    result = []
+    for ui_stroke in ui_strokes:
+
+        stroke = Stroke(ui_stroke.char_num, ui_stroke.stroke_num, ui_stroke.on_paper)
+        stroke.trajectory = [pt.dot for pt in ui_stroke.trajectory]
+
+        result.append(stroke)
+
+    return result
 
 #-------------------------------------------------------------------------------------
 def delete_all_files_from(directory):

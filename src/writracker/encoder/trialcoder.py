@@ -81,7 +81,7 @@ def encode_one_trial(trial, out_dir, screen_size=(1000, 800), margin=25):
         elif rc == 'reset_trial':
             trial_queue = _init_trial_queue(trial)
             sub_trial_num = 1
-            dataio.remove_from_trial_index(out_dir, trial.trial_id)
+            dataio.delete_trial(out_dir, trial.trial_id)
             trial.processed = False
 
         elif rc == 'split_trial':
@@ -272,15 +272,15 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
             response = get_valid_user_response(response, on_paper_chars, get_if_already_exists=False)
             if response is not None:
                 if sub_trial_num == 1:
-                    dataio.remove_from_trial_index(out_dir, trial.trial_id)
+                    dataio.delete_trial(out_dir, trial.trial_id)
                 dataio.save_trial(trial, response, "OK", characters, sub_trial_num, out_dir)
                 trial.processed = True
                 window.Close()
                 return 'next_trial', None, None
 
         #-- Clicked on DropDown error
-        elif event == 'error':
-            if values['error'] in app_config["error_codes"]:
+        elif event == 'error_code':
+            if values['error_code'] in app_config["error_codes"]:
                 window['accept_error'].update(disabled=False)
                 #window['accept'].update(disabled=True)
 
@@ -288,10 +288,10 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
             #     window['accept_error'].update(disabled=True)
 
         #-- Error - Accept current coding, set trial as error
-        if event in ('o', 'O', 'accept_error', 79, 'ם'):
+        elif event in ('o', 'O', 'accept_error', 79, 'ם'):
             if trial.response is not None or not app_config['response_mandatory']:
                 if sub_trial_num == 1:
-                    dataio.remove_from_trial_index(out_dir, trial.trial_id)
+                    dataio.delete_trial(out_dir, trial.trial_id)
                 dataio.save_trial(trial, response, values['error_code'], characters, sub_trial_num, out_dir)
                 trial.processed = True
                 window.Close()

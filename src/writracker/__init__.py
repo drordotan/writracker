@@ -8,7 +8,7 @@ from . import recorder
 
 
 def version():
-    return 1, 0, 2
+    return 1, 0, 3
 
 
 def run_encoder():

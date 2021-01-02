@@ -167,18 +167,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
                 self.start_trial()
 
         if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
-            self.path.moveTo(QPoint(self.pen_x, self.pen_y))
+            self.path.moveTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
         elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
             if self.session_started:
                 # When the pen leaves the surface, add a sample point with zero pressure
                 self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
         elif new_pressure > 0:                                               # it's a "TabletMove" event
-            self.path.lineTo(QPoint(self.pen_x, self.pen_y))
+            self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
         self.update()                                       # calls paintEvent
         self.pen_pressure = new_pressure
         # write to traj file:
         if self.current_active_trajectory is not None and self.session_started:
-            self.current_active_trajectory.add_row(self.x_resolution - self.pen_x, self.pen_y, self.pen_pressure)   # Fix tablet mirroring-flip X axis
+            self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
 
     """ This is the old function to get tablet information using events. 
         it work well, but does not allow recording tablet move above the surface ('hovering') """
@@ -458,7 +458,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
     def pop_folder_selector(self, continue_session=False):
         error_str = ""
         while True:
-            folder = str(QFileDialog.getExistingDirectory(self, caption="Select results directory"))
+            folder = QDir.toNativeSeparators(QFileDialog.getExistingDirectory(self, "Select results directory"))
+            folder = str(folder)
             if folder:
                 path_ok = os.access(folder, os.W_OK | os.X_OK)
                 if os.access(folder + os.sep + dataio.trials_csv_filename, os.W_OK):

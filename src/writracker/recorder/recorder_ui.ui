@@ -51,8 +51,7 @@
          </size>
         </property>
         <property name="text">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;http://mathinklab.org/writracker/&quot;&gt;&lt;img src=&quot;img/writracker_logo.png&quot; width=175 height=116/&gt;&lt;/a&gt;
-&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;a href=&quot;http://mathinklab.org/writracker/&quot;&gt;&lt;img src=&quot;../src/writracker/recorder/img/writracker_logo.png&quot; width=&quot;175&quot; height=&quot;116&quot;/&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="textFormat">
          <enum>Qt::RichText</enum>

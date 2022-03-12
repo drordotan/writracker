@@ -172,7 +172,7 @@ def save_remaining_targets_file(results_path, targets):
         targets_file = csv.DictWriter(targets_file, ['target_id', 'target', 'sound_file_name'], lineterminator='\n')
         targets_file.writeheader()
         for target in targets:
-            if target.rc_code is not "OK":
+            if target.rc_code != "OK":
                 row = dict(target_id=target.id, target=target.value, sound_file_name=target.sound_file_name)
                 targets_file.writerow(row)
 

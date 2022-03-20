@@ -13,6 +13,11 @@ except OSError:
     messagebox.showerror("Couldn't Load wintab32.dll file!", "wintab32.dll file couldn't be found. "
                                                              "\nTry to install/reinstall Tablet drivers.")
     raise Exception("wintab32 library couldn't load. wintab32.dll file couldn't be found. Try to install Tablet drivers.")
+
+''' Hard coded value for setting the X axis returned values range.
+The tablet scales the input of the x and y ranges according to what defined in lcMine.lcOut<Org/Ext><X/Y>'''
+X_AXIS_OUTPUT_RANGE_MAX = 2000
+
 FIX32 = DWORD
 WTPKT = FIX32
 
@@ -112,6 +117,7 @@ def OpenTabletContexts(hWnd):
     getTabletAxisInfo(TabletX, TabletY)
     lcMine.lcInExtX = TabletX.axMax  # specifies the extent of the input area in native coordinates:
     lcMine.lcInExtY = TabletY.axMax
+    TabletNativeResolutionRatio = lcMine.lcInExtY / lcMine.lcInExtX  # Used later for setting the output coordinates
 
     # Map the coordinate space to contain the whole screen
     SM_XVIRTUALSCREEN  = 76  # From winuser.h: The coordinates for the left side of the virtual screen. The virtual screen is the bounding rectangle of all display monitors.
@@ -122,15 +128,15 @@ def OpenTabletContexts(hWnd):
     # lcMine.lcOutExtX = GetSystemMetrics(SM_CXVIRTUALSCREEN)
     # This settings controls the output grid limits for X-Y.
     lcMine.lcOutOrgX = 0
-    lcMine.lcOutExtX = 1920  # Dual screens might cause issues. Setting hard coded values to prevent issues.
-    lcMine.lcOutOrgY = GetSystemMetrics(SM_YVIRTUALSCREEN)
-    lcMine.lcOutExtY = - GetSystemMetrics(SM_CYVIRTUALSCREEN)  # In Wintab, the tablet origin is lower left. Move origin to upper left so that it coincides with screen origin.
-    #     (0)    X axis----->            (1920)
+    lcMine.lcOutExtX = X_AXIS_OUTPUT_RANGE_MAX  # X axis is hardcoded.
+    lcMine.lcOutOrgY = 0
+    lcMine.lcOutExtY = int(lcMine.lcOutExtX * TabletNativeResolutionRatio)
+    #     (0)    X axis----->            (2000)
     #    ______________________________________    (0)
     #   |                                      |    |
     #   |@  The tablet, buttons to the left    |    |   Y Axis
     #   |@                                     |    V
-    #   |_____________________________________ |   (1080)
+    #   |_____________________________________ |   (X_AXIS_OUTPUT_RANGE_MAX(=2000) * TabletNativeResolutionRatio)
     hctx = wintab.WTOpenA(hWnd, byref(lcMine), 1)
     return hctx
 

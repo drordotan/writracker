@@ -68,7 +68,7 @@ def animate_trajectory(traj_file, action="play", filename=""):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi('plotter_ui.ui', self)
+        uic.loadUi(os.path.dirname(__file__) + os.sep + 'plotter_ui.ui', self)
         self.menu_online_help = self.findChild(QAction, 'actionOnline_help')
         self.btn_play = self.findChild(QPushButton, 'btn_play')
         self.btn_convert_gif = self.findChild(QPushButton, 'btn_convert_gif')

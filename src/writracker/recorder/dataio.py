@@ -189,16 +189,17 @@ def load_targets(targets_file_path):
         df = pd.read_csv(targets_file_path, converters=_targets_file_converters)
 
     if not {'target_id', 'target'}.issubset(set(list(df))):  # Check targets file format
-        return None, ("Wrong targets file format",
+        return None, None, ("Wrong targets file format",
                       "targets file must contain the following fields: 'target_id', 'target'.\nOptional field: 'sound_file_name'")
 
+    has_sound_file_column = 'sound_file_name' in set(list(df))
     targets = []
 
     for index, row in df.iterrows():
         sound_file_name = row["sound_file_name"] if ("sound_file_name" in df.columns) and str(row["sound_file_name"]) != 'nan' else ""
         targets.append(Target(row["target_id"], row["target"].strip(), sound_file_name))
 
-    return targets, None
+    return targets, has_sound_file_column, None
 
 
 def _null_converter(v):

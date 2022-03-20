@@ -754,7 +754,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         Read targets file, create target objects, and insert to the list. Also fills the comboBox (goto)
         """
 
-        targets, err_msg = dataio.load_targets(targets_file_path)
+        targets, has_sound_file_column, err_msg = dataio.load_targets(targets_file_path)
         if err_msg is not None:
             _warning(err_msg[0], err_msg[1])
             raise IOError  # bad targets file format
@@ -765,6 +765,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
             self.combox_targets.addItem(str(target.id)+"-"+target.value)
 
         self.targets_file_name = os.path.abspath(targets_file_path)
+        self.allow_sound_play = has_sound_file_column
 
         return True
 

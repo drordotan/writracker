@@ -30,7 +30,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         self.title = "WriTracker Recorder"
         # Establish tablet connection & Start polling
         h_wnd = int(self.winId())                            # Get current window's window handle
-        wintab.hctx = wintab.OpenTabletContexts(h_wnd)       # context handle for the tablet polling function.
+        wintab.hctx = safely_open_tablet_context(h_wnd)       # context handle for the tablet polling function.
+        if wintab.hctx is None:
+            self.close()
         self.poll_timer = QTimer(self)
         # noinspection PyUnresolvedReferences
         self.poll_timer.timeout.connect(self.tabletPoll)    # Start timer & Run polling function
@@ -927,6 +929,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 # ---------------------------------------------------------------------------------------------------------
 #todo: move the tablet-related functions to another package
+def safely_open_tablet_context(h_wnd):
+    try:
+        return wintab.OpenTabletContexts(h_wnd)
+    except ZeroDivisionError:
+        _critical_msg("Error when trying to open tablet context. Make sure the tablet is connected.")
+        return None
+
+
 # Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
 # The check isn't blocking the program from running - for the case the device status is not 100% reliable.
 def check_if_tablet_connected():

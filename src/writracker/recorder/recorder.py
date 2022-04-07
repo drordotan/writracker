@@ -31,8 +31,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
         # Establish tablet connection & Start polling
         h_wnd = int(self.winId())                            # Get current window's window handle
         wintab.hctx = safely_open_tablet_context(h_wnd)       # context handle for the tablet polling function.
-        if wintab.hctx is None:
-            self.close()
+        if not wintab.hctx:
+            return
         self.poll_timer = QTimer(self)
         # noinspection PyUnresolvedReferences
         self.poll_timer.timeout.connect(self.tabletPoll)    # Start timer & Run polling function
@@ -933,8 +933,8 @@ def safely_open_tablet_context(h_wnd):
     try:
         return wintab.OpenTabletContexts(h_wnd)
     except ZeroDivisionError:
-        _critical_msg("Error when trying to open tablet context. Make sure the tablet is connected.")
-        return None
+        _critical_msg("Can't open tablet context", "Error when trying to open tablet context. Make sure the tablet is connected.")
+        return False
 
 
 # Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell

@@ -72,9 +72,12 @@ class Trajectory:
         try:
             with open(self.full_path, mode='a+', encoding='utf-8') as traj_file:
                 self.file_handle = csv.DictWriter(traj_file, ['x', 'y', 'pressure', 'time'], lineterminator='\n')
-                if row == "header":
+                no_previous_header = traj_file.tell() == 0  # in order to avoid double writing of header row after reset + play combination
+                write_header_row = row == "header"
+                proper_row_request = type(row) is dict
+                if write_header_row and no_previous_header:
                     self.file_handle.writeheader()
-                else:
+                elif not write_header_row and proper_row_request:
                     self.file_handle.writerow(row)
         except (IOError, FileNotFoundError):
             QMessageBox().critical(None, "Warning! file access error",

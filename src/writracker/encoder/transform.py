@@ -102,7 +102,7 @@ def aggregate_characters(trials, agg_func_specs=(), trial_filter=None, char_filt
         if not os.path.exists(out_filename):
             append = False
 
-        with open(out_filename, 'a' if append else 'w') as fp:
+        with open(out_filename, 'a' if append else 'w', encoding='utf-8') as fp:
 
             writer = csv.DictWriter(fp, csv_fieldnames, lineterminator='\n')
 

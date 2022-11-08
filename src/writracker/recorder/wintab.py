@@ -7,12 +7,12 @@ from ctypes import *
 
 try:
     wintab = WinDLL("wintab32.dll")
-except OSError:
+except OSError as e:
     main = Tk()
     main.withdraw()
     messagebox.showerror("Couldn't Load wintab32.dll file!", "wintab32.dll file couldn't be found. "
                                                              "\nTry to install/reinstall Tablet drivers.")
-    raise Exception("wintab32 library couldn't load. wintab32.dll file couldn't be found. Try to install Tablet drivers.")
+    raise Exception("wintab32 library couldn't load. wintab32.dll file couldn't be found. Try to install Tablet drivers.", e)
 
 ''' Hard coded value for setting the X axis returned values range.
 The tablet scales the input of the x and y ranges according to what defined in lcMine.lcOut<Org/Ext><X/Y>'''

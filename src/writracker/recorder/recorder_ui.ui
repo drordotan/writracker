@@ -506,6 +506,28 @@ border-color: rgb(255, 0, 0);</string>
           </property>
          </widget>
         </item>
+		<item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+         <widget class="QPushButton" name="pen_mode_btn">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>175</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>175</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Pen mode: paper</string>
+          </property>
+         </widget>
+        </item>
         <item alignment="Qt::AlignHCenter">
          <widget class="QPushButton" name="start_ssn_btn">
           <property name="enabled">
@@ -595,6 +617,40 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
             </property>
            </widget>
           </item>
+
+		  <item>
+           <widget class="QPushButton" name="mirror_btn">
+            <property name="enabled">
+             <bool>true</bool>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>50</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>50</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;mirror the graphics display view.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>img/mirror_icon.png</normaloff>img/mirror_icon.png</iconset>
+            </property>
+            <property name="flat">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+
           <item>
            <widget class="QPushButton" name="plus_btn">
             <property name="minimumSize">

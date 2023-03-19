@@ -6,7 +6,7 @@ from . import encoder
 from . import plotter
 from . import recorder
 
-
+print( os.name )
 def version():
     return 1, 0, 3
 

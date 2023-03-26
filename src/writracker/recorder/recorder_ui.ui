@@ -524,7 +524,7 @@ border-color: rgb(255, 0, 0);</string>
            </size>
           </property>
           <property name="text">
-           <string>Pen mode: paper</string>
+           <string>Pen mode: basic</string>
           </property>
          </widget>
         </item>

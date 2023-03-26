@@ -34,7 +34,7 @@ from WacomPaperMode import wacom_paper_mode
 
 
 
-
+# CR check best for fit for both pens
 TABLET_POLL_TIME = 50   # defines the polling frequency for tablet packets, in milliseconds
 
 
@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 	def __init__(self, parent=None):
 		super(MainWindow, self).__init__(parent)
 
-	
+		# get token from env variable insted of hardcoded string
 		wacom_token = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJMTVMiLCJleHAiOjE2ODYxNDE1MjQsImlhdCI6MTY3ODE5MjcyNCwic2VhdHMiOjAsInJpZ2h0cyI6WyJDRExfQUNDRVNTIiwiQ0RMX0xJVkVfU1RSRUFNSU5HIiwiQ0RMX1RISVJEUEFSVFlfUEVOUyIsIkNETF9QSFVfMTExIiwiQ0RMX09FTV9NT05UQkxBTkMiLCJDREwyX0VOVU1fVVNCIiwiQ0RMMl9FTlVNX0JMRSIsIkNETDJfRU5VTV9XQUMiLCJDREwyX0VOVU1fU1lTIiwiQ0RMMl9CQVNJQyIsIkNETDJfU0VSVklDRV9SZWFsVGltZUluayIsIkNETDJfU0VSVklDRV9EaXNjcmV0ZURpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRGVza3RvcERpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRmlsZVRyYW5zZmVyIiwiQ0RMMl9TRVJWSUNFX0VuY3J5cHRpb24iXSwiZGV2aWNlcyI6WyJXQUNPTV9TTUFSVFBBRCIsIldBQ09NX1NUVSIsIldBQ09NX0RSSVZFUiJdLCJ0eXBlIjoiZXZhbCIsImxpY19uYW1lIjoiV2Fjb21fSW5rX1NES19mb3JfZGV2aWNlcyIsIndhY29tX2lkIjoiN2M0OGZlZTk0OGZkNGIyMDgxNDA1MmZlZTJkM2RkZmEiLCJsaWNfdWlkIjoiMzNhODhmMTMtMWQ5OS00NzI3LTg2ZmUtMGJjNTI1MjIyY2UzIiwiYXBwc193aW5kb3dzIjpbXSwiYXBwc19pb3MiOltdLCJhcHBzX2FuZHJvaWQiOltdLCJtYWNoaW5lX2lkcyI6W119.DpGnb9tG_vb_l5mb74fi-BQz4TpVU4nQ1y0c8b0EBK9GmJTGKVtIzewMJvmKCoztxThwVQwZEvB5-jTGxLnnDP4SWDOi1MJ2d0mnJoN4Q5zsL0Q2qCic0YROCAL6q_Rg-6RpkiJt9hDAIfClGWXnBerrU1Cigm90VtfR1_7n8ZWnNMiSzRRFnsuBjyeiaZscvKVvbwc6Skvxt-Xf3BYkxNxlD0kEQQzQNERrFoZdx_q6jNSlctt0jHECuE8Wgy8SsRwIgiCpOhq2GHydPHewMfOaVnDw9d6nJUe0nsHFW0stJCRwE9nOjYbxHKsAgO7OaLZtAPX6WKXzkTLdkkhX7g"
 		self.tablet_paper_mode = wacom_paper_mode(wacom_token)
 		time.sleep(2)
@@ -181,37 +181,49 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 	#--------------------------------------------------------------------------------------
 	def tabletPoll(self):
-
+		#CR switch logic for ink mode if
 		if(self.ink_mode == False):
 			lp_pkts = (wintab.PACKET*100)()
 			lp_pkts = wintab.GetPackets()
+
 			if lp_pkts == 0:  # no packets received
 				return
-			
-			self.pen_x = lp_pkts[0].pkX
-			self.pen_y = lp_pkts[0].pkY
-			new_pressure = int(lp_pkts[0].pkNormalPressure/327.67)      # normalized to 0-100 range
+			print("packet count: ", len(lp_pkts))
+			for i in range(len(lp_pkts)):
+				if(lp_pkts[i].pkX == 0 and lp_pkts[i].pkY == 0):
+					return
+				
+				# if this pen and next pen are the same, return
+				if self.pen_x == lp_pkts[i].pkX and self.pen_y == lp_pkts[i].pkY:
+					continue
 
-			# mark Trial started flag, but only if the ok/error are not checked.
-			# this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
-			if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
-				# When we the user chose to play sounds
-				# the trial will start when pressing play, and not when touching the tablet.
-				if not self.trial_started and self.sounds_folder_path is None:
-					self.start_trial()
-			if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
-				self.path.moveTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
-			elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
-				if self.session_started:
-					# When the pen leaves the surface, add a sample point with zero pressure
-					self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
-			elif new_pressure > 0:                                               # it's a "TabletMove" event
-				self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
-			self.update()                                       # calls paintEvent
-			self.pen_pressure = new_pressure
-			# write to traj file:
-			if self.current_active_trajectory is not None and self.session_started:
-				self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
+				# CR add for loop for the points in the packet
+				self.pen_x = lp_pkts[i].pkX
+				self.pen_y = lp_pkts[i].pkY
+
+				new_pressure = int(lp_pkts[i].pkNormalPressure/327.67)      # normalized to 0-100 range
+			
+				print(self.pen_x, self.pen_y, new_pressure)
+				# mark Trial started flag, but only if the ok/error are not checked.
+				# this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
+				if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
+					# When we the user chose to play sounds
+					# the trial will start when pressing play, and not when touching the tablet.
+					if not self.trial_started and self.sounds_folder_path is None:
+						self.start_trial()
+				if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
+					self.path.moveTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
+				elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
+					if self.session_started:
+						# When the pen leaves the surface, add a sample point with zero pressure
+						self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
+				elif new_pressure > 0:                                               # it's a "TabletMove" event
+					self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
+				self.update()                                       # calls paintEvent
+				self.pen_pressure = new_pressure
+				# write to traj file:
+				if self.current_active_trajectory is not None and self.session_started:
+					self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
 		else:
 			lp_pkts = self.tablet_paper_mode.getPoints()
 			if len(lp_pkts) == 0 or lp_pkts[0].point is None or lp_pkts[0].pressure is '':  # no packets received
@@ -222,10 +234,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 			for i in range(len(lp_pkts)):
 				# substraction of 31 so it will match the basic pen
-				self.pen_x=lp_pkts[i].point[0]/31
-				self.pen_y=lp_pkts[i].point[1]/31
+				self.pen_x=lp_pkts[i].point[0]/31.1
+				self.pen_y=lp_pkts[i].point[1]/31.1
+
+				# mirror the x axis
+				self.pen_x = wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x
+
 
 				new_pressure = int(int(lp_pkts[i].pressure)/60) 	# normalized to 0-100 range
+				print(self.pen_x, self.pen_y, new_pressure)
 
 				if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
 					# When we the user chose to play sounds

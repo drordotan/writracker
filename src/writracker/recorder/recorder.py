@@ -37,6 +37,7 @@ from WacomPaperMode import wacom_paper_mode
 # CR check best for fit for both pens
 TABLET_POLL_TIME = 50   # defines the polling frequency for tablet packets, in milliseconds
 
+	
 
 # -------------------------------------------------------------------------------------------------------------
 # noinspection PyPep8Naming
@@ -45,12 +46,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		super(MainWindow, self).__init__(parent)
 
 		# get token from env variable insted of hardcoded string
-		wacom_token = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJMTVMiLCJleHAiOjE2ODYxNDE1MjQsImlhdCI6MTY3ODE5MjcyNCwic2VhdHMiOjAsInJpZ2h0cyI6WyJDRExfQUNDRVNTIiwiQ0RMX0xJVkVfU1RSRUFNSU5HIiwiQ0RMX1RISVJEUEFSVFlfUEVOUyIsIkNETF9QSFVfMTExIiwiQ0RMX09FTV9NT05UQkxBTkMiLCJDREwyX0VOVU1fVVNCIiwiQ0RMMl9FTlVNX0JMRSIsIkNETDJfRU5VTV9XQUMiLCJDREwyX0VOVU1fU1lTIiwiQ0RMMl9CQVNJQyIsIkNETDJfU0VSVklDRV9SZWFsVGltZUluayIsIkNETDJfU0VSVklDRV9EaXNjcmV0ZURpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRGVza3RvcERpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRmlsZVRyYW5zZmVyIiwiQ0RMMl9TRVJWSUNFX0VuY3J5cHRpb24iXSwiZGV2aWNlcyI6WyJXQUNPTV9TTUFSVFBBRCIsIldBQ09NX1NUVSIsIldBQ09NX0RSSVZFUiJdLCJ0eXBlIjoiZXZhbCIsImxpY19uYW1lIjoiV2Fjb21fSW5rX1NES19mb3JfZGV2aWNlcyIsIndhY29tX2lkIjoiN2M0OGZlZTk0OGZkNGIyMDgxNDA1MmZlZTJkM2RkZmEiLCJsaWNfdWlkIjoiMzNhODhmMTMtMWQ5OS00NzI3LTg2ZmUtMGJjNTI1MjIyY2UzIiwiYXBwc193aW5kb3dzIjpbXSwiYXBwc19pb3MiOltdLCJhcHBzX2FuZHJvaWQiOltdLCJtYWNoaW5lX2lkcyI6W119.DpGnb9tG_vb_l5mb74fi-BQz4TpVU4nQ1y0c8b0EBK9GmJTGKVtIzewMJvmKCoztxThwVQwZEvB5-jTGxLnnDP4SWDOi1MJ2d0mnJoN4Q5zsL0Q2qCic0YROCAL6q_Rg-6RpkiJt9hDAIfClGWXnBerrU1Cigm90VtfR1_7n8ZWnNMiSzRRFnsuBjyeiaZscvKVvbwc6Skvxt-Xf3BYkxNxlD0kEQQzQNERrFoZdx_q6jNSlctt0jHECuE8Wgy8SsRwIgiCpOhq2GHydPHewMfOaVnDw9d6nJUe0nsHFW0stJCRwE9nOjYbxHKsAgO7OaLZtAPX6WKXzkTLdkkhX7g"
+		wacom_token = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJMTVMiLCJleHAiOjE2OTQ1ODkyNDcsImlhdCI6MTY4NjY0MDQ0Nywic2VhdHMiOjAsInJpZ2h0cyI6WyJDRExfQUNDRVNTIiwiQ0RMX0xJVkVfU1RSRUFNSU5HIiwiQ0RMX1RISVJEUEFSVFlfUEVOUyIsIkNETF9QSFVfMTExIiwiQ0RMX09FTV9NT05UQkxBTkMiLCJDREwyX0VOVU1fVVNCIiwiQ0RMMl9FTlVNX0JMRSIsIkNETDJfRU5VTV9XQUMiLCJDREwyX0VOVU1fU1lTIiwiQ0RMMl9CQVNJQyIsIkNETDJfU0VSVklDRV9SZWFsVGltZUluayIsIkNETDJfU0VSVklDRV9EaXNjcmV0ZURpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRGVza3RvcERpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRmlsZVRyYW5zZmVyIiwiQ0RMMl9TRVJWSUNFX0VuY3J5cHRpb24iXSwiZGV2aWNlcyI6WyJXQUNPTV9TTUFSVFBBRCIsIldBQ09NX1NUVSIsIldBQ09NX0RSSVZFUiJdLCJ0eXBlIjoiZXZhbCIsImxpY19uYW1lIjoiV2Fjb21fSW5rX1NES19mb3JfZGV2aWNlcyIsIndhY29tX2lkIjoiN2M0OGZlZTk0OGZkNGIyMDgxNDA1MmZlZTJkM2RkZmEiLCJsaWNfdWlkIjoiM2JjNGNlNDYtOTQ1NC00Zjg2LWEyMTctOTAzOWQyY2EwNjhhIiwiYXBwc193aW5kb3dzIjpbXSwiYXBwc19pb3MiOltdLCJhcHBzX2FuZHJvaWQiOltdLCJtYWNoaW5lX2lkcyI6W10sInd3dyI6W10sImJhY2tlbmVkX2lkcyI6W119.h_6YURMwNvaPeV-aHoAr5EKxTME8zDQ_iEy6OTKSrtxdJpMlFlJ217UPRDOvQeQX-nneVpdhwNMW6avmQxMaWZd8BO1NAU24Wg2GrmwHzRR16r-PIzk-GvMkB9oyU-Sm8fC9Yo019nD0BzD-It8DDZZVkZ7LMEK10FHSXnRgfX1-5cm9bakQ8_Sm2xf2G80GiyH7WfoZ-pvRJbHxADH2uCptj4bnHCgv0vIpDVyRd1hpQ30AGM3CnbDMspqzRaxffvCgupumNlr9LcJqbB6yzp4is8vXuh00kcW2u5_E6KOK9hFKXGSa8vjR_BKxyhO9F1GjXNK50WKCzsby5bpHeg"
 		self.tablet_paper_mode = wacom_paper_mode(wacom_token)
 		time.sleep(2)
 		self.tablet_paper_mode.SyncConnection()
-		time.sleep(2)
-		self.tablet_paper_mode.RealTimeInk_StartStop(True)
+		# time.sleep(2)
+		# self.tablet_paper_mode.RealTimeInk_StartStop(True)
 		self.ink_mode = False
 		self.title = "WriTracker Recorder"
 		# Establish tablet connection & Start polling
@@ -114,6 +115,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.btn_minus = self.findChild(QPushButton, 'minus_btn')
 		self.menu_online_help = self.findChild(QAction, 'actionOnline_help')
 		self.menu_add_error = self.findChild(QAction, 'actionAddError')
+		self.sounds_settings = self.findChild(QAction, 'sounds_settings')
 		self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
 		self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
 		self.combox_errors = self.findChild(QComboBox, 'combobox_errortype')
@@ -173,6 +175,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.btn_plus.clicked.connect(self.f_btn_plus)
 		self.btn_minus.clicked.connect(self.f_btn_minus)
 		self.menu_add_error.triggered.connect(self.f_menu_add_error)
+		self.sounds_settings.triggered.connect(self.pop_config_menu)
 		self.menu_online_help.triggered.connect(self.f_menu_online_help)
 		self.target_textedit.setStyleSheet("QTextEdit {color:red}")
 		self.target_id_textedit.setStyleSheet("QTextEdit {color:black}")
@@ -211,8 +214,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 					# the trial will start when pressing play, and not when touching the tablet.
 					if not self.trial_started and self.sounds_folder_path is None:
 						self.start_trial()
+						# 
 				if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
-					self.path.moveTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
+					self.path.moveTo(QPoint(int(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x), int(self.pen_y)))
 				elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
 					if self.session_started:
 						# When the pen leaves the surface, add a sample point with zero pressure
@@ -226,6 +230,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 					self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
 		else:
 			lp_pkts = self.tablet_paper_mode.getPoints()
+			# print(len(lp_pkts))
 			if len(lp_pkts) == 0 or lp_pkts[0].point is None or lp_pkts[0].pressure is '':  # no packets received
 				return
 			
@@ -235,14 +240,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 			for i in range(len(lp_pkts)):
 				# substraction of 31 so it will match the basic pen
 				self.pen_x=lp_pkts[i].point[0]/31.1
-				self.pen_y=lp_pkts[i].point[1]/31.1
+				self.pen_y=int(lp_pkts[i].point[1]/31.1)
 
 				# mirror the x axis
-				self.pen_x = wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x
+				self.pen_x = int(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x)
 
 
 				new_pressure = int(int(lp_pkts[i].pressure)/60) 	# normalized to 0-100 range
-				print(self.pen_x, self.pen_y, new_pressure)
+				# print(self.pen_x, self.pen_y, new_pressure)
 
 				if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
 					# When we the user chose to play sounds
@@ -255,6 +260,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
 					if self.session_started:
 						# When the pen leaves the surface, add a sample point with zero pressure
+						print("	self.current_active_trajectory",	self.current_active_trajectory)
 						self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
 				elif new_pressure > 0:                                               # it's a "TabletMove" event
 					self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
@@ -356,6 +362,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 					self.btn_continue_ssn.setEnabled(False)
 					self.stats_reset()
 					self.stats_update()
+					mixer.init()      
 					self.read_next_target()  # read first target
 					return True
 			else:
@@ -364,6 +371,11 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 	#------------------------------------------------------------------------------------------
 	def f_pen_mode_mode(self):
 		self.ink_mode = not self.ink_mode
+		if self.ink_mode:
+			self.tablet_paper_mode.RealTimeInk_StartStop(True)
+		else:
+			self.tablet_paper_mode.RealTimeInk_StartStop(False)
+
 		self.pen_mode_btn.setText("Pen mode: {}".format("paper" if self.ink_mode else "basic"))
 	
 	def f_btn_start_ssn(self):
@@ -435,13 +447,15 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		current_target = self.targets[self.curr_target_index]
 		try:
 			soundfile = os.path.join(self.sounds_folder_path, current_target.sound_file_name)
+			print("soundfile", soundfile)
 			mixer.music.load(soundfile)
 			self.start_trial()
 			mixer.music.play(0)
 			self.targets[self.curr_target_index].sound_file_length = round(MP3(soundfile).info.length, 2)
 		except TypeError:
 			self.show_info_msg("Error!", "Error when trying to access sound file.")
-		except pgerr:
+		except pgerr as pger:
+			print("error" + str(pger))
 			self.show_info_msg("Error!", "Error when trying to play sound file.")
 
 	#------------------------------------------------------------------------------------------
@@ -489,6 +503,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				self.close_current_trial()
 				self.save_trials_file()
 				self.save_remaining_targets_file()
+			self.tablet_paper_mode.RealTimeInk_StartStop(False)
 			self.poll_timer.stop()
 			wintab.CloseTabletContext(wintab.hctx)
 			self.close()
@@ -543,6 +558,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				continue
 			else:
 				return False
+
 
 	# ----------------------------------------------------------------------------------
 	# For results folder
@@ -648,7 +664,17 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
 								   " errors list. \nInsert Error types, divided by commas(',') "
 								   "or leave empty to use default error types")
+
+
 		lineedit_error_types = QLineEdit(objectName="lineedit_error_types")
+				# lineedit_error_types add default value if self.combox_errors is not empty
+
+		if self.combox_errors.count() > 0:
+			error_types = ""
+			for i in range(self.combox_errors.count()):
+				error_types += self.combox_errors.itemText(i) + ", "
+			lineedit_error_types.setText(error_types[:-2])
+			
 		lineedit_error_types.setPlaceholderText("Spelling, Motor, Incomplete")
 		# Add everything to the the main layout, layout_v (vertical)
 		layout_v.addWidget(label_sound_folder)
@@ -695,12 +721,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		"""
 		reads the database and restores session status
 		"""
-
+		print(str(self.results_folder_path) + os.sep + dataio.trials_csv_filename)
 		df = pd.read_csv(str(self.results_folder_path) + os.sep + dataio.trials_csv_filename)
 
 		self.trial_unique_id = df.trial_id.max() + 1
-
-		df['target'] = df.target.str.strip()  # remove space, might be added by pandas when converted to CSV
+		print(df.target)
+		# df['target'] = df.target.astype(str).str.strip()  # remove space, might be added by pandas when converted to CSV
 
 		# -- Fill targets list --
 		for target in self.targets:  # fill in targets' rc property.
@@ -712,6 +738,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 					target.rc_code = df.set_index('target')['rc'].to_dict()[target.value]
 				last_trial_file_name = df.set_index('target')['traj_file_name'].to_dict()[target.value]
 				num_idx = df.set_index('target')['traj_file_name'].to_dict()[target.value].rfind('l')
+				print(last_trial_file_name[num_idx + 1:])
 				target.next_trial_id = int(last_trial_file_name[num_idx + 1:]) + 1
 
 				# -- Fill trials list per target --

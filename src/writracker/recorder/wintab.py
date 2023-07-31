@@ -1,5 +1,5 @@
 from writracker.recorder.wintab_params import LOGCONTEXT, AXIS, PACKET
-from win32api import GetSystemMetrics
+# from win32api import GetSystemMetrics
 from tkinter import messagebox, Tk
 from ctypes.wintypes import DWORD
 from ctypes import *

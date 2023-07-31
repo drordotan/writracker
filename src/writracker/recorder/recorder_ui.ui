@@ -784,6 +784,7 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
     </property>
     <addaction name="actionAddError"/>
     <addaction name="separator"/>
+	<addaction name="sounds_settings"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -806,6 +807,11 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
    </property>
    <property name="text">
     <string>Add Error type</string>
+   </property>
+  </action>
+    <action name="sounds_settings">
+   <property name="text">
+    <string>sounds settings</string>
    </property>
   </action>
   <action name="actionOnline_help">

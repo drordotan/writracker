@@ -213,6 +213,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 					# When we the user chose to play sounds
 					# the trial will start when pressing play, and not when touching the tablet.
 					if not self.trial_started and self.sounds_folder_path is None:
+						print("self start in poll")
 						self.start_trial()
 						# 
 				if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
@@ -253,12 +254,13 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 					# When we the user chose to play sounds
 					# the trial will start when pressing play, and not when touching the tablet.
 					if not self.trial_started and self.sounds_folder_path is None:
+						print("start trail in poll")
 						self.start_trial()
 
 				if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
 					self.path.moveTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
 				elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
-					if self.session_started:
+					if self.session_started and self.current_active_trajectory is not None:
 						# When the pen leaves the surface, add a sample point with zero pressure
 						print("	self.current_active_trajectory",	self.current_active_trajectory)
 						self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)

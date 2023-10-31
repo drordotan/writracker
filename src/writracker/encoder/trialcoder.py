@@ -138,10 +138,6 @@ def show_settings_screen(show_cancel_button=True):
 
     while show_popup:
 
-        buttons = [sg.Button('OK')]
-        if show_cancel_button:
-            buttons.append(sg.Button('Cancel'))
-
         layout = [
             [sg.Text(warning, text_color='red')],
 
@@ -159,7 +155,7 @@ def show_settings_screen(show_cancel_button=True):
 
             [sg.Text('The size of dots for plotting the trajectories: '),
              sg.DropDown(['1', '2', '3', '4', '5'], readonly=True, key='dot_radius', default_value=str(app_config['dot_radius']))],
-            buttons,
+            [sg.Button('OK')] + ( [sg.Button('Cancel')] if show_cancel_button else []),
         ]
 
         window = sg.Window('Settings', layout)

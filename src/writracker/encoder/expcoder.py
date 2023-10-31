@@ -2,12 +2,14 @@
 An application for coding strokes & characters in a full experiment
 """
 import os
+import traceback
 # noinspection PyPep8Naming
 import PySimpleGUI as sg
 from tkinter import messagebox
 import tkinter as tk
 
-import writracker
+import writracker.recorder.results
+import writracker.encoder
 from writracker import uiutil as uiu
 
 
@@ -73,6 +75,7 @@ def _load_raw_exp_ui():
             return exp, raw_dir
 
         except Exception as e:
+            traceback.print_exception(e)
             messagebox.showerror("Invalid raw-data folder", str(e))
 
 

@@ -148,7 +148,7 @@ def _load_trials_index(dir_name):
 
             err_loc = 'line {:} in {:}'.format(reader.line_num, index_fn)
 
-            row['sound_file_length'] = 0 if row['sound_file_length'] is None or row['sound_file_length'] == "" else int(row['sound_file_length'])
+            row['sound_file_length'] = 0 if row['sound_file_length'] is None or row['sound_file_length'] == "" else float(row['sound_file_length'])
             row['trial_id'] = u.parse_int('trial_id', row['trial_id'], err_loc)
             if row['rc'] == '':
                 row['rc'] = None

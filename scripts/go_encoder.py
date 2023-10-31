@@ -1,3 +1,3 @@
-import writracker
+import writracker.encoder
 
-writracker.run_encoder()
+writracker.encoder.run()

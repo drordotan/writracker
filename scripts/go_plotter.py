@@ -1,3 +1,3 @@
-import writracker
+import writracker.plotter
 
-writracker.run_plotter()
+writracker.plotter.run()

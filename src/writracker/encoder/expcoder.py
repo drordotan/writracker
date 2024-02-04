@@ -40,6 +40,7 @@ def run():
         code_experiment(raw_exp.trials, results_dir)
 
     except Exception as e:
+        traceback.print_exception(e)
         messagebox.showerror('Error in WEncoder', str(e))
 
 
@@ -116,6 +117,7 @@ def _mark_processed_trials(raw_exp, coded_dir):
     try:
         coded_trial_nums = writracker.encoder.dataio.load_coded_trials_nums(coded_dir)
     except Exception as e:
+        traceback.print_exception(e)
         messagebox.showerror('Invalid target directory', 'Error: {}'.format(e))
         return False
 
@@ -293,6 +295,7 @@ def _all_trials_are_coded(encoded_dir, raw_trials):
     try:
         coded_trial_nums = writracker.encoder.dataio.load_coded_trials_nums(encoded_dir)
     except Exception as e:
+        traceback.print_exception(e)
         messagebox.showerror('Error reading the encoded trials', 'Error: {}'.format(e))
         return False
 

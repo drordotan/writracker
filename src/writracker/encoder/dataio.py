@@ -394,6 +394,9 @@ class Stroke(object):
         """
         The duration (in ms) it took to complete this stroke
         """
+        if len(self.trajectory) == 0:
+            return 0
+
         t_0 = float(self.trajectory[0].t)
         t_n = float(self.trajectory[-1].t)
         return t_n - t_0
@@ -595,7 +598,7 @@ def traj_filenames(filename, trial_id, sub_trial_num=None):
     with open(filename, 'r', encoding="utf-8") as fp:
         reader = csv.DictReader(fp)
         u.validate_csv_format(filename, reader, ['trial_id', 'sub_trial_num', 'traj_file_name'])
-        return [row['traj_filename'] for row in reader if relevant_row(row)]
+        return [row['traj_file_name'] for row in reader if relevant_row(row)]
 
 
 #----------------------------------------------------------

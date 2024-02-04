@@ -1,6 +1,8 @@
 """
 coding strokes & characters in one trial
 """
+import traceback
+
 import numpy as np
 import re
 import enum
@@ -250,31 +252,31 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
         if event is None:
             return 'reset_trial', None, None
 
-        #-- Reset the trial
+        #-- Command: Reset the trial
         elif event in ('r', 'R', 'reset_trial', 82, 'ר'):
             answer = sg.Popup('Reset trial', 'Are you sure you want to reset the current trial?', button_type=1)
             if answer == "Yes":
                 window.Close()
                 return 'reset_trial', None, None
 
-        #-- Quit the app
+        #-- Command: Quit the app
         elif event in ('q', 'Q', 'quit', '/'):
             answer = sg.Popup('Quit', 'Are you sure you want to quit WEncoder?', button_type=1)
             if answer == "Yes":
                 window.Close()
                 return 'quit', None, None
 
-        #-- Select trial
+        #-- Command: Select trial
         elif event in ('g', 'G', 'choose_trial', 71, 'ע'):
             window.Close()
             return 'choose_trial', None, None
 
-        #-- Open settings window
+        #-- Command: Open settings window
         elif event in ('e', 'E', 'settings', 69, 'ק'):
             window.Close()
             return 'settings', None, None
 
-        #-- OK - Accept current coding
+        #-- Command: OK - Accept current coding
         if event in ('a', 'A', 'accept', 65, 'ש'):
             resp_optional = app_config['response_mandatory'] == ResponseMandatory.Optional
             if not resp_optional:
@@ -297,7 +299,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
             # else:
             #     window['accept_error'].update(disabled=True)
 
-        #-- Error - Accept current coding, set trial as error
+        #-- Command: Error - Accept current coding, set trial as error
         elif event in ('o', 'O', 'accept_error', 79, 'ם'):
             resp_optional = app_config['response_mandatory'] != ResponseMandatory.MandatoryForAll
             if not resp_optional:
@@ -311,38 +313,38 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 window.Close()
                 return 'next_trial', None, None
 
-        #-- Skip this trial
+        #-- Command: Skip this trial
         elif event in ('k', 'K', 'skip_trial', 75, 'ל'):
             window.Close()
             return 'next_trial', None, None
 
-        #-- Return to previous trial
+        #-- Command: Return to previous trial
         elif event in ('p', 'P', 'prev_trial', 80, 'פ'):
             window.Close()
             return 'prev_trial', None, None
 
-        #-- Merge 2 characters
+        #-- Command: Merge 2 characters
         elif event in ('m', 'M', 'merge_chars', 77, 'צ'):
             if current_command is None and len(characters) > 1:
                 instructions.Update('Select the characters to merge. ENTER=confirm, ESC=abort')
                 current_command = 'merge_chars'
                 selection_handler = _CharsSelectorConsecutivePair(graph, characters)
 
-        #-- Split a stroke into 2 characters
+        #-- Command: Split a stroke into 2 characters
         elif event in ('s', 'S', 'split_stroke', 83, 'ד'):
             if current_command is None:
                 instructions.Update('Select a stroke to split. ENTER=confirm, ESC=abort')
                 current_command = 'split_stroke'
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
-        #-- Split a character
+        #-- Command: Split a character
         elif event in ('c', 'C', 'split_char', 67, 'ב'):
             if current_command is None:
                 instructions.Update('Select a character to split to 2 different characters. ENTER=confirm, ESC=abort')
                 current_command = 'split_char'
                 selection_handler = _MultiStrokeSelector(graph, characters, 'before')
 
-        #-- Split the trial into 2 trials
+        #-- Command: Split the trial into 2 trials
         elif event in ('t', 'T', 'split_trial', 84, 'א'):
             if current_command is None:
                 instructions.Update('Select the last character of trial#1. ENTER=confirm, ESC=abort')
@@ -350,25 +352,27 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 selection_handler = _CharSeriesSelector(graph, characters)
 
 
-        #-- Self correction
+        #-- Command: Self correction
         elif event in ('x', 'X', 'set_extending_chars', 'ס'):
             if current_command is None:
                 instructions.Update('Select 2 characters to connect as extending, or 1 char to un-extend. ENTER=confirm, ESC=abort')
                 current_command = 'set_extending_chars'
                 selection_handler = _CharSelectorAnyPair(graph, characters)
 
-        # -- Show Self correction
+        #-- Command: Show Self correction
         elif event == 'show_extending':
             app_config['show_extending'] = values['show_extending']
             window.Close()
             return 'rerun', characters, None
 
+        #-- Command: Delete a stroke
         elif event in ('d', 'D', 'delete_stroke', 68, 'ג'):
             if current_command is None:
                 instructions.Update('Select a stroke to delete. ENTER=confirm, ESC=abort')
                 current_command = 'delete_stroke'
                 selection_handler = _SingleStrokeSelector(graph, strokes)
 
+        #-- Command: enter the participant's response
         elif event == 'enter_response':
             response = get_valid_user_response(response, on_paper_chars, trial.stimulus, get_if_already_exists=True)
             window.Close()
@@ -380,7 +384,6 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 selection_handler.clicked(values)
 
         #-- ENTER clicked: end the currently-running command
-
         elif current_command is not None and not isinstance(event, int) and len(event) == 1 and ord(event) == 13:
             if current_command == 'split_char':
                 characters = manip.split_character(characters, selection_handler.selected_char, selection_handler.selected_stroke)
@@ -420,6 +423,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                         messagebox.showerror('Invalid deletion attempt', err_msg)
                     return 'rerun', characters, None
                 except Exception as e:
+                    traceback.print_exception(e)
                     messagebox.showerror('Error in WEncoder', 'Error when trying to delete a character: {}'.format(e))
                     return 'rerun', characters, None
 
@@ -652,7 +656,7 @@ def _create_window_for_split_strokes(screen_size):
         [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)]
     ]
 
-    window = sg.Window('Split a stroke into 2', layout, return_keyboard_events=True, resizable=True)
+    window = sg.Window('Split a stroke into 2', layout, return_keyboard_events=False, resizable=True)
     window.Finalize()
 
     return window

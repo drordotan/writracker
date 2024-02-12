@@ -67,6 +67,11 @@ class RawTrial(object):
 
     #-----------------------------------------------------------------
     @property
+    def stim_chars(self):
+        return self.stimulus.replace(' ', '')
+
+    #-----------------------------------------------------------------
+    @property
     def n_traj_points(self):
         """
         The total number of points recorded in the trial

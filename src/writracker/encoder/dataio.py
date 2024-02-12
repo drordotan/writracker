@@ -231,7 +231,7 @@ def _validate_consecutive_char_numbers(characters, trial_id):
 
     char_nums = [c.char_num for c in characters]
     if char_nums != list(range(1, len(characters) + 1)):
-        raise ValueError('Non-consecutive character numbers for trial #{} ({})'.format(trial_id, char_nums))
+        raise ValueError('Character numbers for trial #{} ({}) are not consecutive or do not start from 1'.format(trial_id, char_nums))
 
 
 #--------------------------------------------------------------------------

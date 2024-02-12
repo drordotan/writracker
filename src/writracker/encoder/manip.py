@@ -1,6 +1,6 @@
 import numpy as np
 
-from writracker.encoder import dataio
+from writracker import commonio
 
 
 #=====================================================================================================
@@ -46,6 +46,11 @@ class UiStroke(object):
         x = [d.x for d in self.trajectory]
         return min(x), max(x)
 
+    @property
+    def ylim(self):
+        y = [d.y for d in self.trajectory]
+        return min(y), max(y)
+
     def __iter__(self):
         return self.trajectory.__iter__()
 
@@ -72,6 +77,12 @@ class UiTrajPoint(object):
     @property
     def t(self):
         return self.dot.t
+
+    def rotate_x(self, pivot):
+        return UiTrajPoint(commonio.TrajectoryPoint(pivot + (pivot - self.dot.x), self.dot.y, self.dot.z, self.dot.t))
+
+    def rotate_y(self, pivot):
+        return UiTrajPoint(commonio.TrajectoryPoint(self.dot.x, pivot + (pivot - self.dot.y), self.dot.z, self.dot.t))
 
 
 #=====================================================================================================
@@ -141,10 +152,11 @@ def _split_dots_into_strokes(dots):
 
 
 #-------------------------------------------------------------------------------------
-def _x_overlap_ratio(dots1, dots2):
+def _x_overlap_ratio(dots1, dots2, mode_new=True):
     """
     Get 2 arrays of dots and return the % of overlap between the two intervals.
-    The overlap is defined as: overlapping_inverval / total_inverval
+    The overlap is defined as: overlapping_inverval / reference_inverval
+    reverence_inteval is the total width of both characters if mode_new=False; or the width of the thinner character if mode_new=True
     """
 
     x1 = [d.x for d in dots1]
@@ -158,12 +170,17 @@ def _x_overlap_ratio(dots1, dots2):
     overlap = min(max1, max2) - max(min1, min2)
     overlap = max(overlap, 0)
 
-    total_width = max(max1, max2) - min(min1, min2)
+    if mode_new:
+        #-- Reference is the width of the thinner character
+        reference_interval = min(max1-min1, max2-min2)
+    else:
+        #-- Reference is the width of both characters together
+        reference_interval = max(max1, max2) - min(min1, min2)
 
-    if total_width == 0:
+    if reference_interval == 0:
         return 1
     else:
-        return overlap / total_width
+        return overlap / reference_interval
 
 
 #=====================================================================================================
@@ -182,6 +199,9 @@ def split_into_2_trials(characters, trial1_last_char):
 
     trial1_chars = [c for c in characters if c.char_num <= trial1_last_char.char_num]
     trial2_chars = [c for c in characters if c.char_num > trial1_last_char.char_num]
+
+    _renumber_chars_and_strokes(trial1_chars)
+    _renumber_chars_and_strokes(trial2_chars)
 
     return trial1_chars, trial2_chars
 
@@ -453,3 +473,36 @@ def _move_leading_space_to_prev_char(characters, char_ind):
     _merge_consecutive_space_strokes(prev_char, len(prev_char.strokes) - 2)
 
     _renumber_strokes(prev_char)
+
+#=====================================================================================================
+# Rotate trial
+#=====================================================================================================
+
+#-----------------------------------------------------------------------------------
+def rotate_horizontally(characters):
+    xlim = trial_xlim(characters)
+    xmid = (xlim[0] + xlim[1]) / 2
+    for c in characters:
+        for stroke in c.strokes:
+            stroke.trajectory = [point.rotate_x(xmid) for point in stroke.trajectory]
+
+
+#-----------------------------------------------------------------------------------
+def rotate_vertically(characters):
+    ylim = trial_ylim(characters)
+    ymid = (ylim[0] + ylim[1]) / 2
+    for c in characters:
+        for stroke in c.strokes:
+            stroke.trajectory = [point.rotate_y(ymid) for point in stroke.trajectory]
+
+
+#-----------------------------------------------------------------------------------
+def trial_xlim(characters):
+    xlims = [stroke.xlim for c in characters for stroke in c.strokes]
+    return min([x[0] for x in xlims]), max([x[1] for x in xlims])
+
+
+#-----------------------------------------------------------------------------------
+def trial_ylim(characters):
+    ylims = [stroke.ylim for c in characters for stroke in c.strokes]
+    return min([y[0] for y in ylims]), max([y[1] for y in ylims])

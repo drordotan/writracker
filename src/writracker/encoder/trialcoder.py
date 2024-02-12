@@ -23,7 +23,7 @@ class ResponseMandatory(enum.Enum):
 _response_mandatory_options = ['Optional', 'Mandatory only for correct trials', 'Mandatory for correct and error trials']
 
 
-app_config = dict(max_within_char_overlap=0.25,
+app_config = dict(max_within_char_overlap=0.33,
                   error_codes=('WrongNumber', 'NoResponse', 'BadHandwriting', 'TooConnected'),
                   response_mandatory=ResponseMandatory.Mandatory,
                   show_extending=True,
@@ -96,10 +96,10 @@ def encode_one_trial(trial, out_dir, screen_size=(1000, 800), margin=25):
             dataio.delete_trial(out_dir, trial.trial_id)
             trial.processed = False
 
-        elif rc == 'split_trial':
+        elif rc == 'replace_trial':
             # noinspection PyUnboundLocalVariable
-            trial_queue.insert(0, extra_info)
-            trial_queue.insert(0, characters)
+            for char_list in extra_info[::-1]:
+                trial_queue.insert(0, char_list)
 
         elif rc == 'next_trial':
             sub_trial_num += 1
@@ -280,7 +280,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
         if event in ('a', 'A', 'accept', 65, 'ש'):
             resp_optional = app_config['response_mandatory'] == ResponseMandatory.Optional
             if not resp_optional:
-                response = get_valid_user_response(response, on_paper_chars, trial.stimulus, get_if_already_exists=False)
+                response = get_valid_user_response(response, on_paper_chars, trial.stim_chars, get_if_already_exists=False)
 
             if resp_optional or response is not None:
                 if sub_trial_num == 1:
@@ -303,7 +303,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
         elif event in ('o', 'O', 'accept_error', 79, 'ם'):
             resp_optional = app_config['response_mandatory'] != ResponseMandatory.MandatoryForAll
             if not resp_optional:
-                response = get_valid_user_response(response, on_paper_chars, trial.stimulus, get_if_already_exists=False)
+                response = get_valid_user_response(response, on_paper_chars, trial.stim_chars, get_if_already_exists=False)
 
             if resp_optional or response is not None:
                 if sub_trial_num == 1:
@@ -351,13 +351,26 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 current_command = 'split_trial'
                 selection_handler = _CharSeriesSelector(graph, characters)
 
-
         #-- Command: Self correction
         elif event in ('x', 'X', 'set_extending_chars', 'ס'):
             if current_command is None:
                 instructions.Update('Select 2 characters to connect as extending, or 1 char to un-extend. ENTER=confirm, ESC=abort')
                 current_command = 'set_extending_chars'
                 selection_handler = _CharSelectorAnyPair(graph, characters)
+
+        #-- Command: rotate horizontally
+        elif event in ('h', 'H', 'rotate_hor', 'י'):
+            if current_command is None:
+                manip.rotate_horizontally(characters)
+                window.Close()
+                return 'replace_trial', None, [characters]
+
+        #-- Command: rotate vertically
+        elif event in ('v', 'V', 'rotate_ver', 'ה'):
+            if current_command is None:
+                manip.rotate_vertically(characters)
+                window.Close()
+                return 'replace_trial', None, [characters]
 
         #-- Command: Show Self correction
         elif event == 'show_extending':
@@ -374,17 +387,20 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
 
         #-- Command: enter the participant's response
         elif event == 'enter_response':
-            response = get_valid_user_response(response, on_paper_chars, trial.stimulus, get_if_already_exists=True)
+            response = get_valid_user_response(response, on_paper_chars, trial.stim_chars, get_if_already_exists=True)
             window.Close()
             return 'rerun', characters, response
 
-        #-- Mouse click
+        #-- Clicked (with mouse) on the characters
         elif event == 'graph':
             if selection_handler is not None:
                 selection_handler.clicked(values)
 
-        #-- ENTER clicked: end the currently-running command
-        elif current_command is not None and not isinstance(event, int) and len(event) == 1 and ord(event) == 13:
+        #------------------------
+        #-- Clicked ENTER (or the 'confirm' button): end the currently-running command
+        elif current_command is not None and \
+                (event == 'cmd_confirm' or (not isinstance(event, int) and len(event) == 1 and ord(event) == 13)):
+
             if current_command == 'split_char':
                 characters = manip.split_character(characters, selection_handler.selected_char, selection_handler.selected_stroke)
                 window.Close()
@@ -406,7 +422,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                     return 'continue', characters, None
                 chars1, chars2 = manip.split_into_2_trials(characters, selection_handler.selected)
                 window.Close()
-                return 'split_trial', chars1, chars2
+                return 'replace_trial', None, (chars1, chars2)
 
             elif current_command == 'set_extending_chars':
                 if len(selection_handler.selected_chars) == 0:
@@ -431,8 +447,12 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 messagebox.showerror('Error in WEncoder', 'General error (ENC-GEN-01)\nQuitting')
                 return 'quit', None, None
 
+        #------------------------
         #-- ESC clicked: cancel the currently-running command
         #elif len(event) == 1 and ord(event) == 27:                         #Original line!!!
+        elif current_command is not None and \
+                (event == 27 or event == 'cmd_cancel' or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)):
+            cleanup_selection_handler = True
 
         else:
             if isinstance(event, str) and len(event) == 1:
@@ -441,8 +461,8 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
                 print("Clicked [{}]".format(event))
             instructions.Update('UNKNOWN COMMAND')
 
-        if current_command is not None and (event == 27 or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)):
-            cleanup_selection_handler = True
+        #if current_command is not None and (event == 27 or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)):
+        #    cleanup_selection_handler = True
 
         if cleanup_selection_handler:
             instructions.Update('')
@@ -506,6 +526,9 @@ def _create_window_for_markup(screen_size, title, user_response):
         sg.Text('            Stroke-level: '),
         sg.Button('Split (S)troke', key='split_stroke'),
         sg.Button('(D)elete stroke', key='delete_stroke'),
+        sg.Text('            Rotate trial: '),
+        sg.Button('(H)orizontally', key='rotate_hor'),
+        sg.Button('(V)ertically', key='rotate_ver'),
     ]
 
     commands_s = [
@@ -530,6 +553,9 @@ def _create_window_for_markup(screen_size, title, user_response):
         sg.Txt('User response:'),
         sg.Input(default_text=user_response, key='user_response', readonly=True, background_color='#CFCFCF'),
         sg.Button('Update...', key='enter_response'),
+        sg.Txt('          Confirm split/merge:'),
+        sg.Button('Confirm', key='cmd_confirm'),
+        sg.Button('Cancel', key='cmd_cancel'),
     ]
 
     commands_general = [
@@ -632,12 +658,13 @@ def _split_stroke(stroke, screen_size, margin, dot_radius=6):
 
             selected_dot = clicked_dot
 
-        elif len(event) == 1 and ord(event) == 13 and selected_dot is not None:
+        elif selected_dot is not None and \
+                (event == 'cmd_confirm' or (len(event) == 1 and ord(event) == 13)):
             #-- ENTER pressed
             window.Close()
             return selected_dot.markup
 
-        elif event == 'Escape:27':
+        elif event == 'Escape:27' or event == 'cmd_cancel':
             #-- ESC pressed
             if selected_dot is None:
                 window.Close()
@@ -653,7 +680,8 @@ def _create_window_for_split_strokes(screen_size):
 
     layout = [
         [sg.Text('Choose a dot on which the stroke will be split. ENTER=confirm, ESC=abort', text_color='red', key='instructions')],
-        [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)]
+        [sg.Graph(screen_size, (0, screen_size[1]), (screen_size[0], 0), background_color='Black', key='graph', enable_events=True)],
+        [sg.Button('Confirm', key='cmd_confirm'), sg.Button('Cancel', key='cmd_cancel')]
     ]
 
     window = sg.Window('Split a stroke into 2', layout, return_keyboard_events=False, resizable=True)

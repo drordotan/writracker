@@ -244,9 +244,11 @@ def code_experiment(trials, out_dir):
     reprocess_trial = False
     delta = 1
 
-    while i < len(trials):
+    while True:
 
         i += delta
+        if i >= len(trials):
+            break
 
         trial = trials[i]
         if trial.processed and not reprocess_trial:

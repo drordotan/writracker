@@ -375,7 +375,7 @@ def delete_stroke(characters, selection_handler):
     deleted_stroke_ind = characters[deleted_char_ind].strokes.index(deleted_stroke)
 
     _change_stroke_to_space(characters[deleted_char_ind], deleted_stroke_ind)
-    _move_leading_space_to_prev_char(characters, deleted_char_ind)
+    characters = _redistribute_strokes_after_deletion(characters, deleted_char_ind)
 
     return characters, None
 
@@ -437,6 +437,34 @@ def _renumber_strokes(char):
     for i, stroke in enumerate(char.strokes):
         stroke.stroke_num = i+1
         stroke.char_num = char.char_num
+
+
+#-----------------------------------------------------------------------------------
+def _redistribute_strokes_after_deletion(characters, deleted_char_ind):
+    """
+    After deleting a stroke, redistribute them to characters if the first stroke in the target character is space
+    (or if the whole character was deleted)
+    """
+
+    if deleted_char_ind == 0 and len(characters[0].strokes) == 1 and not characters[0].strokes[0].on_paper:
+        #-- The character was deledeted. Because it's the first, add the stroke to the next char.
+        deleted_stroke = characters[0].strokes[0]
+        deleted_stroke.on_paper = False
+        characters = characters[1:]
+        _insert_stroke_at_beginning_of_char(characters[0], deleted_stroke)
+        _renumber_chars_and_strokes(characters)
+
+    else:
+        _move_leading_space_to_prev_char(characters, deleted_char_ind)
+
+    return characters
+
+
+#-----------------------------------------------------------------------------------
+def _insert_stroke_at_beginning_of_char(char, stroke):
+    char.strokes.insert(0, stroke)
+    if len(char.strokes) > 1 and not char.strokes[1].on_paper:
+        _merge_consecutive_space_strokes(char, 0)
 
 
 #-----------------------------------------------------------------------------------

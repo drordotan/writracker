@@ -219,7 +219,7 @@ def _ask_when_session_partially_encoded(coded_dir, last_coded_trial, some_trials
     while True:
         resp = show_question('Target directory is not empty',
                              ['Some of the trials in this session were already encoded.', msg, 'What do you want to do?'],
-                             ["Quit WEncoder", "Delete any encoded trial and start over", "Start encoding from trial {}".format(last_coded_trial+1)],
+                             ["Quit WEncoder", "Delete any encoded trial and start over", "Continue encoding from trial {}".format(last_coded_trial+1)],
                              answers_in_one_line=False)
         if resp == 0:   # Quit WEncoder
             return 'quit'

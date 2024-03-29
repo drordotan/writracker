@@ -80,7 +80,7 @@ class RawTrial(object):
 
 
 #--------------------------------------------------------------------------------------------------------------------
-class Experiment(object):
+class RawDataset(object):
     """
     All trials of one experiment session
     """
@@ -130,7 +130,7 @@ def load_experiment(dir_name):
 
         trials.append(trial)
 
-    return Experiment(trials, source_path=dir_name)
+    return RawDataset(trials, source_path=dir_name)
 
 
 #----------------------------------------------------------

@@ -24,45 +24,58 @@ strokes_cols = 'trial_id', 'sub_trial_num', 'char_num', 'stroke', 'on_paper'
 #============================================================================================================
 
 #-------------------------------------------------------------------------------------------------
-def load_experiment(dir_name, trial_index_filter=None):
+def load_experiment(dir_names, trial_index_filter=None, renumber_trials=False):
     """
     Load full experiment (including trajectories)
 
-    :param dir_name: The directory with WEncoder data
+    :param dir_names: The directory with WEncoder data, or a list of directories
     :param trial_index_filter: A function that gets a trials.csv row (as dict) and returns T/F (whether to load it or not)
     """
 
-    index = _load_trials_index(dir_name)
-    all_strokes = _load_strokes_file(dir_name)
+    if not u.is_collection(dir_names):
+        dir_names = dir_names,
 
     trials = []
 
-    for trial_spec in index:
+    for dir_name in dir_names:
 
-        #-- Skip filtered trials
-        if trial_index_filter is not None and not trial_index_filter(trial_spec):
-            continue
+        index = _load_trials_index(dir_name)
+        all_strokes = _load_strokes_file(dir_name)
 
-        trial_key = trial_spec['trial_id'], trial_spec['sub_trial_num']
-        if trial_key not in all_strokes:
-            raise ValueError('Invalid data in {}: no strokes for trial #{} (sub-trial={})')
+        for trial_spec in index:
 
-        trial_strokes = all_strokes[trial_key]
+            #-- Skip filtered trials
+            if trial_index_filter is not None and not trial_index_filter(trial_spec):
+                continue
 
-        traj_filename = dir_name + os.sep + trial_spec['traj_file_name']
-        _load_trajectory(traj_filename, trial_strokes)
+            trial_key = trial_spec['trial_id'], trial_spec['sub_trial_num']
+            if trial_key not in all_strokes:
+                raise ValueError('Invalid data in {}: no strokes for trial #{} (sub-trial={})')
 
-        characters = _create_characters(trial_strokes, trial_spec['trial_id'])
+            trial_strokes = all_strokes[trial_key]
 
-        trial = CodedTrial(trial_id=trial_spec['trial_id'], sub_trial_num=trial_spec['sub_trial_num'], target_id=trial_spec['target_id'],
-                           stimulus=trial_spec['target'], time_in_session=trial_spec['time_in_session'], rc=trial_spec['rc'],
-                           response=trial_spec['response'], sound_file_length=trial_spec['sound_file_length'],
-                           traj_file_name=trial_spec['traj_file_name'], time_in_day=trial_spec['time_in_day'], date=trial_spec['date'],
-                           characters=characters, strokes=trial_strokes)
+            traj_filename = dir_name + os.sep + trial_spec['traj_file_name']
+            _load_trajectory(traj_filename, trial_strokes)
 
-        trials.append(trial)
+            characters = _create_characters(trial_strokes, trial_spec['trial_id'])
 
-    return Experiment(trials, source_path=dir_name)
+            trial = CodedTrial(trial_id=len(trials) + 1 if renumber_trials else trial_spec['trial_id'],
+                               sub_trial_num=trial_spec['sub_trial_num'],
+                               target_id=trial_spec['target_id'],
+                               stimulus=trial_spec['target'],
+                               time_in_session=trial_spec['time_in_session'],
+                               rc=trial_spec['rc'],
+                               response=trial_spec['response'],
+                               sound_file_length=trial_spec['sound_file_length'],
+                               traj_file_name=trial_spec['traj_file_name'],
+                               time_in_day=trial_spec['time_in_day'],
+                               date=trial_spec['date'],
+                               characters=characters,
+                               strokes=trial_strokes)
+
+            trials.append(trial)
+
+    return CodedDataset(trials)
 
 
 #----------------------------------------------------------
@@ -144,7 +157,11 @@ def _load_trajectory(traj_filename, trial_strokes):
         if stroke.stroke_num not in all_stroke_nums:
             raise ValueError('Error in trajectory file {}: stroke #{} has no points'.format(traj_filename, stroke.stroke_num))
 
-        stroke.trajectory = points_per_stroke[stroke.stroke_num]
+        if stroke.stroke_num in points_per_stroke:
+            stroke.trajectory = points_per_stroke[stroke.stroke_num]
+        else:
+            print(f'WARNING: stroke #{stroke.stroke_num} not found in {traj_filename}')
+            stroke.trajectory = []
 
 
 #--------------------------------------------------------------------------------------------------------------------
@@ -231,7 +248,7 @@ def _validate_consecutive_char_numbers(characters, trial_id):
 
     char_nums = [c.char_num for c in characters]
     if char_nums != list(range(1, len(characters) + 1)):
-        raise ValueError('Character numbers for trial #{} ({}) are not consecutive or do not start from 1'.format(trial_id, char_nums))
+        print('ERROR: Character numbers for trial #{} ({}) are not consecutive or do not start from 1'.format(trial_id, char_nums))
 
 
 #--------------------------------------------------------------------------
@@ -267,15 +284,14 @@ def _update_post_char_space(characters, strokes, space_stroke_ind):
 
 
 #--------------------------------------------------------------------------------------------------------------------
-class Experiment(object):
+class CodedDataset(object):
     """
     All trials of one experiment session
     """
 
-    def __init__(self, trials=(), subj_id=None, source_path=None):
+    def __init__(self, trials=(), subj_id=None):
         self._trials = list(trials)
         self.subj_id = subj_id
-        self.source_path = source_path
 
     @property
     def trials(self):

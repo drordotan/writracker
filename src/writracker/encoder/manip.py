@@ -377,6 +377,8 @@ def delete_stroke(characters, selection_handler):
     _change_stroke_to_space(characters[deleted_char_ind], deleted_stroke_ind)
     characters = _redistribute_strokes_after_deletion(characters, deleted_char_ind)
 
+    _renumber_chars_and_strokes(characters)
+
     return characters, None
 
 

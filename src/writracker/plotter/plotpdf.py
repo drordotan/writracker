@@ -220,39 +220,65 @@ def _trial_stim(trial):
         return str(trial.stimulus)
 
 
+#---------------------------------------------------
+def _trial_response(trial):
+    if str(trial.stimulus) == str(trial.response):
+        return '='
+    else:
+        return str(trial.response)
+
+
 #-------------------------------------------------------------
 class TrialTitle(object):
 
+    keywords = dict(
+            block=lambda trial: str(trial.block),
+            trial_id=lambda trial: str(trial.trial_id),
+            target_id=lambda trial: str(trial.target_id),
+            stimulus=_trial_stim,
+            response=_trial_response,
+            rc=lambda trial: str(trial.rc),
+            nchars=lambda trial: str(len(trial.characters)),
+            nstrokes=lambda trial: str(len(trial.strokes)),
+    )
+
+    #---------------------------------------------------
     def __init__(self, format='Trial {trial_id}(#{target_id}): {stimulus}'):
-        #self.validate_format(format)
         self.format = format
-        self.keywords = dict(
-                trial_id=lambda trial: str(trial.trial_id),
-                target_id=lambda trial: str(trial.target_id),
-                stimulus=_trial_stim,
-                response=self.response,
-                rc=lambda trial: str(trial.rc),
-                nchars=lambda trial: str(len(trial.characters)),
-                nstrokes=lambda trial: str(len(trial.strokes)),
-        )
 
-    def __call__(self, trial):
+    #---------------------------------------------------
+    @property
+    def format(self):
+        return self._format
 
-        title = self.format
+    @format.setter
+    def format(self, value):
+        self.set_keyword_appliers(value)
+        self._format = value
+
+    #---------------------------------------------------
+    def set_keyword_appliers(self, title_format):
+        appliers = {}
+        fmt = title_format
         while True:
-            m = re.match('^(.*)\\{(\\w+)}(.*)$', title)
+            m = re.match('^(.*)\\{(\\w+)}(.*)$', fmt)
             if m is None:
                 break
+            keyword = m.group(2)
+            if keyword not in TrialTitle.keywords:
+                raise ValueError(f'Unsupported keyword "{keyword}" in trial-title format "{title_format}"')
+            appliers['{' + keyword + '}'] = TrialTitle.keywords[keyword]
+            fmt = m.group(1) + m.group(3)
 
-            title = m.group(1) + self.keywords[m.group(2)](trial) + m.group(3)
+        self.keyword_appliers = appliers
+
+    #---------------------------------------------------
+    def __call__(self, trial):
+        title = self.format
+        for keyword, applier in self.keyword_appliers.items():
+            title = title.replace(keyword, applier(trial))
 
         return title
-
-    def response(self, trial):
-        if str(trial.stimulus) == str(trial.response):
-            return '='
-        else:
-            return str(trial.response)
 
 
 #-------------------------------------------------------------

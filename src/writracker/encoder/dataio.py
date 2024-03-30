@@ -24,7 +24,7 @@ strokes_cols = 'trial_id', 'sub_trial_num', 'char_num', 'stroke', 'on_paper'
 #============================================================================================================
 
 #-------------------------------------------------------------------------------------------------
-def load_experiment(dir_names, trial_index_filter=None, renumber_trials=False):
+def load_experiment(dir_names, trial_index_filter=None):
     """
     Load full experiment (including trajectories)
 
@@ -32,12 +32,13 @@ def load_experiment(dir_names, trial_index_filter=None, renumber_trials=False):
     :param trial_index_filter: A function that gets a trials.csv row (as dict) and returns T/F (whether to load it or not)
     """
 
-    if not u.is_collection(dir_names):
+    multi_dir = u.is_collection(dir_names)
+    if not multi_dir:
         dir_names = dir_names,
 
     trials = []
 
-    for dir_name in dir_names:
+    for block_num, dir_name in enumerate(dir_names):
 
         index = _load_trials_index(dir_name)
         all_strokes = _load_strokes_file(dir_name)
@@ -59,7 +60,8 @@ def load_experiment(dir_names, trial_index_filter=None, renumber_trials=False):
 
             characters = _create_characters(trial_strokes, trial_spec['trial_id'])
 
-            trial = CodedTrial(trial_id=len(trials) + 1 if renumber_trials else trial_spec['trial_id'],
+            trial = CodedTrial(block=block_num + 1 if multi_dir else None,
+                               trial_id=trial_spec['trial_id'],
                                sub_trial_num=trial_spec['sub_trial_num'],
                                target_id=trial_spec['target_id'],
                                stimulus=trial_spec['target'],
@@ -299,7 +301,7 @@ class CodedDataset(object):
 
     @property
     def sorted_trials(self):
-        return tuple(sorted(self._trials, key=attrgetter('trial_id')))
+        return tuple(sorted(self._trials, key=lambda trial: (trial.block, trial.trial_id)))
 
     def append(self, trial):
         self._trials.append(trial)
@@ -320,9 +322,10 @@ class CodedTrial(object):
     The trial contains a series of characters
     """
 
-    def __init__(self, trial_id, sub_trial_num, target_id, stimulus, time_in_session, rc, response,
+    def __init__(self, block, trial_id, sub_trial_num, target_id, stimulus, time_in_session, rc, response,
                  sound_file_length, traj_file_name, time_in_day, date, characters, strokes):
 
+        self.block = block
         self.trial_id = trial_id
         self.sub_trial_num = sub_trial_num
         self.target_id = target_id
@@ -758,7 +761,8 @@ def append_to_characters_file(out_dir, raw_trial, sub_trial_num, trial_rc, respo
     for i, (coded_char, ui_char) in enumerate(zip(chars, ui_characters)):
         coded_char.extends = ui_char.extends
 
-    coded_trial = CodedTrial(raw_trial.trial_id,
+    coded_trial = CodedTrial(block=None,
+                             trial_id=raw_trial.trial_id,
                              sub_trial_num=sub_trial_num,
                              target_id=raw_trial.target_id,
                              stimulus=raw_trial.stimulus,

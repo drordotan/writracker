@@ -24,7 +24,7 @@ strokes_cols = 'trial_id', 'sub_trial_num', 'char_num', 'stroke', 'on_paper'
 #============================================================================================================
 
 #-------------------------------------------------------------------------------------------------
-def load_experiment(dir_names, trial_index_filter=None):
+def load_experiment(dir_names, block_nums=None, trial_index_filter=None):
     """
     Load full experiment (including trajectories)
 
@@ -60,7 +60,12 @@ def load_experiment(dir_names, trial_index_filter=None):
 
             characters = _create_characters(trial_strokes, trial_spec['trial_id'])
 
-            trial = CodedTrial(block=block_num + 1 if multi_dir else None,
+            if block_nums is None:
+                out_block_num = block_num + 1 if multi_dir else None
+            else:
+                out_block_num = block_nums[block_num]
+
+            trial = CodedTrial(block=out_block_num,
                                trial_id=trial_spec['trial_id'],
                                sub_trial_num=trial_spec['sub_trial_num'],
                                target_id=trial_spec['target_id'],

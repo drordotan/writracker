@@ -398,8 +398,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
 
         #------------------------
         #-- Clicked ENTER (or the 'confirm' button): end the currently-running command
-        elif current_command is not None and \
-                (event == 'cmd_confirm' or (not isinstance(event, int) and len(event) == 1 and ord(event) == 13)):
+        elif current_command is not None and is_confirm_event(event):
 
             if current_command == 'split_char':
                 characters = manip.split_character(characters, selection_handler.selected_char, selection_handler.selected_stroke)
@@ -450,8 +449,7 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
         #------------------------
         #-- ESC clicked: cancel the currently-running command
         #elif len(event) == 1 and ord(event) == 27:                         #Original line!!!
-        elif current_command is not None and \
-                (event == 27 or event == 'cmd_cancel' or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)):
+        elif current_command is not None and _is_cancel_event(event):
             cleanup_selection_handler = True
 
         else:
@@ -470,6 +468,15 @@ def _try_encode_trial(trial, characters, sub_trial_num, out_dir, screen_size, ma
             #if selection_handler is not None:
             selection_handler.cleanup()
             selection_handler = None
+
+
+#-------------------------------------------------------------------------------------
+def _is_cancel_event(event):
+    return event in (27, 889192475, 'cmd_cancel') or (isinstance(event, str) and len(event) == 1 and ord(event) == 27)
+
+
+def is_confirm_event(event):
+    return event in ('cmd_confirm', 603979789) or (isinstance(event, str) and len(event) == 1 and ord(event) == 13)
 
 
 #-------------------------------------------------------------------------------------
@@ -658,13 +665,12 @@ def _split_stroke(stroke, screen_size, margin, dot_radius=6):
 
             selected_dot = clicked_dot
 
-        elif selected_dot is not None and \
-                (event == 'cmd_confirm' or (len(event) == 1 and ord(event) == 13)):
+        elif selected_dot is not None and is_confirm_event(event):
             #-- ENTER pressed
             window.Close()
             return selected_dot.markup
 
-        elif event == 'Escape:27' or event == 'cmd_cancel':
+        elif _is_cancel_event(event):
             #-- ESC pressed
             if selected_dot is None:
                 window.Close()

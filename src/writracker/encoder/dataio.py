@@ -683,14 +683,12 @@ def load_coded_trials_nums(dir_name):
 #===================================================================================================
 
 #-------------------------------------------------------
-# noinspection PyUnusedLocal
-def _get_extends(trial, character):
+def _get_extends(_, character):
     return '' if character.extends is None else character.extends
 
 
 #-------------------------------------------------------
-# noinspection PyUnusedLocal
-def _get_pre_char_delay(trial, character):
+def _get_pre_char_delay(_, character):
     """
     The delay between this character and the previous one
     """
@@ -698,8 +696,15 @@ def _get_pre_char_delay(trial, character):
 
 
 #-------------------------------------------------------
-# noinspection PyUnusedLocal
-def _get_post_char_delay(trial, character):
+def _get_char_duration(_, character):
+    """
+    The delay between this character and the previous one
+    """
+    return round(character.duration, 3)
+
+
+#-------------------------------------------------------
+def _get_post_char_delay(_, character):
     """
     The delay between this character and the next one
     """
@@ -707,8 +712,7 @@ def _get_post_char_delay(trial, character):
 
 
 #-------------------------------------------------------
-# noinspection PyUnusedLocal
-def _get_pre_char_distance(trial, character, prev_agg):
+def _get_pre_char_distance(_, character, prev_agg):
     """
     The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box)
     """
@@ -740,6 +744,7 @@ def _get_post_char_distance(trial, character, prev_agg):
 _agg_func_specs = (
     transform.AggFunc(transform.GetBoundingBox(1.0, 1.0), ('x', 'width', 'y', 'height')),
     transform.AggFunc(lambda t, c: t.response, 'response'),
+    transform.AggFunc(_get_char_duration, 'duration'),
     transform.AggFunc(_get_pre_char_delay, 'pre_char_delay'),
     transform.AggFunc(_get_post_char_delay, 'post_char_delay'),
     transform.AggFunc(_get_pre_char_distance, 'pre_char_distance', get_prev_aggregations=True),
@@ -799,6 +804,7 @@ def _ui_to_coded_strokes(ui_strokes):
         result.append(stroke)
 
     return result
+
 
 #-------------------------------------------------------------------------------------
 def delete_all_files_from(directory):

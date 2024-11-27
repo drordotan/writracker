@@ -356,6 +356,55 @@ def split_stroke(characters, stroke, dot):
     return characters
 
 
+#-------------------------------------------------------------------------------------
+def merge_strokes(trial, strokes):
+
+    if len(strokes) <= 1:
+        print('WEncoder warning: cannot merge less than 2 strokes (trial #{})'.format(trial.trial_id))
+        return
+
+    _assert_strokes_are_consecutive(strokes)
+    char = _assert_strokes_are_from_same_char(strokes, trial.characters)
+
+    #-- Merge trajectories
+    for stroke in strokes[1:]:
+        strokes[0].trajectory.extend(stroke.trajectory)
+
+    for stroke in strokes[1:]:
+        trial.strokes.remove(stroke)
+        if char is not None:
+            char.strokes.remove(stroke)
+
+    _renumber_all_strokes(trial)
+    _renumber_chars_and_strokes(trial.characters)
+
+
+#-------------------------------------------------------------------------------------
+def _assert_strokes_are_consecutive(strokes):
+    stroke_nums = [s.stroke_num for s in strokes]
+    diff = np.diff(stroke_nums)
+    if set(diff) != {1}:
+        raise Exception('WEncoder problem: cannot merge non-consecutive strokes({})'.format(stroke_nums))
+
+
+#-------------------------------------------------------------------------------------
+def _assert_strokes_are_from_same_char(strokes, characters):
+
+    char_nums = {s.char_num for s in strokes}
+    if len(char_nums) != 1:
+        raise Exception('WEncoder problem: cannot merge strokes from different characters({})'.format(char_nums))
+
+    cn = char_nums.pop()
+    if cn == 0:
+        return None
+
+    chars = [c for c in characters if c.char_num == cn]
+    if len(chars) == 0:
+        raise Exception('WEncoder problem: cannot find character #{}'.format(cn))
+
+    return chars[0]
+
+
 #=====================================================================================================
 # Delete stroke
 #=====================================================================================================
@@ -404,7 +453,7 @@ def _change_stroke_to_space(char, deleted_stroke_ind):
     stroke2_deleted = _merge_consecutive_space_strokes(char, deleted_stroke_ind)
 
     if stroke1_deleted or stroke2_deleted:
-        _renumber_strokes(char)
+        _renumber_strokes_of_char(char)
 
 
 #-----------------------------------------------------------------------------------
@@ -435,7 +484,13 @@ def _renumber_chars_and_strokes(characters):
 
 
 #-----------------------------------------------------------------------------------
-def _renumber_strokes(char):
+def _renumber_all_strokes(trial):
+    for i, stroke in enumerate(trial.strokes):
+        stroke.stroke_num = i+1
+
+
+#-----------------------------------------------------------------------------------
+def _renumber_strokes_of_char(char):
     for i, stroke in enumerate(char.strokes):
         stroke.stroke_num = i+1
         stroke.char_num = char.char_num
@@ -494,7 +549,7 @@ def _move_leading_space_to_prev_char(characters, char_ind):
         characters.remove(char)
         _renumber_chars_and_strokes(characters)
     else:
-        _renumber_strokes(char)
+        _renumber_strokes_of_char(char)
 
     #-- Add it to previous char
     prev_char = characters[char_ind-1]
@@ -502,7 +557,7 @@ def _move_leading_space_to_prev_char(characters, char_ind):
 
     _merge_consecutive_space_strokes(prev_char, len(prev_char.strokes) - 2)
 
-    _renumber_strokes(prev_char)
+    _renumber_strokes_of_char(prev_char)
 
 #=====================================================================================================
 # Rotate trial

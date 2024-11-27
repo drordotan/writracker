@@ -278,16 +278,22 @@ def _update_between_char_spaces(characters, strokes):
 def _update_pre_char_space(characters, strokes, space_stroke_ind):
 
     next_char_num = strokes[space_stroke_ind+1].char_num
-    char = [c for c in characters if c.char_num == next_char_num][0]
-    char.pre_char_space = strokes[space_stroke_ind]
+    chars = [c for c in characters if c.char_num == next_char_num]
+    if len(chars) == 0:
+        print(f'ERROR in _update_pre_char_space: character #{next_char_num} not found for space stroke #{space_stroke_ind}')
+        return
+    chars[0].pre_char_space = strokes[space_stroke_ind]
 
 
 #--------------------------------------------------------------------------
 def _update_post_char_space(characters, strokes, space_stroke_ind):
 
     prev_char_num = strokes[space_stroke_ind-1].char_num
-    char = [c for c in characters if c.char_num == prev_char_num][0]
-    char.post_char_space = strokes[space_stroke_ind]
+    chars = [c for c in characters if c.char_num == prev_char_num]
+    if len(chars) == 0:
+        print(f'ERROR in _update_post_char_space: character #{prev_char_num} not found for space stroke {space_stroke_ind}')
+        return
+    chars[0].post_char_space = strokes[space_stroke_ind]
 
 
 #--------------------------------------------------------------------------------------------------------------------
@@ -517,6 +523,27 @@ def create_traj_file_name(out_dir, sub_trial_num, trial, trial_id):
 
 
 #-------------------------------------------------------------------------------------
+def save_strokes_file(trials, out_dir):
+    """
+    Save the strokes file from scratch
+    """
+
+    index_fn = out_dir + os.sep + 'strokes.csv'
+
+    with open(index_fn, 'w') as fp:
+        writer = csv.DictWriter(fp, strokes_cols, lineterminator='\n')
+
+        writer.writeheader()
+
+        for trial in trials:
+            stroke_num = 0
+            for stroke in trial.strokes:
+                stroke_num += 1
+                row = _stroke_as_col(stroke, stroke.stroke_num, trial.sub_trial_num, trial)
+                writer.writerow(row)
+
+
+#-------------------------------------------------------------------------------------
 def append_to_strokes_file(strokes, trial, sub_trial_num, out_dir):
 
     index_fn = out_dir + os.sep + 'strokes.csv'
@@ -531,9 +558,17 @@ def append_to_strokes_file(strokes, trial, sub_trial_num, out_dir):
         stroke_num = 0
         for stroke in strokes:
             stroke_num += 1
-            row = dict(trial_id=trial.trial_id, sub_trial_num=sub_trial_num, char_num=stroke.char_num,
-                       stroke=stroke_num, on_paper=1 if stroke.on_paper else 0)
+            row = _stroke_as_col(stroke, stroke_num, sub_trial_num, trial)
             writer.writerow(row)
+
+
+#-------------------------------------------------------------------------------------
+def _stroke_as_col(stroke, stroke_num, sub_trial_num, trial):
+    return dict(trial_id=trial.trial_id,
+                sub_trial_num=sub_trial_num,
+                char_num=stroke.char_num,
+                stroke=stroke_num,
+                on_paper=1 if stroke.on_paper else 0)
 
 
 #-------------------------------------------------------------------------------------
@@ -754,12 +789,15 @@ _agg_func_specs = (
 
 
 #--------------------------------------------------------------------
-def save_characters_file(out_dir):
+def save_characters_file(session_dir):
+    """
+    Create the characters.csv file for a particular session and save it
+    """
 
-    exp = load_experiment(out_dir, trial_index_filter=lambda trial: trial['rc'] == 'OK')
+    exp = load_experiment(session_dir, trial_index_filter=lambda trial: trial['rc'] == 'OK')
 
     transform.aggregate_characters(exp.trials, agg_func_specs=_agg_func_specs, trial_filter=lambda trial: trial.rc == 'OK',
-                                   out_filename=out_dir+'/characters.csv', save_as_attr=False)
+                                   out_filename=session_dir + '/characters.csv', save_as_attr=False)
 
 
 #--------------------------------------------------------------------

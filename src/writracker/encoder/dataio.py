@@ -730,17 +730,25 @@ def _get_extends(_, character):
 
 
 #-------------------------------------------------------
-def _get_pre_char_delay(_, character):
+def _get_pre_char_delay(trial, character):
     """
     The delay between this character and the previous one
     """
-    return round(character.t0 if character.char_num == 1 else character.pre_char_delay, 3)
+    delay = character.t0 if character.char_num == 1 else character.pre_char_delay
+    if delay < 0:
+        print('WARNING: negative pre-char-delay for character #{} in trial ${}'.format(character.char_num, trial.trial_id))
+        return None
+    return round(delay, 3)
 
 
 #-------------------------------------------------------
-def _get_char_t0(_, character):
+def _get_char_t0(trial, character):
     """ the time when the character started """
-    return round(character.t0, 3)
+    t0 = character.t0
+    if t0 < 0:
+        print('WARNING: negative t0 for character #{} in trial {}'.format(character.char_num, trial.trial_id))
+        return None
+    return round(t0, 3)
 
 
 #-------------------------------------------------------

@@ -1,6 +1,5 @@
 
 import csv
-from collections import namedtuple
 
 
 #-------------------------------------------------------------------------------------------------
@@ -15,10 +14,10 @@ def load_trajectory(filename):
         reader = csv.DictReader(fp)
         trajectory = []
         for line in reader:
-            x = _parse_traj_value(line, 'x', reader.line_num, filename)
-            y = _parse_traj_value(line, 'y', reader.line_num, filename)
-            prs = _parse_traj_value(line, 'pressure', reader.line_num, filename)
-            t = _parse_traj_value(line, 'time', reader.line_num, filename)
+            x = parse_traj_value(line, 'x', reader.line_num, filename)
+            y = parse_traj_value(line, 'y', reader.line_num, filename)
+            prs = parse_traj_value(line, 'pressure', reader.line_num, filename)
+            t = parse_traj_value(line, 'time', reader.line_num, filename)
             pt = TrajectoryPoint(x, y, prs, t)
             trajectory.append(pt)
 
@@ -26,11 +25,12 @@ def load_trajectory(filename):
 
 
 #--------------------------------------
-def _parse_traj_value(line, name, line_num, filename):
+def parse_traj_value(line, name, line_num, filename):
     try:
         return float(line[name])
     except ValueError:
-        raise ValueError('Invalid value in line {:} in {:}: column {:} should be a number but it''s "{:}"'.format(line_num, filename, name, line[name]))
+        raise ValueError('Invalid value in line {:} in {:}: column {:} should be a number but it''s "{:}"'.
+                         format(line_num, filename, name, line[name]))
 
 
 #----------------------------------------------------------------------------------------------

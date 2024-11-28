@@ -183,10 +183,10 @@ def _load_traj_points(filename):
         reader = csv.DictReader(fp)
         for line in reader:
             stroke_num = u.parse_int('stroke', line['stroke'], 'line {} in {}'.format(reader.line_num, filename))
-            x = commonio._parse_traj_value(line, 'x', reader.line_num, filename)
-            y = commonio._parse_traj_value(line, 'y', reader.line_num, filename)
-            prs = commonio._parse_traj_value(line, 'pressure', reader.line_num, filename)
-            t = commonio._parse_traj_value(line, 'time', reader.line_num, filename)
+            x = commonio.parse_traj_value(line, 'x', reader.line_num, filename)
+            y = commonio.parse_traj_value(line, 'y', reader.line_num, filename)
+            prs = commonio.parse_traj_value(line, 'pressure', reader.line_num, filename)
+            t = commonio.parse_traj_value(line, 'time', reader.line_num, filename)
             pt = commonio.TrajectoryPoint(x, y, prs, t)
 
             if stroke_num not in result:
@@ -380,6 +380,13 @@ class Character(object):
         self.character = character
         self.extends = extends
 
+
+    @property
+    def t0(self):
+        """
+        The time (relative to start-of-trial) when this character started
+        """
+        return self.strokes[0].trajectory[0].t
 
     @property
     def duration(self):
@@ -727,30 +734,30 @@ def _get_pre_char_delay(_, character):
     """
     The delay between this character and the previous one
     """
-    return round(character.pre_char_delay, 3)
+    return round(character.t0 if character.char_num == 1 else character.pre_char_delay, 3)
+
+
+#-------------------------------------------------------
+def _get_char_t0(_, character):
+    """ the time when the character started """
+    return round(character.t0, 3)
 
 
 #-------------------------------------------------------
 def _get_char_duration(_, character):
-    """
-    The delay between this character and the previous one
-    """
+    """ The time it took to write this character """
     return round(character.duration, 3)
 
 
 #-------------------------------------------------------
 def _get_post_char_delay(_, character):
-    """
-    The delay between this character and the next one
-    """
+    """ The delay between this character and the next one """
     return round(character.post_char_delay, 3)
 
 
 #-------------------------------------------------------
 def _get_pre_char_distance(_, character, prev_agg):
-    """
-    The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box)
-    """
+    """ The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box) """
     charnum = character.char_num
     if not (charnum in prev_agg and charnum-1 in prev_agg):
         return None
@@ -779,6 +786,7 @@ def _get_post_char_distance(trial, character, prev_agg):
 _agg_func_specs = (
     transform.AggFunc(transform.GetBoundingBox(1.0, 1.0), ('x', 'width', 'y', 'height')),
     transform.AggFunc(lambda t, c: t.response, 'response'),
+    transform.AggFunc(_get_char_t0, 't0'),
     transform.AggFunc(_get_char_duration, 'duration'),
     transform.AggFunc(_get_pre_char_delay, 'pre_char_delay'),
     transform.AggFunc(_get_post_char_delay, 'post_char_delay'),

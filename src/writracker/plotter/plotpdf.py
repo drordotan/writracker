@@ -42,7 +42,7 @@ class PdfPlotter(object):
         self.bounding_box_line_width = 0.5
 
     #------------------------------------------------------------------------------
-    def plot(self, trials, out_fn, max_trials=None):
+    def plot(self, trials, out_fn, max_trials=None, progress_desc=None):
         """
         Plot the experiment raw data - the characters, as the subject wrote them - and save to a PDF file.
 
@@ -63,6 +63,10 @@ class PdfPlotter(object):
 
         pdf = backend_pdf.PdfPages(out_fn)
         z_values = np.array([point.z for t in trials for point in t.on_paper_points])
+        if len(z_values) == 0:
+            print('WARNING: No data to plot' + ('' if progress_desc is None else f' for {progress_desc}'))
+            return
+
         max_z = max(z_values)
 
         def get_z_levels(z):
@@ -73,7 +77,7 @@ class PdfPlotter(object):
 
         n_pages = math.ceil(len(trials) / n_trials_per_page)
 
-        progress = u.ProgressBar(len(trials), 'Preparing pdf...')
+        progress = u.ProgressBar(len(trials), 'Preparing pdf...' if progress_desc is None else f'Preparing pdf for {progress_desc}...')
         n_done = 0
 
         while len(trials) > 0:
@@ -114,7 +118,7 @@ class PdfPlotter(object):
         """
         Plot the trial raw data - the characters, as the subject wrote them.
 
-        :type trial: trajwriter.Trial
+        :type trial: loadraw.Trial
         :param n_colors: No. of colors to use to denote level of pressure
         :param ax: The axes to use for plotting
         """

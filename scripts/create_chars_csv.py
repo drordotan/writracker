@@ -1,3 +1,6 @@
+"""
+Re-create the character.csv files of the given sessions
+"""
 import os
 import glob
 import writracker.encoder

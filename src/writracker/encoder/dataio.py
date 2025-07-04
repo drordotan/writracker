@@ -51,7 +51,8 @@ def load_experiment(dir_names, block_nums=None, trial_index_filter=None):
 
             trial_key = trial_spec['trial_id'], trial_spec['sub_trial_num']
             if trial_key not in all_strokes:
-                raise ValueError('Invalid data in {}: no strokes for trial #{} (sub-trial={})')
+                raise ValueError('Invalid data in {}: no strokes for trial #{} (sub-trial={})'
+                                 .format(dir_name, trial_spec['trial_id'], trial_spec['sub_trial_num']))
 
             trial_strokes = all_strokes[trial_key]
 
@@ -160,6 +161,10 @@ def _load_trajectory(traj_filename, trial_strokes):
     all_stroke_nums = {s.stroke_num for s in trial_strokes}
 
     points_per_stroke = _load_traj_points(traj_filename)
+    n_points = sum([len(points) for points in points_per_stroke.values()])
+    if n_points == 0:
+        raise ValueError(f'WARNING: No points in trajectory file {traj_filename}. Trajectory not loaded.')
+
     for stroke in trial_strokes:
         if stroke.stroke_num not in all_stroke_nums:
             raise ValueError('Error in trajectory file {}: stroke #{} has no points'.format(traj_filename, stroke.stroke_num))
@@ -764,30 +769,54 @@ def _get_post_char_delay(_, character):
 
 
 #-------------------------------------------------------
-def _get_pre_char_distance(_, character, prev_agg):
+class GetPreCharDistance(object):
     """ The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box) """
-    charnum = character.char_num
-    if not (charnum in prev_agg and charnum-1 in prev_agg):
-        return None
 
-    char_inf = prev_agg[charnum]
-    prev_char_inf = prev_agg[charnum - 1]
-    return char_inf['x'] - (prev_char_inf['x'] + prev_char_inf['width'])
+    def __init__(self, between_centers):
+        """
+        Compute the distance between characters
+        :param between_centers: If True, compute the distance between the centers of the two characters. If False, compute distance
+                                between bounding boxes excluding the box itself.
+        """
+        self.between_centers = between_centers
+
+    def __call__(self, _, character, prev_agg):
+        charnum = character.char_num
+        if not (charnum in prev_agg and charnum-1 in prev_agg):
+            return None
+
+        char_inf = prev_agg[charnum]
+        prev_char_inf = prev_agg[charnum - 1]
+        if self.between_centers:
+            return char_inf['x'] - prev_char_inf['x']
+        else:
+            return char_inf['x'] - (prev_char_inf['x'] + prev_char_inf['width'])
 
 
 #-------------------------------------------------------
-# noinspection PyUnusedLocal
-def _get_post_char_distance(trial, character, prev_agg):
-    """
-    The horizontal distance between this character and the next one (rely on the previously-calculated bounding box)
-    """
-    charnum = character.char_num
-    if not (charnum in prev_agg and charnum+1 in prev_agg):
-        return None
+class GetPostCharDistance(object):
+    """ The horizontal distance between this character and the next one (rely on the previously-calculated bounding box) """
 
-    char_inf = prev_agg[charnum]
-    next_char_inf = prev_agg[charnum + 1]
-    return next_char_inf['x'] - (char_inf['x'] + char_inf['width'])
+    def __init__(self, between_centers):
+        """
+        Compute the distance between characters
+        :param between_centers: If True, compute the distance between the centers of the two characters. If False, compute distance
+                                between bounding boxes excluding the box itself.
+        """
+        self.between_centers = between_centers
+
+    def __call__(self, _, character, prev_agg):
+        charnum = character.char_num
+        if not (charnum in prev_agg and charnum+1 in prev_agg):
+            return None
+
+        char_inf = prev_agg[charnum]
+        next_char_inf = prev_agg[charnum + 1]
+
+        if self.between_centers:
+            return next_char_inf['x'] - char_inf['x']
+        else:
+            return next_char_inf['x'] - (char_inf['x'] + char_inf['width'])
 
 
 #-- The list of the aggregations to perform (each becomes one or more columns in the resulting CSV file)
@@ -798,8 +827,10 @@ _agg_func_specs = (
     transform.AggFunc(_get_char_duration, 'duration'),
     transform.AggFunc(_get_pre_char_delay, 'pre_char_delay'),
     transform.AggFunc(_get_post_char_delay, 'post_char_delay'),
-    transform.AggFunc(_get_pre_char_distance, 'pre_char_distance', get_prev_aggregations=True),
-    transform.AggFunc(_get_post_char_distance, 'post_char_distance', get_prev_aggregations=True),
+    transform.AggFunc(GetPreCharDistance(False), 'pre_char_distance', get_prev_aggregations=True),
+    transform.AggFunc(GetPostCharDistance(False), 'post_char_distance', get_prev_aggregations=True),
+    transform.AggFunc(GetPreCharDistance(True), 'pre_char_cdistance', get_prev_aggregations=True),
+    transform.AggFunc(GetPostCharDistance(True), 'post_char_cdistance', get_prev_aggregations=True),
     transform.AggFunc(_get_extends, 'extends'),
 )
 

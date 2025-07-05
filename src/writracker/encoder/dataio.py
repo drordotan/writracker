@@ -51,15 +51,17 @@ def load_experiment(dir_names, block_nums=None, trial_index_filter=None):
 
             trial_key = trial_spec['trial_id'], trial_spec['sub_trial_num']
             if trial_key not in all_strokes:
-                raise ValueError('Invalid data in {}: no strokes for trial #{} (sub-trial={})'
+                print('ERROR: Invalid data in {}: no strokes for trial #{} (sub-trial={})'
                                  .format(dir_name, trial_spec['trial_id'], trial_spec['sub_trial_num']))
+                continue
 
             trial_strokes = all_strokes[trial_key]
 
             traj_filename = dir_name + os.sep + trial_spec['traj_file_name']
-            _load_trajectory(traj_filename, trial_strokes)
+            if not _load_trajectory(traj_filename, trial_strokes):
+                continue
 
-            characters = _create_characters(trial_strokes, trial_spec['trial_id'])
+            characters = _create_characters(trial_strokes, trial_spec['trial_id'], trial_spec['target_id'])
 
             if block_nums is None:
                 out_block_num = block_num + 1 if multi_dir else None
@@ -163,7 +165,8 @@ def _load_trajectory(traj_filename, trial_strokes):
     points_per_stroke = _load_traj_points(traj_filename)
     n_points = sum([len(points) for points in points_per_stroke.values()])
     if n_points == 0:
-        raise ValueError(f'WARNING: No points in trajectory file {traj_filename}. Trajectory not loaded.')
+        print(f'ERROR: No points in trajectory file {traj_filename}. Trajectory not loaded.')
+        return False
 
     for stroke in trial_strokes:
         if stroke.stroke_num not in all_stroke_nums:
@@ -174,6 +177,8 @@ def _load_trajectory(traj_filename, trial_strokes):
         else:
             print(f'WARNING: stroke #{stroke.stroke_num} not found in {traj_filename}')
             stroke.trajectory = []
+
+    return True
 
 
 #--------------------------------------------------------------------------------------------------------------------
@@ -203,10 +208,10 @@ def _load_traj_points(filename):
 
 
 #--------------------------------------------------------------------------------------------------------------------
-def _create_characters(strokes, trial_id):
+def _create_characters(strokes, trial_id, target_id):
 
     characters = _create_characters_without_spaces(strokes, trial_id)
-    _validate_consecutive_char_numbers(characters, trial_id)
+    _validate_consecutive_char_numbers(characters, trial_id, target_id)
     _update_between_char_spaces(characters, strokes)
 
     return characters
@@ -256,11 +261,11 @@ def _create_characters_without_spaces(strokes, trial_id):
 
 
 #--------------------------------------------------------------------------
-def _validate_consecutive_char_numbers(characters, trial_id):
+def _validate_consecutive_char_numbers(characters, trial_id, target_id):
 
     char_nums = [c.char_num for c in characters]
     if char_nums != list(range(1, len(characters) + 1)):
-        print('ERROR: Character numbers for trial #{} ({}) are not consecutive or do not start from 1'.format(trial_id, char_nums))
+        print('ERROR: Character numbers for trial #{} target {} are not consecutive or do not start from 1: {}'.format(trial_id, target_id, char_nums))
 
 
 #--------------------------------------------------------------------------
@@ -852,7 +857,7 @@ def append_to_characters_file(out_dir, raw_trial, sub_trial_num, trial_rc, respo
 
     strokes = _ui_to_coded_strokes(ui_strokes)
 
-    chars = _create_characters(strokes, raw_trial.trial_id)
+    chars = _create_characters(strokes, raw_trial.trial_id, raw_trial.target_id)
     for i, (coded_char, ui_char) in enumerate(zip(chars, ui_characters)):
         coded_char.extends = ui_char.extends
 

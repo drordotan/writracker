@@ -12,6 +12,7 @@ import math
 import writracker.utils as u
 
 CharInfo = namedtuple('CharInfo', ['character', 'csv_row'])
+CharBoundingBox = namedtuple('CharBoundingBox', ['xmid', 'width', 'ymid', 'height', 'xmin', 'ymin'])
 
 
 #-----------------------------------------------------------------------------------------------------
@@ -267,7 +268,7 @@ def _get_bounding_box_traj(trajectory, fraction_of_x_points=None, fraction_of_y_
     w = xmax - xmin
     h = ymax - ymin
 
-    return xmin + w / 2, w, ymin + h / 2, h, xmin, ymin
+    return CharBoundingBox(xmid=xmin + w / 2, width=w, ymid=ymin + h / 2, height=h, xmin=xmin, ymin=ymin)
 
 
 #----------------------------------------------------------------

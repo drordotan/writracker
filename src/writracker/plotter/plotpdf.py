@@ -17,12 +17,13 @@ from writracker.encoder.transform import get_bounding_box
 # noinspection PyMethodMayBeStatic
 class PdfPlotter(object):
 
-    def __init__(self, bounding_box=False, temporal_gaps=False, fraction_of_x_points=None, fraction_of_y_points=None,
+    def __init__(self, bounding_box=False, char_order=False, temporal_gaps=False, fraction_of_x_points=None, fraction_of_y_points=None,
                  cols_per_page=2, rows_per_page=5, n_colors=10, trial_title=None):
         """
 
-        :param bounding_box: True/False plot bounding box
-        :param temporal_gaps: True/False plot temporal gaps between adjacent characters
+        :param bounding_box: plot bounding box for each character (True/False)
+        :param char_order: Write the order of writing each character (possible only if bounding_box = True)
+        :param temporal_gaps: Plot temporal gaps between adjacent characters (True/False)
         :param fraction_of_x_points: This % of x-points determines the bounding box
         :param fraction_of_y_points: This % of y-points determines the bounding box
         :param cols_per_page: Number of stimuli per row in each page
@@ -30,7 +31,10 @@ class PdfPlotter(object):
         :param n_colors: Number of grayscale color gradients for showing pen pressure
         :param trial_title: Function that sets each trial's title
         """
+        if char_order:
+            assert bounding_box, 'Cannot show character order without bounding box'
         self.bounding_box = bounding_box
+        self.char_order = char_order
         self.temporal_gaps = temporal_gaps
         self.fraction_of_x_points = fraction_of_x_points
         self.fraction_of_y_points = fraction_of_y_points
@@ -90,12 +94,13 @@ class PdfPlotter(object):
 
             for i in range(curr_page_n_trials):
                 trial = trials.pop(0)
+                trial.correct_writing_order = None
                 n_done += 1
                 ax = axes[i]
                 ax.get_yaxis().set_visible(False)
                 ax.get_xaxis().set_visible(False)
-                ax.set_title(self.get_trial_title(trial), fontdict=dict(fontsize=5))
                 self.plot_trial(trial, ax=ax, get_z_levels=get_z_levels)
+                ax.set_title(self.get_trial_title(trial), fontdict=dict(fontsize=5))
 
             if curr_page_n_trials < n_trials_per_page:
                 for i in range(curr_page_n_trials, n_trials_per_page):
@@ -160,41 +165,43 @@ class PdfPlotter(object):
         if not self.bounding_box and not self.temporal_gaps:
             return
 
-        characters = trial.characters
+        bounding_boxes = [get_bounding_box(c, fraction_of_x_points=self.fraction_of_x_points, fraction_of_y_points=self.fraction_of_y_points)
+                          for c in trial.characters]
 
-        gaps = []
-        ys = []
-        xs = []
-        firstx = 0
+        trial.correct_writing_order = sum(np.diff([box.xmin for box in bounding_boxes]) < 0) == 0
 
-        for n, c in enumerate(characters):
-            box = get_bounding_box(c, fraction_of_x_points=self.fraction_of_x_points, fraction_of_y_points=self.fraction_of_y_points)
-            x, y = box[4], box[5]
-            ys.append(int(y))
-            xs.append(int(x))
-            if characters.index(c) == 0:
-                firstx = x
-
-            gap = " " * int(c.pre_char_delay/120)
-            gap += "\npre-" + str(c.character) + ":\n"
-            gap += (" {0:.2f}s".format(c.pre_char_delay))
-
-            gaps.append(gap)
-
+        #-- Plot bounding boxes
+        for n, (c, box) in enumerate(zip(trial.characters, bounding_boxes)):
+            bbox_color = 'r' if (n % 2 == 0) else 'b'
             if self.bounding_box:
-                rect = patches.Rectangle((x, y), box[1], box[3],
-                                         edgecolor='r' if (n % 2 == 0) else 'b', facecolor='none')
+                rect = patches.Rectangle((box.xmin, box.ymin), box.width, box.height,
+                                         edgecolor=bbox_color, facecolor='none')
                 rect.set_linewidth(self.bounding_box_line_width)
                 ax.add_patch(rect)
 
+            #-- Plot character order
+            if self.char_order:
+                ax.text(box.xmin, box.ymin + box.height, str(c.char_num), fontsize=5, color=bbox_color)
 
         #-- Plot temporal gaps
         if self.temporal_gaps:
+            firstx = bounding_boxes[0].xmin
+            gaps = [_bbox_gap(c) for c in trial.characters]
+            ys = [int(box.ymin) for box in bounding_boxes]
             bott = int(min(ys))
             for i in range(len(gaps)):
                 #print("bott-100 is " + str(bott-100))
                 ax.text(firstx-100 + i * 510, bott - 150, gaps[i], fontsize=4, ha="left", va="center",
                         bbox=dict(boxstyle="square", linewidth=0.3, ec=(1., 0.5, 0.5), fc=(1., 0.8, 0.8) if i % 2 == 0 else (1., 0.65, 0.65)))
+
+
+#-------------------------------------------------------------
+def _bbox_gap(c):
+    gap = " " * int(c.pre_char_delay / 120)
+    gap += "\npre-" + str(c.character) + ":\n"
+    gap += (" {0:.2f}s".format(c.pre_char_delay))
+    return gap
+
 
 #-------------------------------------------------------------
 def default_trial_title(trial):
@@ -234,20 +241,24 @@ def _trial_response(trial):
 
 #-------------------------------------------------------------
 class TrialTitle(object):
-
-    keywords = dict(
-            block=lambda trial: str(trial.block),
-            trial_id=lambda trial: str(trial.trial_id),
-            target_id=lambda trial: str(trial.target_id),
-            stimulus=_trial_stim,
-            response=_trial_response,
-            rc=lambda trial: str(trial.rc),
-            nchars=lambda trial: str(len(trial.characters)),
-            nstrokes=lambda trial: str(len(trial.strokes)),
-    )
+    """
+    Default way to write the title of a trial in the PDF plotter. You can change the format by setting the `format` property and using keywords.
+    """
 
     #---------------------------------------------------
-    def __init__(self, format='Trial {trial_id}(#{target_id}): {stimulus}'):
+    def __init__(self, format='Trial {trial_id}(#{target_id}): {stimulus}', additional_keywords=None):
+        self.keywords = dict(
+                block=lambda trial: str(trial.block),
+                trial_id=lambda trial: str(trial.trial_id),
+                target_id=lambda trial: str(trial.target_id),
+                stimulus=_trial_stim,
+                response=_trial_response,
+                rc=lambda trial: str(trial.rc),
+                nchars=lambda trial: str(len(trial.characters)),
+                nstrokes=lambda trial: str(len(trial.strokes)),
+        )
+        if additional_keywords is not None:
+            self.keywords.update(additional_keywords)
         self.format = format
 
     #---------------------------------------------------
@@ -269,9 +280,9 @@ class TrialTitle(object):
             if m is None:
                 break
             keyword = m.group(2)
-            if keyword not in TrialTitle.keywords:
+            if keyword not in self.keywords:
                 raise ValueError(f'Unsupported keyword "{keyword}" in trial-title format "{title_format}"')
-            appliers['{' + keyword + '}'] = TrialTitle.keywords[keyword]
+            appliers['{' + keyword + '}'] = self.keywords[keyword]
             fmt = m.group(1) + m.group(3)
 
         self.keyword_appliers = appliers

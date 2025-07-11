@@ -30,12 +30,9 @@ class MainWindow(QMainWindow):
 	def __init__(self, parent=None):
 		super(MainWindow, self).__init__(parent)
 
-		self.tablet_conn_paper_mode = None
-		self.tablet_conn_bacic_mode = None
-		self.paper_mode = False
+		self.tablet_connect = None
 		self.poll_timer = None
-
-		self.init_basic_mode()   # initialize the tablet
+		self.init_tablet_connection()
 
 		self.title = "WriTracker Recorder"
 
@@ -87,7 +84,6 @@ class MainWindow(QMainWindow):
 		self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')
 		self.btn_continue_ssn = self.findChild(QPushButton, 'continue_ssn_btn')
 		self.btn_end_ssn = self.findChild(QPushButton, 'end_ssn_btn')
-		self.pen_mode_btn = self.findChild(QPushButton, 'pen_mode_btn')
 		self.btn_next = self.findChild(QPushButton, 'next_btn')
 		self.btn_play = self.findChild(QPushButton, 'play_btn')
 		self.btn_prv = self.findChild(QPushButton, 'prv_btn')
@@ -124,23 +120,13 @@ class MainWindow(QMainWindow):
 		self.init_ui()
 
 	#----------------------------------------------------------------------------
-	def init_basic_mode(self):
-		if self.tablet_conn_bacic_mode is not None:
+	def init_tablet_connection(self):
+		if self.tablet_connect is not None:
 			return
 
 		self.poll_timer.stop()
 		self.poll_timer = None
-		self.tablet_conn_bacic_mode = tablet.ConnectBasicMode(int(self.winId()))  # Connect to the tablet in basic mode
-		self.start_polling_tablet()
-
-	#----------------------------------------------------------------------------
-	def init_paper_mode(self):
-		if self.tablet_conn_paper_mode is not None:
-			return
-
-		self.poll_timer.stop()
-		self.poll_timer = None
-		self.tablet_conn_paper_mode = tablet.ConnectPaperMode()
+		self.tablet_connect = tablet.TabletConnect(int(self.winId()))  # Connect to the tablet in basic mode
 		self.start_polling_tablet()
 
 	#----------------------------------------------------------------------------
@@ -174,7 +160,6 @@ class MainWindow(QMainWindow):
 
 		# button links
 		self.btn_start_ssn.clicked.connect(self.f_btn_start_ssn)
-		self.pen_mode_btn.clicked.connect(self.f_pen_mode_mode)
 		self.btn_continue_ssn.clicked.connect(self.f_btn_continue_ssn)
 		self.btn_end_ssn.clicked.connect(self.f_btn_end_ssn)
 		self.btn_next.clicked.connect(self.f_btn_next)
@@ -203,11 +188,7 @@ class MainWindow(QMainWindow):
 
 		time_in_trial = (datetime.now() - self.trial_start_time).total_seconds() if self.trial_started else None
 
-		if self.paper_mode:
-			points = self.tablet_conn_paper_mode.poll()
-		else:
-			points = self.tablet_conn_bacic_mode.poll()
-
+		points = self.tablet_connect.poll()
 		if points is None or len(points) == 0:
 			return
 
@@ -317,16 +298,6 @@ class MainWindow(QMainWindow):
 					return True
 			else:
 				return False
-
-	#------------------------------------------------------------------------------------------
-	def f_pen_mode_mode(self):
-		self.paper_mode = not self.paper_mode
-		if self.paper_mode and self.tablet_conn_paper_mode is None:
-			self.init_paper_mode()
-		else:
-			self.tablet_conn_paper_mode.set_active(self.paper_mode)
-
-		self.pen_mode_btn.setText("Pen mode: {}".format("paper" if self.paper_mode else "basic"))
 
 	#------------------------------------------------------------------------------------------
 	def f_btn_start_ssn(self):
@@ -447,13 +418,9 @@ class MainWindow(QMainWindow):
 			self.poll_timer.stop()
 			self.poll_timer = None
 
-			if self.tablet_conn_paper_mode is not None:
-				self.tablet_conn_paper_mode.disconnect()
-				self.tablet_conn_paper_mode = None
-
-			if self.tablet_conn_bacic_mode is not None:
-				self.tablet_conn_bacic_mode.disconnect()
-				self.tablet_conn_bacic_mode = None
+			if self.tablet_connect is not None:
+				self.tablet_connect.disconnect()
+				self.tablet_connect = None
 
 			self.close()
 

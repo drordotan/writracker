@@ -1,26 +1,14 @@
 
 from collections import namedtuple
-import time
-import pythonnet
-import os
 
 from writracker.recorder import wintab
-
-pythonnet.load(r"coreclr")
-
-import clr
-dir_path = os.path.dirname(os.path.realpath(__file__))
-
-dll = "ConsoleApp2.dll"
-clr.AddReference(dir_path + "/dll/" + dll)
-from WacomPaperMode import wacom_paper_mode
 
 
 TabletData = namedtuple('TabletData', ['x', 'y', 'pressure'])
 
 
 #=========================================================================================================
-class ConnectBasicMode(object):
+class TabletConnect(object):
 
     #------------------------------------------------------------
     def __init__(self, context_id, trace=False):
@@ -64,52 +52,5 @@ class ConnectBasicMode(object):
             pressure = int(lp_pkts[i].pkNormalPressure / 327.67)  # normalized to 0-100 range
 
             result.append(TabletData(x, y, pressure))
-
-
-#=========================================================================================================
-class ConnectPaperMode(object):
-
-    #------------------------------------------------------------
-    def init(self, trace=False):
-        wacom_token = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJMTVMiLCJleHAiOjE3NTQ1NDYwMjgsImlhdCI6MTc0NjU5NzIyOSwic2VhdHMiOjAsInJpZ2h0cyI6WyJTSUdfU0RLX0NPUkUiLCJUT1VDSF9TSUdOQVRVUkVfRU5BQkxFRCIsIlNJR0NBUFRYX0FDQ0VTUyIsIlNJR19TREtfSVNPIiwiU0lHX1NES19FTkNSWVBUSU9OIl0sImRldmljZXMiOltdLCJ0eXBlIjoiZXZhbCIsImxpY19uYW1lIjoiV2Fjb21fSW5rX1NES19mb3Jfc2lnbmF0dXJlIiwid2Fjb21faWQiOiIyNDEyY2FlNmZmYzc0MzQxOTE0Yzg1MThhMTBhY2ZkZiIsImxpY191aWQiOiJlMTdiMTE0MC1mNGE0LTQzNzQtOWFkMC1jYWFhOWY5NmM2YmYiLCJhcHBzX3dpbmRvd3MiOltdLCJhcHBzX2lvcyI6W10sImFwcHNfYW5kcm9pZCI6W10sIm1hY2hpbmVfaWRzIjpbXSwid3d3IjpbXSwiYmFja2VuZF9pZHMiOltdfQ.t_JoF-ltT-hYldYgnHfkL7L1SgkOyh5jcNAJfuGmb1eaHan1eh8p0KOPJ_Qt6inG6dHThGEoruDCvtpdvtGAbQcHOdV7JzY22GYogsQdoJfG-yz6oWTW1nm2p_RTeRdjehWMehP51EMcFQvfVw6HE9jWZs5ApK5ukNASGm1ZBHAP3vZbtsVCGnIVGOub9bm2YyDLDVJC_QOfB_P8_TknNO3fJ1YEOb3fywuUVcY2V05fzQTwlVorYI2MNm3A9FgFvGmoHw2nLN8Vq2zKhNCtcmsxtBfnvPgBlMqP4GK0ej_gmXEGFwhSgaUhDRsIq771wdvjqyzyVfy8KvG4eCO-ug"
-        self.tablet_paper_mode = wacom_paper_mode(wacom_token)
-        time.sleep(2)
-        self.tablet_paper_mode.SyncConnection()
-        self.trace = trace
-
-        self.tablet_paper_mode.RealTimeInk_StartStop(True)
-
-    #------------------------------------------------------------
-    def set_active(self, active):
-        self.tablet_paper_mode.RealTimeInk_StartStop(active)
-
-    #------------------------------------------------------------
-    def disconenct(self):
-        self.set_active(False)
-
-    #------------------------------------------------------------
-    def poll(self):
-
-        lp_pkts = self.tablet_paper_mode.getPoints()
-        # print(len(lp_pkts))
-        if len(lp_pkts) == 0 or lp_pkts[0].point is None or lp_pkts[0].pressure == '':
-            #-- no packets received
-            return None
-
-        result = []
-
-        #-- Process each packet
-        for i in range(len(lp_pkts)):
-
-            #-- Update pen coordinates
-            x = lp_pkts[i].point[0] / 31.1         # subtract 31 so it will match the basic pen
-            pen_x = int(wintab.X_AXIS_OUTPUT_RANGE_MAX - x)  # mirror the x axis
-            pen_y = int(lp_pkts[i].point[1] / 31.1)
-
-            pressure = int(int(lp_pkts[i].pressure) / 60)  # normalized to 0-100 range
-            if self.trace:
-                print(f"TabletData: x={pen_x}, y={pen_y}, pressure={pressure}")
-
-            result.append(TabletData(pen_x, pen_y, pressure))
 
         return result

@@ -124,8 +124,6 @@ class MainWindow(QMainWindow):
 		if self.tablet_connect is not None:
 			return
 
-		self.poll_timer.stop()
-		self.poll_timer = None
 		self.tablet_connect = tablet.TabletConnect(int(self.winId()))  # Connect to the tablet in basic mode
 		self.start_polling_tablet()
 

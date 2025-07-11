@@ -5,6 +5,8 @@ from ctypes.wintypes import DWORD
 from ctypes import *
 
 
+#---------------------------------------------------------------------------------------------------------------
+#-- Setup the Wintab32.dll library, used for tablet input handling.
 try:
     wintab = WinDLL("wintab32.dll")
 except OSError as e:
@@ -14,8 +16,11 @@ except OSError as e:
                                                              "\nTry to install/reinstall Tablet drivers.")
     raise Exception("wintab32 library couldn't load. wintab32.dll file couldn't be found. Try to install Tablet drivers.", e)
 
-''' Hard coded value for setting the X axis returned values range.
-The tablet scales the input of the x and y ranges according to what defined in lcMine.lcOut<Org/Ext><X/Y>'''
+
+#---------------------------------------------------------------------------------------------------------------
+
+# Hard coded value for setting the X axis returned values range.
+# The tablet scales the input of the x and y ranges according to what defined in lcMine.lcOut<Org/Ext><X/Y>
 X_AXIS_OUTPUT_RANGE_MAX = 2000
 
 FIX32 = DWORD
@@ -61,9 +66,12 @@ CXO_PEN             = 0x0002  # Specifies that the context is a Pen Windows cont
 CXO_MESSAGES        = 0x0004  # Specifies that the context returns WT_PACKET messages to its owner.
 
 
-# -- Query Connected tablet information --
-# Returns Tablet device name, or None if no tablet is connected
+#-------------------------------------------------------------------------------
 def getTabletInfo():
+    """
+    Query Connected tablet information
+    :return: Tablet device name, or None if no tablet is connected
+    """
     AttachedDevices = c_uint(0)
     wintab.WTInfoA(WTI_INTERFACE, IFC_NDEVICES, byref(AttachedDevices))  # Query for number of connected tablets
     print("Wintab: Found {} connected devices".format(AttachedDevices.value))
@@ -75,19 +83,26 @@ def getTabletInfo():
     return str(DeviceName.value, 'utf-8')
 
 
-# -- Query  tablet axis information --
-# Input type: AXIS(). Returns axis information: tablet's range and resolution capabilities.
+#-------------------------------------------------------------------------------
 def getTabletAxisInfo(TabletX, TabletY):
+    """
+    Query  tablet axis information.
+    Input type: AXIS()
+    Returns axis information: tablet's range and resolution capabilities.
+    """
     assert isinstance(TabletX, AXIS), "TabletX must be of type AXIS"
     assert isinstance(TabletY, AXIS), "TabletY must be of type AXIS"
     wintab.WTInfoA(WTI_DEVICES, DVC_X, byref(TabletX))
     wintab.WTInfoA(WTI_DEVICES, DVC_Y, byref(TabletY))
 
 
-# -- Query  tablet pressure capability/range --
-# Input type: AXIS. Returns pressure information: range and resolution capabilities,
-# for the normal and tangential pressure
+#-------------------------------------------------------------------------------
 def getTabletPressureInfo(normal_press, tangential_press):
+    """
+    Query  tablet pressure capability/range
+    Input type: AXIS. Returns pressure information: range and resolution capabilities,
+    for the normal and tangential pressure
+    """
     assert isinstance(normal_press, AXIS), "normal_press must be of type AXIS"
     assert isinstance(tangential_press, AXIS), "tangential_press must be of type AXIS"
     # normal_press = AXIS()
@@ -96,12 +111,16 @@ def getTabletPressureInfo(normal_press, tangential_press):
     wintab.WTInfoA(WTI_DEVICES, DVC_TPRESSURE, byref(tangential_press))
 
 
+#-------------------------------------------------------------------------------
 # -- Open Tablet contexts --
 # Input: HWND windows handle. Returns hctx - tablet context handle.
 def OpenTabletContexts(hWnd):
+    #-- (1) Get wintab default context
     lcMine = LOGCONTEXT()   # This structure determines what events an application will get, how they will be processed, and how they will be delivered to the application/window
     foundCtx = wintab.WTInfoA(WTI_DEFCONTEXT, 0, byref(lcMine))  # If the nIndex argument is zero, the function returns all of the information entries in the category in a single data structure
     # print('Wintab: contexts found, buf size: {}, devname: {}'.format(foundCtx, lcMine.lcName))
+
+    #-- (2) Set the context parameters
 
     lcMine.lcPktData = PACKETDATA
     lcMine.lcOptions |= CXO_MESSAGES    # Adding CXO_PEN will cause the pen to act also as a system cursor.
@@ -137,10 +156,13 @@ def OpenTabletContexts(hWnd):
     #   |@  The tablet, buttons to the left    |    |   Y Axis
     #   |@                                     |    V
     #   |_____________________________________ |   (X_AXIS_OUTPUT_RANGE_MAX(=2000) * TabletNativeResolutionRatio)
+
+    #-- (3) Open the tablet context
     hctx = wintab.WTOpenA(hWnd, byref(lcMine), 1)
     return hctx
 
 
+#-------------------------------------------------------------------------------
 # -- Closes and destroys a tablet context object --
 # input: tablet context handle.
 def CloseTabletContext(hctx):
@@ -151,10 +173,13 @@ def CloseTabletContext(hctx):
 hctx = None  # Context handle, used across importing modules (recorder.py)
 
 
-# -- Reads the latest packets the the tablets packet queue --
-# use this function after calling OpenTabletContext()
-# return lpPkts PACKET array if any packet was received, 0 otherwise.
+#-------------------------------------------------------------------------------
 def GetPackets():
+    """
+    Reads the latest packets from the tablets packet queue
+    use this function only after calling OpenTabletContext()
+    :return: lpPkts PACKET array if any packet was received, 0 otherwise.
+    """
     global hctx
     cMaxPkts = 100
     lpPkts = (PACKET * 100)()
@@ -162,4 +187,3 @@ def GetPackets():
     if recv_num > 0:
         return lpPkts
     return 0
-

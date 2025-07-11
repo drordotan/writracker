@@ -55,30 +55,42 @@ class Trial:
 
 #-------------------------------------------------------------------------------------------------------------
 class Trajectory:
+
 	def __init__(self, filename, filepath):
 		self.filename = filename
 		self.filepath = filepath
 		self.file_handle = None
-		self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
 
+	#-----------------------------------------------------------------------------
 	def __str__(self):
 		return self.full_path
 
+	#-----------------------------------------------------------------------------
 	@property
 	def full_path(self):
 		return self.filepath + os.sep + self.filename
 
-	def open_traj_file(self, row):
+	#-----------------------------------------------------------------------------
+	def save_header(self):
+		self._save_row(header=True)
+
+	#-----------------------------------------------------------------------------
+	def add_row(self, x_cord, y_cord, pressure, time_in_trial):
+		self._save_row(header=False, x=x_cord, y=y_cord, pressure=pressure, time=time_in_trial)
+
+	#-----------------------------------------------------------------------------
+	def _save_row(self, header, x=None, y=None, pressure=None, time=None):
 		try:
 			with open(self.full_path, mode='a+', encoding='utf-8') as traj_file:
 				self.file_handle = csv.DictWriter(traj_file, ['x', 'y', 'pressure', 'time'], lineterminator='\n')
-				if row == "header":
-					# check first if file is empty
+				if header:
+					#-- write header only if the file is empty
 					traj_file.seek(0, os.SEEK_END)
 					if traj_file.tell() == 0:
 						self.file_handle.writeheader()
 				else:
-					self.file_handle.writerow(row)
+					self.file_handle.writerow(dict(x=x, y=y, pressure=pressure, time=time))
+
 		except (IOError, FileNotFoundError):
 			QMessageBox().critical(None, "Warning! file access error",
 								   "WriTracker couldn't save Trajectory file. Last trial trajectory"
@@ -86,15 +98,7 @@ class Trajectory:
 								   QMessageBox.Ok)
 			raise Exception("Error writing trajectory file in:" + self.filepath + os.sep + self.filename)
 
-	def add_row(self, x_cord, y_cord, pressure):
-		time_abs = datetime.now().strftime("%M:%S:%f")[:-2]
-		time_relative = datetime.strptime(time_abs, "%M:%S:%f") - datetime.strptime(self.start_time, "%M:%S:%f")
-		row = dict(x=x_cord, y=y_cord, pressure=pressure, time=time_relative.total_seconds())
-		self.open_traj_file(row)
-
-	def reset_start_time(self):
-		self.start_time = datetime.now().strftime("%M:%S:%f")[:-2]
-
+	#-----------------------------------------------------------------------------
 	# This function rotates trajectory file by angle degrees. Angle must be one of the following: 0, 90, 270.
 	# Angle of 0 will cause 180 degrees rotation. This is due to mismatch between the tablet & PyQt Coordinate system.
 	def rotate_trajectory_file(self, angle):
@@ -140,7 +144,6 @@ def save_trials(results_path, targets):
 	"""
 	Save the trials.csv file
 	"""
-
 	filename = results_path + os.sep + trials_csv_filename
 	with open(filename, mode='w', encoding='utf-8') as trials_file:
 		trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',

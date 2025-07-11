@@ -19,16 +19,6 @@ import writracker.utils as u
 import writracker.recorder
 from writracker.recorder import tablet
 
-from pythonnet import load
-
-load(r"coreclr")
-
-import clr
-dir_path = os.path.dirname(os.path.realpath(__file__))
-
-dll = "ConsoleApp2.dll"
-clr.AddReference(dir_path + "/dll/" + dll)
-
 
 TABLET_POLL_INTERVAL_MS = 50   # defines the polling frequency for tablet packets, in milliseconds
 

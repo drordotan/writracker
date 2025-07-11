@@ -506,28 +506,6 @@ border-color: rgb(255, 0, 0);</string>
           </property>
          </widget>
         </item>
-		<item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
-         <widget class="QPushButton" name="pen_mode_btn">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="minimumSize">
-           <size>
-            <width>175</width>
-            <height>25</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>175</width>
-            <height>25</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>Pen mode: basic</string>
-          </property>
-         </widget>
-        </item>
         <item alignment="Qt::AlignHCenter">
          <widget class="QPushButton" name="start_ssn_btn">
           <property name="enabled">

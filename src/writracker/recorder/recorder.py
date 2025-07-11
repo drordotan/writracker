@@ -20,20 +20,6 @@ import writracker.utils as u
 import writracker.recorder
 
 
-from pythonnet import load
-import base64
-
-load(r"coreclr")
-
-import clr
-dir_path = os.path.dirname(os.path.realpath(__file__))
-
-dll = "ConsoleApp2.dll"
-clr.AddReference(dir_path + "/dll/" + dll)
-from WacomPaperMode import wacom_paper_mode
-
-
-
 # CR check best for fit for both pens
 TABLET_POLL_TIME = 50   # defines the polling frequency for tablet packets, in milliseconds
 
@@ -45,15 +31,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 	def __init__(self, parent=None):
 		super(MainWindow, self).__init__(parent)
 
-		# get token from env variable insted of hardcoded string
-		#wacom_token = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJMTVMiLCJleHAiOjE3NDEwODU3ODgsImlhdCI6MTczMzMwOTc4OCwic2VhdHMiOjAsInJpZ2h0cyI6WyJDRExfQUNDRVNTIiwiQ0RMX0xJVkVfU1RSRUFNSU5HIiwiQ0RMX1RISVJEUEFSVFlfUEVOUyIsIkNETF9QSFVfMTExIiwiQ0RMX09FTV9NT05UQkxBTkMiLCJDREwyX0VOVU1fVVNCIiwiQ0RMMl9FTlVNX0JMRSIsIkNETDJfRU5VTV9XQUMiLCJDREwyX0VOVU1fU1lTIiwiQ0RMMl9CQVNJQyIsIkNETDJfU0VSVklDRV9SZWFsVGltZUluayIsIkNETDJfU0VSVklDRV9EaXNjcmV0ZURpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRGVza3RvcERpc3BsYXkiLCJDREwyX1NFUlZJQ0VfRmlsZVRyYW5zZmVyIiwiQ0RMMl9TRVJWSUNFX0VuY3J5cHRpb24iXSwiZGV2aWNlcyI6WyJXQUNPTV9TTUFSVFBBRCIsIldBQ09NX1NUVSIsIldBQ09NX0RSSVZFUiJdLCJ0eXBlIjoiZXZhbCIsImxpY19uYW1lIjoiV2Fjb21fSW5rX1NES19mb3JfZGV2aWNlcyIsIndhY29tX2lkIjoiMjQxMmNhZTZmZmM3NDM0MTkxNGM4NTE4YTEwYWNmZGYiLCJsaWNfdWlkIjoiMGY3Yzg4NGUtZjU2NS00ZjEzLTgzOTUtOGI3M2JmMDFkMjBkIiwiYXBwc193aW5kb3dzIjpbXSwiYXBwc19pb3MiOltdLCJhcHBzX2FuZHJvaWQiOltdLCJtYWNoaW5lX2lkcyI6W10sInd3dyI6W10sImJhY2tlbmRfaWRzIjpbXX0.m6olreCgI-lR-pimuV53lvRTY10r2FzbBdkG0c5Tlm7XEfKfNUOoNrTzWJespj-7AiH9VhNJbjUr49s4vTKCeKPETYBnmpJiu9eZeCtp0WbKNoXvD5qZNue-MlFOpwxuDYbBwEK8TEEACGO02ZDe-1OuoL0RMkixmT1q0cBL2zzw6_sXz9LHM3k41yr_IunszDiHBoJOO1UlpHgHRRbz7G8M14_nFM17et81E4faoOWvHrKtcChF9AlNxrSi-oA8DvAdHx732gHSRPqU7vaxIiWgulgZYYdF4Egildif0cZ0Nv-xTHJz0Bjx8NpEUkeJxj42K3UjqxRqRi-E02T_Aw"
-		wacom_token = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJMTVMiLCJleHAiOjE3NTQ1NDYwMjgsImlhdCI6MTc0NjU5NzIyOSwic2VhdHMiOjAsInJpZ2h0cyI6WyJTSUdfU0RLX0NPUkUiLCJUT1VDSF9TSUdOQVRVUkVfRU5BQkxFRCIsIlNJR0NBUFRYX0FDQ0VTUyIsIlNJR19TREtfSVNPIiwiU0lHX1NES19FTkNSWVBUSU9OIl0sImRldmljZXMiOltdLCJ0eXBlIjoiZXZhbCIsImxpY19uYW1lIjoiV2Fjb21fSW5rX1NES19mb3Jfc2lnbmF0dXJlIiwid2Fjb21faWQiOiIyNDEyY2FlNmZmYzc0MzQxOTE0Yzg1MThhMTBhY2ZkZiIsImxpY191aWQiOiJlMTdiMTE0MC1mNGE0LTQzNzQtOWFkMC1jYWFhOWY5NmM2YmYiLCJhcHBzX3dpbmRvd3MiOltdLCJhcHBzX2lvcyI6W10sImFwcHNfYW5kcm9pZCI6W10sIm1hY2hpbmVfaWRzIjpbXSwid3d3IjpbXSwiYmFja2VuZF9pZHMiOltdfQ.t_JoF-ltT-hYldYgnHfkL7L1SgkOyh5jcNAJfuGmb1eaHan1eh8p0KOPJ_Qt6inG6dHThGEoruDCvtpdvtGAbQcHOdV7JzY22GYogsQdoJfG-yz6oWTW1nm2p_RTeRdjehWMehP51EMcFQvfVw6HE9jWZs5ApK5ukNASGm1ZBHAP3vZbtsVCGnIVGOub9bm2YyDLDVJC_QOfB_P8_TknNO3fJ1YEOb3fywuUVcY2V05fzQTwlVorYI2MNm3A9FgFvGmoHw2nLN8Vq2zKhNCtcmsxtBfnvPgBlMqP4GK0ej_gmXEGFwhSgaUhDRsIq771wdvjqyzyVfy8KvG4eCO-ug"
-		self.tablet_paper_mode = wacom_paper_mode(wacom_token)
-		time.sleep(2)
-		self.tablet_paper_mode.SyncConnection()
-		# time.sleep(2)
-		# self.tablet_paper_mode.RealTimeInk_StartStop(True)
-		self.ink_mode = False
 		self.title = "WriTracker Recorder"
 		# Establish tablet connection & Start polling
 		h_wnd = int(self.winId())                            # Get current window's window handle
@@ -102,7 +79,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')
 		self.btn_continue_ssn = self.findChild(QPushButton, 'continue_ssn_btn')
 		self.btn_end_ssn = self.findChild(QPushButton, 'end_ssn_btn')
-		self.pen_mode_btn = self.findChild(QPushButton, 'pen_mode_btn')
 		self.btn_next = self.findChild(QPushButton, 'next_btn')
 		self.btn_play = self.findChild(QPushButton, 'play_btn')
 		self.btn_prv = self.findChild(QPushButton, 'prv_btn')
@@ -160,7 +136,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.move(0, 0)
 		# button links
 		self.btn_start_ssn.clicked.connect(self.f_btn_start_ssn)
-		self.pen_mode_btn.clicked.connect(self.f_pen_mode_mode)
 		self.btn_continue_ssn.clicked.connect(self.f_btn_continue_ssn)
 		self.btn_end_ssn.clicked.connect(self.f_btn_end_ssn)
 		self.btn_next.clicked.connect(self.f_btn_next)
@@ -185,93 +160,49 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 	#--------------------------------------------------------------------------------------
 	def tabletPoll(self):
-		#CR switch logic for ink mode if
-		if(self.ink_mode == False):
-			lp_pkts = (wintab.PACKET*100)()
-			lp_pkts = wintab.GetPackets()
+		lp_pkts = (wintab.PACKET * 100)()
+		lp_pkts = wintab.GetPackets()
 
-			if lp_pkts == 0:  # no packets received
+		if lp_pkts == 0:  # no packets received
+			return
+		print("packet count: ", len(lp_pkts))
+		for i in range(len(lp_pkts)):
+			if (lp_pkts[i].pkX == 0 and lp_pkts[i].pkY == 0):
 				return
-			print("packet count: ", len(lp_pkts))
-			for i in range(len(lp_pkts)):
-				if(lp_pkts[i].pkX == 0 and lp_pkts[i].pkY == 0):
-					return
-				
-				# if this pen and next pen are the same, return
-				if self.pen_x == lp_pkts[i].pkX and self.pen_y == lp_pkts[i].pkY:
-					continue
 
-				# CR add for loop for the points in the packet
-				self.pen_x = lp_pkts[i].pkX
-				self.pen_y = lp_pkts[i].pkY
+			# if this pen and next pen are the same, return
+			if self.pen_x == lp_pkts[i].pkX and self.pen_y == lp_pkts[i].pkY:
+				continue
 
-				new_pressure = int(lp_pkts[i].pkNormalPressure/327.67)      # normalized to 0-100 range
-			
-				print(self.pen_x, self.pen_y, new_pressure)
-				# mark Trial started flag, but only if the ok/error are not checked.
-				# this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
-				if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
-					# When we the user chose to play sounds
-					# the trial will start when pressing play, and not when touching the tablet.
-					if not self.trial_started and self.sounds_folder_path is None:
-						print("self start in poll")
-						self.start_trial()
-						# 
-				if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
-					self.path.moveTo(QPoint(int(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x), int(self.pen_y)))
-				elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
-					if self.session_started:
-						# When the pen leaves the surface, add a sample point with zero pressure
-						self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
-				elif new_pressure > 0:                                               # it's a "TabletMove" event
-					self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
-				self.update()                                       # calls paintEvent
-				self.pen_pressure = new_pressure
-				# write to traj file:
-				if self.current_active_trajectory is not None and self.session_started:
-					self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
-		else:
-			lp_pkts = self.tablet_paper_mode.getPoints()
-			# print(len(lp_pkts))
-			if len(lp_pkts) == 0 or lp_pkts[0].point is None or lp_pkts[0].pressure is '':  # no packets received
-				return
-			
+			# CR add for loop for the points in the packet
+			self.pen_x = lp_pkts[i].pkX
+			self.pen_y = lp_pkts[i].pkY
 
+			new_pressure = int(lp_pkts[i].pkNormalPressure / 327.67)  # normalized to 0-100 range
 
-
-			for i in range(len(lp_pkts)):
-				# substraction of 31 so it will match the basic pen
-				self.pen_x=lp_pkts[i].point[0]/31.1
-				self.pen_y=int(lp_pkts[i].point[1]/31.1)
-
-				# mirror the x axis
-				self.pen_x = int(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x)
-
-
-				new_pressure = int(int(lp_pkts[i].pressure)/60) 	# normalized to 0-100 range
-				# print(self.pen_x, self.pen_y, new_pressure)
-
-				if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
-					# When we the user chose to play sounds
-					# the trial will start when pressing play, and not when touching the tablet.
-					if not self.trial_started and self.sounds_folder_path is None:
-						print("start trail in poll")
-						self.start_trial()
-
-				if self.pen_pressure == 0 and new_pressure > 0:     # "TabletPress"
-					self.path.moveTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
-				elif self.pen_pressure > 0 and new_pressure == 0:   # "TabletRelease"
-					if self.session_started and self.current_active_trajectory is not None:
-						# When the pen leaves the surface, add a sample point with zero pressure
-						print("	self.current_active_trajectory",	self.current_active_trajectory)
-						self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
-				elif new_pressure > 0:                                               # it's a "TabletMove" event
-					self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX-self.pen_x, self.pen_y))
-				self.update()                                       # calls paintEvent
-				self.pen_pressure = new_pressure
-				# write to traj file:
-				if self.current_active_trajectory is not None and self.session_started:
-					self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
+			print(self.pen_x, self.pen_y, new_pressure)
+			# mark Trial started flag, but only if the ok/error are not checked.
+			# this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
+			if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
+				# When we the user chose to play sounds
+				# the trial will start when pressing play, and not when touching the tablet.
+				if not self.trial_started and self.sounds_folder_path is None:
+					print("self start in poll")
+					self.start_trial()
+			#
+			if self.pen_pressure == 0 and new_pressure > 0:  # "TabletPress"
+				self.path.moveTo(QPoint(int(wintab.X_AXIS_OUTPUT_RANGE_MAX - self.pen_x), int(self.pen_y)))
+			elif self.pen_pressure > 0 and new_pressure == 0:  # "TabletRelease"
+				if self.session_started:
+					# When the pen leaves the surface, add a sample point with zero pressure
+					self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
+			elif new_pressure > 0:  # it's a "TabletMove" event
+				self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX - self.pen_x, self.pen_y))
+			self.update()  # calls paintEvent
+			self.pen_pressure = new_pressure
+			# write to traj file:
+			if self.current_active_trajectory is not None and self.session_started:
+				self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
 
 	""" This is the old function to get tablet information using events. 
 		it work well, but does not allow recording tablet move above the surface ('hovering') """
@@ -312,7 +243,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 	def f_btn_mirror(self):
 		self.tablet_paint_area.scale(-1, 1)
 	#------------------------------------------------------------------------------------------
-	# This function rotates the graphicsView, then tablet_paper_modeulates the rotation factor for the points in the traj file.
+	# This function rotates the graphicsView, then tablet_modulates the rotation factor for the points in the traj file.
 	def f_btn_rotate(self):
 		self.tablet_paint_area.rotate(90)
 		self.rotation_angle = (self.rotation_angle+90) % 360  # allowed angles: 0,90,180,270
@@ -372,15 +303,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				return False
 
 	#------------------------------------------------------------------------------------------
-	def f_pen_mode_mode(self):
-		self.ink_mode = not self.ink_mode
-		if self.ink_mode:
-			self.tablet_paper_mode.RealTimeInk_StartStop(True)
-		else:
-			self.tablet_paper_mode.RealTimeInk_StartStop(False)
-
-		self.pen_mode_btn.setText("Pen mode: {}".format("paper" if self.ink_mode else "basic"))
-	
 	def f_btn_start_ssn(self):
 		self.clean_display()
 		self.show_info_msg("Starting a new session",
@@ -506,7 +428,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				self.close_current_trial()
 				self.save_trials_file()
 				self.save_remaining_targets_file()
-			self.tablet_paper_mode.RealTimeInk_StartStop(False)
 			self.poll_timer.stop()
 			wintab.CloseTabletContext(wintab.hctx)
 			self.close()
@@ -851,7 +772,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.stats['remaining'] = 0
 
 	#----------------------------------------------------------------------------------
-	# tablet_paper_modeulate stats based on the the current working mode, and update QLabel fields
+	# ulate stats based on the current working mode, and update QLabel fields
 	def stats_update(self):
 		self.stats_reset()
 		self.stats['total_targets'] = len(self.targets)

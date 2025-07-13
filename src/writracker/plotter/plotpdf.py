@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 
 import writracker.utils as u
-from writracker.encoder.transform import get_bounding_box
+from writracker.encoder.charvalues import get_bounding_box
 
 
 #------------------------------------------------------------------------------

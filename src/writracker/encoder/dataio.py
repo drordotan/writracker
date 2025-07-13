@@ -7,7 +7,7 @@ import csv
 import os
 from operator import attrgetter
 
-from writracker.encoder import transform
+from writracker.encoder import charvalues
 import writracker.utils as u
 from writracker import commonio
 
@@ -52,7 +52,7 @@ def load_experiment(dir_names, block_nums=None, trial_index_filter=None):
             trial_key = trial_spec['trial_id'], trial_spec['sub_trial_num']
             if trial_key not in all_strokes:
                 print('ERROR: Invalid data in {}: no strokes for trial #{} (sub-trial={})'
-                                 .format(dir_name, trial_spec['trial_id'], trial_spec['sub_trial_num']))
+                      .format(dir_name, trial_spec['trial_id'], trial_spec['sub_trial_num']))
                 continue
 
             trial_strokes = all_strokes[trial_key]
@@ -175,7 +175,7 @@ def _load_trajectory(traj_filename, trial_strokes):
         if stroke.stroke_num in points_per_stroke:
             stroke.trajectory = points_per_stroke[stroke.stroke_num]
         else:
-            print(f'WARNING: stroke #{stroke.stroke_num} not found in {traj_filename}')
+            print('WARNING: stroke #{} not found in {}'.format(stroke.stroke_num, traj_filename))
             stroke.trajectory = []
 
     return True
@@ -777,66 +777,74 @@ def _get_post_char_delay(_, character):
 class GetPreCharDistance(object):
     """ The horizontal distance between this character and the previous one (rely on the previously-calculated bounding box) """
 
-    def __init__(self, between_centers):
+    def __init__(self, between_centers, x_col='x', width_col='width'):
         """
         Compute the distance between characters
         :param between_centers: If True, compute the distance between the centers of the two characters. If False, compute distance
                                 between bounding boxes excluding the box itself.
         """
         self.between_centers = between_centers
+        self.x_col = x_col
+        self.width_col = width_col
 
-    def __call__(self, _, character, prev_agg):
+    def __call__(self, _, character, trial_extra_values):
         charnum = character.char_num
-        if not (charnum in prev_agg and charnum-1 in prev_agg):
+        if not (charnum in trial_extra_values and charnum - 1 in trial_extra_values):
             return None
 
-        char_inf = prev_agg[charnum]
-        prev_char_inf = prev_agg[charnum - 1]
+        char_inf = trial_extra_values[charnum]
+        prev_char_inf = trial_extra_values[charnum - 1]
         if self.between_centers:
-            return char_inf['x'] - prev_char_inf['x']
+            return char_inf[self.x_col] - prev_char_inf[self.x_col]
         else:
-            return char_inf['x'] - (prev_char_inf['x'] + prev_char_inf['width'])
+            return char_inf[self.x_col] - (prev_char_inf[self.x_col] + prev_char_inf[self.width_col])
 
 
 #-------------------------------------------------------
 class GetPostCharDistance(object):
     """ The horizontal distance between this character and the next one (rely on the previously-calculated bounding box) """
 
-    def __init__(self, between_centers):
+    def __init__(self, between_centers, x_col='x', width_col='width'):
         """
         Compute the distance between characters
         :param between_centers: If True, compute the distance between the centers of the two characters. If False, compute distance
                                 between bounding boxes excluding the box itself.
         """
         self.between_centers = between_centers
+        self.x_col = x_col
+        self.width_col = width_col
 
-    def __call__(self, _, character, prev_agg):
+    def __call__(self, _, character, trial_extra_values):
         charnum = character.char_num
-        if not (charnum in prev_agg and charnum+1 in prev_agg):
+        if not (charnum in trial_extra_values and charnum + 1 in trial_extra_values):
             return None
 
-        char_inf = prev_agg[charnum]
-        next_char_inf = prev_agg[charnum + 1]
+        char_inf = trial_extra_values[charnum]
+        next_char_inf = trial_extra_values[charnum + 1]
 
         if self.between_centers:
-            return next_char_inf['x'] - char_inf['x']
+            return next_char_inf[self.x_col] - char_inf[self.x_col]
         else:
-            return next_char_inf['x'] - (char_inf['x'] + char_inf['width'])
+            return next_char_inf[self.x_col] - (char_inf[self.x_col] + char_inf[self.width_col])
 
 
-#-- The list of the aggregations to perform (each becomes one or more columns in the resulting CSV file)
-_agg_func_specs = (
-    transform.AggFunc(transform.GetBoundingBox(1.0, 1.0), ('x', 'width', 'y', 'height')),
-    transform.AggFunc(lambda t, c: t.response, 'response'),
-    transform.AggFunc(_get_char_t0, 't0'),
-    transform.AggFunc(_get_char_duration, 'duration'),
-    transform.AggFunc(_get_pre_char_delay, 'pre_char_delay'),
-    transform.AggFunc(_get_post_char_delay, 'post_char_delay'),
-    transform.AggFunc(GetPreCharDistance(False), 'pre_char_distance', get_prev_aggregations=True),
-    transform.AggFunc(GetPostCharDistance(False), 'post_char_distance', get_prev_aggregations=True),
-    transform.AggFunc(GetPreCharDistance(True), 'pre_char_cdistance', get_prev_aggregations=True),
-    transform.AggFunc(GetPostCharDistance(True), 'post_char_cdistance', get_prev_aggregations=True),
-    transform.AggFunc(_get_extends, 'extends'),
+#-- The list of the value-generators (each becomes one/several columns in the resulting CSV file)
+__cgen = charvalues.ValueGenerator
+__tgen = charvalues.TrialLevelValueGenerator
+_default_value_generators = (
+    __cgen(charvalues.GetCharBoundingBox(0.9, 0.9), ('x', 'width', 'y', 'height')),
+    __tgen(charvalues.GetTrialBoundingBox(0.9, 0.9, charvalues.BBoxAttr.width), 'trial_width'),
+    __cgen(charvalues.NormalizeByCharWidth(('x', 'width'), trial_width_col='trial_width'), ('x_norm', 'width_norm')),
+    __cgen(lambda t, c: t.response, 'response'),
+    __cgen(_get_char_t0, 't0'),
+    __cgen(_get_char_duration, 'duration'),
+    __cgen(_get_pre_char_delay, 'pre_char_delay'),
+    __cgen(_get_post_char_delay, 'post_char_delay'),
+    __cgen(GetPreCharDistance(False), 'pre_char_distance'),
+    __cgen(GetPostCharDistance(False), 'post_char_distance'),
+    __cgen(GetPreCharDistance(True), 'pre_char_cdistance'),
+    __cgen(GetPostCharDistance(True), 'post_char_cdistance'),
+    __cgen(_get_extends, 'extends'),
 )
 
 
@@ -848,8 +856,8 @@ def save_characters_file(session_dir):
 
     exp = load_experiment(session_dir, trial_index_filter=lambda trial: trial['rc'] == 'OK')
 
-    transform.aggregate_characters(exp.trials, agg_func_specs=_agg_func_specs, trial_filter=lambda trial: trial.rc == 'OK',
-                                   out_filename=session_dir + '/characters.csv', save_as_attr=False)
+    charvalues.generate_char_level_custom_values(exp.trials, value_generators=_default_value_generators, trial_filter=lambda trial: trial.rc == 'OK',
+                                                 out_filename=session_dir + '/characters.csv')
 
 
 #--------------------------------------------------------------------
@@ -876,7 +884,8 @@ def append_to_characters_file(out_dir, raw_trial, sub_trial_num, trial_rc, respo
                              characters=chars,
                              strokes=strokes)
 
-    transform.aggregate_characters([coded_trial], agg_func_specs=_agg_func_specs, out_filename=out_dir + os.sep + '/characters.csv', append=True)
+    charvalues.generate_char_level_custom_values([coded_trial], value_generators=_default_value_generators,
+                                                 out_filename=out_dir + os.sep + '/characters.csv', append=True)
 
 
 #--------------------------------------------------------------------------------------------------------------------

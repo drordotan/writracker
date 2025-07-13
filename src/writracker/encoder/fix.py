@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from writracker.encoder import dataio, manip
@@ -6,6 +8,11 @@ from writracker.encoder import dataio, manip
 #===================================================================================================
 #   Fix known problems in encoding
 #===================================================================================================
+
+#-------------------------------------------------------------------------------------
+def _isempty(response):
+    return response is None or response == '' or response.isspace() or (isinstance(response, float) and math.isnan(response))
+
 
 #-------------------------------------------------------------------------------------
 def fix_encoding(session_dir, trial_nums=None):
@@ -41,6 +48,9 @@ def fix_encoding(session_dir, trial_nums=None):
 
             if fix_time_lt_0(trial):
                 traj_changed = True
+
+            if _isempty(trial.response):
+                print(f'Error: Trial #{trial.trial_id} has an empty response.')
 
             if trial_strokes_changed or traj_changed:
                 save_trial_traj(trial, session_dir)

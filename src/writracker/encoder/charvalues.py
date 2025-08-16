@@ -301,13 +301,15 @@ class GetTrialBoundingBox(object):
     Get the bounding-box of the trial
     """
 
-    def __init__(self, fraction_of_x_points=None, fraction_of_y_points=None,
+    #----------------------------------------------------------------
+    def __init__(self, fraction_of_x_points=None, fraction_of_y_points=None, only_on_paper=True,
                  columns=(BBoxAttr.xmid, BBoxAttr.width, BBoxAttr.ymid, BBoxAttr.height)):
 
         assert fraction_of_x_points is None or 0 < fraction_of_x_points <= 1
         assert fraction_of_y_points is None or 0 < fraction_of_y_points <= 1
         self.fraction_of_x_points = fraction_of_x_points
         self.fraction_of_y_points = fraction_of_y_points
+        self.only_on_paper = only_on_paper
 
         if isinstance(columns, BBoxAttr):
             self.columns = [columns]
@@ -316,8 +318,11 @@ class GetTrialBoundingBox(object):
                 raise ValueError('Invalid columns argument: expected a list of BBoxColumn objects, got {:}'.format(columns))
             self.columns = columns
 
+    #----------------------------------------------------------------
     def __call__(self, trial):
-        bbox = _get_bounding_box_traj(trial.traj_points,
+
+        points = [pt for pt in trial.traj_points if pt.z > 0] if self.only_on_paper else trial.traj_points
+        bbox = _get_bounding_box_traj(points,
                                       fraction_of_x_points=self.fraction_of_x_points,
                                       fraction_of_y_points=self.fraction_of_y_points)
 

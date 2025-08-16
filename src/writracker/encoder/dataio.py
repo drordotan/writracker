@@ -746,7 +746,7 @@ def _get_pre_char_delay(trial, character):
     """
     delay = character.t0 if character.char_num == 1 else character.pre_char_delay
     if delay < 0:
-        print('WARNING: negative pre-char-delay for character #{} in trial ${}'.format(character.char_num, trial.trial_id))
+        print('WARNING: negative pre-char-delay for character #{} in trial #{}'.format(character.char_num, trial.trial_id))
         return None
     return round(delay, 3)
 
@@ -833,7 +833,7 @@ __cgen = charvalues.ValueGenerator
 __tgen = charvalues.TrialLevelValueGenerator
 _default_value_generators = (
     __cgen(charvalues.GetCharBoundingBox(0.9, 0.9), ('x', 'width', 'y', 'height')),
-    __tgen(charvalues.GetTrialBoundingBox(0.9, 0.9, charvalues.BBoxAttr.width), 'trial_width'),
+    __tgen(charvalues.GetTrialBoundingBox(0.9, 0.9, columns=charvalues.BBoxAttr.width), 'trial_width'),
     __cgen(charvalues.NormalizeByCharWidth(('x', 'width'), trial_width_col='trial_width'), ('x_norm', 'width_norm')),
     __cgen(lambda t, c: t.response, 'response'),
     __cgen(_get_char_t0, 't0'),

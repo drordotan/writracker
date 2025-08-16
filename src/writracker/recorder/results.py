@@ -86,10 +86,11 @@ class RawDataset(object):
     """
 
     #-----------------------------------------------------------------
-    def __init__(self, trials=(), subj_id=None, source_path=None):
+    def __init__(self, trials=(), subj_id=None, source_path=None, empty_trial_ids=()):
         self._trials = list(trials)
         self.subj_id = subj_id
         self.source_path = source_path
+        self.empty_trial_ids = empty_trial_ids
 
 
     #-----------------------------------------------------------------
@@ -108,7 +109,6 @@ class RawDataset(object):
         return sum([trial.n_traj_points for trial in self._trials])
 
 
-
 #-------------------------------------------------------------------------------------------------
 def load_experiment(dir_name):
     """
@@ -117,11 +117,16 @@ def load_experiment(dir_name):
 
     trials_info = _load_trials_index(dir_name)
 
+    empty_trial_ids = []
+
     trials = []
     for trial_spec in trials_info:
         trial_id = trial_spec['trial_id']
 
         points = commonio.load_trajectory(dir_name + os.sep + trial_spec['traj_file_name'])
+        if len(points) == 0:
+            empty_trial_ids.append(trial_id)
+            continue
 
         trial = RawTrial(trial_id, trial_spec['target_id'], trial_spec['target'], points, time_in_session=trial_spec['time_in_session'],
                          rc=trial_spec['rc'], source=None,
@@ -130,7 +135,7 @@ def load_experiment(dir_name):
 
         trials.append(trial)
 
-    return RawDataset(trials, source_path=dir_name)
+    return RawDataset(trials, source_path=dir_name, empty_trial_ids=empty_trial_ids)
 
 
 #----------------------------------------------------------

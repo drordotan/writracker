@@ -73,6 +73,9 @@ def _load_raw_exp_ui():
 
         try:
             exp = writracker.recorder.results.load_experiment(raw_dir)
+            if len(exp.empty_trial_ids) > 0:
+                print('Error: some trials have an empty trajectory. Trial IDs: {}'.format(exp.empty_trial_ids))
+                messagebox.showwarning("Empty trials", f'{len(exp.empty_trial_ids)} trials have no trajectory data and were not loaded')
             return exp, raw_dir
 
         except Exception as e:

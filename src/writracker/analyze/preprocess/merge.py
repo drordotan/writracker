@@ -11,24 +11,63 @@ import pandas as pd
 import glob
 import re
 import scipy.stats
+import inspect
+from collections import namedtuple
+
+import writracker.utils as u
+
+
+ColGeneratorSpec = namedtuple('ColGeneratorSpec', ['generator', 'nparams'])
 
 
 #-----------------------------------------------------------------------------
 class Merger(object):
 
-    def __init__(self, new_cols=None, traj_file_prefix='trajectory_trial_', has_block_col=True):
+    def __init__(self, new_cols_trials=None, new_cols_chars=None, traj_file_prefix='trajectory_trial_', has_block_col=True):
         """
-
-        :param new_cols: A dictionary with new columns to create. The key is the new column name, the value is a function with
-                4 parameters: the row, the dataset directory, the subject ID, and the trial (from the trials.csv file).
-                If the function does not require the trial, then to save time, replace the function with a 2-elements tuple: (False, function)
+        :param new_cols_trials: Specification of new columns to create in the trials.csv file.
+                The specification is a dict; in each entry,
+                Key = the new column name (or tuple/list of several new column names)
+                Value = A function to generate the new value/s (called for each row).
+                    The function returns, the new columns value (or a list of values if the dict key specifiefs several columns).
+                    The function has 3 arguments: the row, the dataset directory, the subject ID
+        :param new_cols_chars: Specification of new columns to create in the characters.csv file.
+                The specification is a dict; in each entry,
+                Key = the new column name (or tuple/list of several new column names)
+                Value = A function to generate the new value/s (called for each row).
+                    The function returns, the new columns value (or a list of values if the dict key specifiefs several columns).
+                    The function's first argument is the row from characters.csv. It can also get two additinal argumetns:
+                    the dataset directory + the subject ID. It can also get a 4th argument: the trial (a DataFrame row from trials.csv).
         :param traj_file_prefix:
         :param has_block_col:
         """
-        self.new_cols = new_cols or {}
+        self.new_cols_trials = self._parse_generators(new_cols_trials, valid_n_params={1, 3})
+        self.new_cols_chars = self._parse_generators(new_cols_chars, valid_n_params={1, 3, 4})
         self.traj_file_prefix = traj_file_prefix
         self.has_block_col = has_block_col
         self.merge_errors = {}
+
+    #-------------------------------------------------------------------
+    def _parse_generators(self, generators, valid_n_params):
+        """ Detect each generator's number of parameters (and validate it) """
+        if generators is None:
+            return {}
+
+        result = {}
+        for key, gen in generators.items():
+            try:
+                nparams = len(inspect.signature(gen).parameters)
+            except TypeError as e:
+                print(f'ERROR: cannot parse the generator of column {key}: generator="{gen}": {e}')
+                continue
+
+            if nparams not in valid_n_params:
+                print(f'ERROR: generator for column {key} has {nparams} parameters, but expected {" or ".join(valid_n_params)}')
+                continue
+
+            result[key] = ColGeneratorSpec(generator=gen, nparams=nparams)
+
+        return result
 
     #-------------------------------------------------------------------
     def merge_dataset(self, subj_dirs, find_session_dirs, out_chars_fn=None, out_trials_fn=None):
@@ -55,7 +94,8 @@ class Merger(object):
             for ds_dir in ds_dirs:
                 curr_trials_df = pd.read_csv(ds_dir.dir_name + os.sep + 'trials.csv')
                 if out_trials_fn is not None:
-                    self._collect_trial_data(curr_trials_df, trials_data, ds_dir, subj_id)
+                    tdf = self._load_session_trials(curr_trials_df, ds_dir, subj_id)
+                    trials_data.append(tdf)
 
                 curr_chars_df = self._load_session_characters(ds_dir, curr_trials_df, subj_id)
                 if not curr_chars_df.empty:
@@ -87,17 +127,22 @@ class Merger(object):
         return all_chars_df
 
     #-------------------------------------------------------------------
-    def _collect_trial_data(self, raw_df, trials_data, ds_dir, subj_id):
+    def _load_session_trials(self, raw_df, ds_dir, subj_id):
+        """
+        Add a DataFrame with the current dataset's trials to the trials_data array
+        """
 
         new_df = dict(subject=[subj_id] * raw_df.shape[0],
-                   trial_id=raw_df.trial_id,
-                   target_id=raw_df.target_id,
-                   sub_trial_num=raw_df.sub_trial_num,
-                   target=raw_df.target,
-                   response=raw_df.response,
-                   time_in_session=raw_df.time_in_session,
-                   rc=raw_df.rc,
-                   traj_file_name=raw_df.traj_file_name)
+                      trial_id=raw_df.trial_id,
+                      target_id=raw_df.target_id,
+                      sub_trial_num=raw_df.sub_trial_num,
+                      target=raw_df.target,
+                      response=raw_df.response,
+                      time_in_session=raw_df.time_in_session,
+                      rc=raw_df.rc,
+                      traj_file_name=raw_df.traj_file_name)
+
+        new_df = pd.DataFrame(new_df)
 
         if 'sound_file_length' in raw_df:
             new_df['sound_file_length'] = raw_df.sound_file_length
@@ -105,24 +150,62 @@ class Merger(object):
         if self.has_block_col:
             new_df['block'] = [ds_dir.block_unique] * raw_df.shape[0]
 
-        trials_data.append(pd.DataFrame(new_df))
+        #-- Add new columns to the DataFrame
+        for new_col_name, (new_col_generator, nparams) in self.new_cols_trials.items():
+
+            if nparams == 1:
+                def gen_args(row):
+                    return row,
+            elif nparams == 3:
+                def gen_args(row):
+                    return row, ds_dir, subj_id
+            else:
+                raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
+
+            new_col_values = [new_col_generator(*gen_args(row)) for _, row in new_df.iterrows()]
+
+            if u.is_collection(new_col_name):
+                for i, col_name in enumerate(new_col_name):
+                    new_df[col_name] = [v[i] for v in new_col_values]
+            else:
+                new_df[new_col_name] = new_col_values
+
+        return new_df
 
     #-------------------------------------------------------------------
     def _load_session_characters(self, ds_dir, trials, subj_id):
+        """
+        Load characters.csv file of the current session, and add new columns to it.
+        """
 
         get_trial_by_id = GetTrialWithID(trials)
 
         curr_chars_df = pd.read_csv(ds_dir.filename, dtype=dict(char=str))
         curr_chars_df = self.filter_good_trials(curr_chars_df, ds_dir.dir_name)
 
-        for new_col_name, new_col_generator in self.new_cols.items():
-            if isinstance(new_col_generator, tuple):
-                col_generators_need_trial, new_col_generator = new_col_generator
+        curr_chars_df['subject'] = subj_id
+
+        for new_col_name, (new_col_generator, nparams) in self.new_cols_chars.items():
+
+            if nparams == 1:
+                def gen_args(row):
+                    return row,
+            elif nparams == 3:
+                def gen_args(row):
+                    return row, ds_dir, subj_id
+            elif nparams == 4:
+                def gen_args(row):
+                    return row, ds_dir, subj_id, get_trial_by_id(row['trial_id'])
             else:
-                col_generators_need_trial = False
-            curr_chars_df[new_col_name] = [new_col_generator(row, ds_dir, subj_id,
-                                                             get_trial_by_id(row['trial_id']) if col_generators_need_trial else None)
-                                           for _, row in curr_chars_df.iterrows()]
+                raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
+
+            new_col_values = [new_col_generator(*gen_args(row)) for _, row in curr_chars_df.iterrows()]
+
+            if u.is_collection(new_col_name):
+                for i, col_name in enumerate(new_col_name):
+                    curr_chars_df[col_name] = [v[i] for v in new_col_values]
+            else:
+                curr_chars_df[new_col_name] = new_col_values
 
         return curr_chars_df
 

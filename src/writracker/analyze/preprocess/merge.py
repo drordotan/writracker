@@ -23,7 +23,8 @@ ColGeneratorSpec = namedtuple('ColGeneratorSpec', ['generator', 'nparams'])
 #-----------------------------------------------------------------------------
 class Merger(object):
 
-    def __init__(self, new_cols_trials=None, new_cols_chars=None, traj_file_prefix='trajectory_trial_', has_block_col=True):
+    def __init__(self, new_cols_trials=None, new_cols_chars=None, traj_file_prefix='trajectory_trial_', has_block_col=True,
+                 trace=False):
         """
         :param new_cols_trials: Specification of new columns to create in the trials.csv file.
                 The specification is a dict; in each entry,
@@ -46,6 +47,7 @@ class Merger(object):
         self.traj_file_prefix = traj_file_prefix
         self.has_block_col = has_block_col
         self.merge_errors = {}
+        self.trace = trace
 
     #-------------------------------------------------------------------
     def _parse_generators(self, generators, valid_n_params):
@@ -86,6 +88,9 @@ class Merger(object):
         self.merge_errors = dict(N_MISSING_IN_TRIALS_CSV=0, N_MISSING_TRAJ_FILES=0)
 
         for subj_id, subj_dir in subj_dirs.items():
+            if self.trace:
+                print(f'\nProcessing subject {subj_id} in {subj_dir}')
+
             ds_dirs = find_session_dirs(subj_dir)
             if ds_dirs is None:
                 print(f"ERROR: No data found in {subj_dir}")
@@ -97,7 +102,7 @@ class Merger(object):
                     tdf = self._load_session_trials(curr_trials_df, ds_dir, subj_id)
                     trials_data.append(tdf)
 
-                curr_chars_df = self._load_session_characters(ds_dir, curr_trials_df, subj_id)
+                curr_chars_df = self._load_session_characters(ds_dir, tdf, subj_id)
                 if not curr_chars_df.empty:
                     chars_data.append(curr_chars_df)
 
@@ -110,8 +115,11 @@ class Merger(object):
 
         all_chars_df = self.update_prev_and_next_char(all_chars_df)
 
-        all_chars_df = self.update_pre_char_delay_at_trial_level(all_chars_df, 'pre_trial_delay', per_length=True, char_num=1)
-        all_chars_df = self.update_pre_char_delay_at_trial_level(all_chars_df, 'cross_triplet_delay', per_length=True, dec_pos=3)
+        variant_length = 'target_len' in all_chars_df and len(all_chars_df.target_len.unique()) > 1
+
+        all_chars_df = self.update_pre_char_delay_at_trial_level(all_chars_df, 'pre_trial_delay', per_length=variant_length, char_num=1)
+        if 'dec_pos' in all_chars_df:
+            all_chars_df = self.update_pre_char_delay_at_trial_level(all_chars_df, 'cross_triplet_delay', per_length=variant_length, dec_pos=3)
 
         if 'sound_file_length' in all_chars_df:
             all_chars_df['post_stim_char1_delay'] = all_chars_df.pre_trial_delay - all_chars_df.sound_file_length
@@ -131,6 +139,9 @@ class Merger(object):
         """
         Add a DataFrame with the current dataset's trials to the trials_data array
         """
+
+        if self.trace:
+            print('Loading trials file')
 
         new_df = dict(subject=[subj_id] * raw_df.shape[0],
                       trial_id=raw_df.trial_id,
@@ -152,6 +163,8 @@ class Merger(object):
 
         #-- Add new columns to the DataFrame
         for new_col_name, (new_col_generator, nparams) in self.new_cols_trials.items():
+            if self.trace:
+                print(f'  Add column {new_col_name} to trials file')
 
             if nparams == 1:
                 def gen_args(row):
@@ -177,6 +190,8 @@ class Merger(object):
         """
         Load characters.csv file of the current session, and add new columns to it.
         """
+        if self.trace:
+            print('Loading characters file')
 
         get_trial_by_id = GetTrialWithID(trials)
 
@@ -186,6 +201,9 @@ class Merger(object):
         curr_chars_df['subject'] = subj_id
 
         for new_col_name, (new_col_generator, nparams) in self.new_cols_chars.items():
+
+            if self.trace:
+                print(f'  Add column {new_col_name} to characters file')
 
             if nparams == 1:
                 def gen_args(row):
@@ -231,7 +249,7 @@ class Merger(object):
 
 
     #-------------------------------------------------------------------
-    def update_pre_char_delay_at_trial_level(self, data, col_name, char_num=None, dec_pos=None, per_length=True):
+    def update_pre_char_delay_at_trial_level(self, data, col_name, per_length, char_num=None, dec_pos=None):
         """
         Set the pre-char delay of a particular character over all rows of the corresponding trial
         Z-score over all subjects together, either separately for each target length or not
@@ -404,8 +422,8 @@ class EncodedSessionDir(object):
 
     def __init__(self, dir_name, filename, block):
         """
-        :param dir_name: Session directory name
-        :param filename: Relevant filename within that sessions
+        :param dir_name: Session directory name (full path)
+        :param filename: Relevant filename within that sessions - e.g., trials.csv (full path)
         :param block: Block number (assuming the subject had several sessions in a given task/condition)
         """
         self.dir_name = dir_name

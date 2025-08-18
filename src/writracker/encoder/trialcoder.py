@@ -20,6 +20,7 @@ class ResponseMandatory(enum.Enum):
     Mandatory = 1
     MandatoryForAll = 2
 
+
 _response_mandatory_options = ['Optional', 'Mandatory only for correct trials', 'Mandatory for correct and error trials']
 
 
@@ -157,7 +158,7 @@ def show_settings_screen(show_cancel_button=True):
 
             [sg.Text('The size of dots for plotting the trajectories: '),
              sg.DropDown(['1', '2', '3', '4', '5'], readonly=True, key='dot_radius', default_value=str(app_config['dot_radius']))],
-            [sg.Button('OK')] + ( [sg.Button('Cancel')] if show_cancel_button else []),
+            [sg.Button('OK')] + ([sg.Button('Cancel')] if show_cancel_button else []),
         ]
 
         window = sg.Window('Settings', layout)
@@ -1039,6 +1040,7 @@ class _CharSelectorAnyPair(object):
     def unselect_cleanup(self, clicked_char):
         if clicked_char is not None:
             _set_char_color(clicked_char, None, self.graph)
+
 
 #-------------------------------------------------------------------------------------
 def _get_expand_ratio(dots, screen_size, margin):

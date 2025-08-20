@@ -637,11 +637,11 @@ class TrialEncodingWindow(qw.QMainWindow):
             return len(response) == n_chars
 
 
-#===================================================
-#        Flow functions
-#===================================================
-
+#============================================================================================================================
 class CodeSingleTrial(object):
+    """
+    Handle the flow of encoding a single trial
+    """
 
     #---------------------------------------------------------------------------------------
     def __init__(self, out_dir):
@@ -782,7 +782,7 @@ class SplitStrokeDialog(qw.QDialog):
         expand_ratio, offset, screen_size = _get_expand_ratio(stroke, screen_size, inner_margin, outer_margin)
         window = SplitStrokeDialog(stroke, screen_size, expand_ratio, offset, screen_margin, dot_radius)
         if window.exec_() == qw.QDialog.Accepted:
-            return window.selected_dot.markup if window.selected_dot is not None else None
+            return window.selected_dot.dot if window.selected_dot is not None else None
 
         return None
 
@@ -834,7 +834,7 @@ class SplitStrokeDialog(qw.QDialog):
     #---------------------------------------------------------------------------------------
     def on_graph_clicked(self, pos):
         click_coord = (pos.x(), pos.y())
-        clicked_dot = _find_clicked_dot(self.dots, click_coord)
+        clicked_dot = _find_dot_closest_to(self.dots, click_coord)
         # reset
         for dot in self.dots:
             if hasattr(dot, 'graphics_item'):
@@ -908,6 +908,7 @@ def _plot_dots_for_markup(characters, graphics_view, screen_size, expand_ratio, 
 
 #---------------------------------------------------------------------------------------
 def _plot_dots_for_split(dot_list, graphics_view, screen_size, expand_ratio, offset, margin, dot_radius=6, n_colors=10):
+
     scene = graphics_view.scene
     scene.clear()
 
@@ -947,28 +948,33 @@ def _plot_dots_for_split(dot_list, graphics_view, screen_size, expand_ratio, off
 
 #---------------------------------------------------------------------------------------
 class UiTrajPointForSplit(object):
-    def __init__(self, markup, color):
-        self.markup = markup
+    """ A single trajectory point in the split-stroke dialog """
+
+    def __init__(self, dot, color):
+        self.dot = dot
         self.color = color
         self.graphics_item = None
 
     @property
     def x(self):
-        return self.markup.x
+        return self.dot.x
 
     @property
     def y(self):
-        return self.markup.y
+        return self.dot.y
 
     @property
     def t(self):
-        return self.markup.t
+        return self.dot.t
 
 
-# =========================
-# Selection handlers
-# =========================
+#==============================================================================================
+#  Selection handlers
+#==============================================================================================
+
+#---------------------------------------------------------------------------------------
 class _SingleStrokeSelector(object):
+
     def __init__(self, graphics_view, strokes):
         self.graphics_view = graphics_view
         self.strokes = [s for s in strokes if len(s.trajectory) > 0]
@@ -978,7 +984,7 @@ class _SingleStrokeSelector(object):
         click_coord = values['graph']
         if click_coord[0] is None:
             return
-        clicked_stroke = _find_clicked_stroke(self.strokes, click_coord)
+        clicked_stroke = _find_stroke_closest_to(self.strokes, click_coord)
         self._set_clicked_stroke_color(clicked_stroke)
 
     def _set_clicked_stroke_color(self, clicked_stroke):
@@ -1015,12 +1021,12 @@ class _MultiStrokeSelector(object):
             return
 
         self.cleanup()
-        self.selected_char = _find_clicked_char(self.characters, click_coord)
+        self.selected_char = _find_char_closest_to(self.characters, click_coord)
         if len(self.selected_char.on_paper_strokes) == 1:
             self.selected_char = None
             self.selected_stroke = None
             return
-        clicked_stroke = _find_clicked_stroke(self.selected_char.on_paper_strokes, click_coord)
+        clicked_stroke = _find_stroke_closest_to(self.selected_char.on_paper_strokes, click_coord)
         self._set_clicked_stroke_color(clicked_stroke)
 
     def _set_clicked_stroke_color(self, clicked_stroke):
@@ -1050,6 +1056,7 @@ class _MultiStrokeSelector(object):
 
 #---------------------------------------------------------------------------------------
 class _CharSelector(object):
+
     def __init__(self, graphics_view, characters):
         self.graphics_view = graphics_view
         self.characters = [c for c in characters if len(c.on_paper_dots) > 0]
@@ -1059,7 +1066,7 @@ class _CharSelector(object):
         click_coord = values['graph']
         if click_coord[0] is None:
             return
-        clicked_char = _find_clicked_char(self.characters, click_coord)
+        clicked_char = _find_char_closest_to(self.characters, click_coord)
         self.cleanup()
         self.selected = clicked_char
         self.highlight_selected()
@@ -1071,12 +1078,6 @@ class _CharSelector(object):
         if self.selected is None:
             return
         _set_chars_color(self.graphics_view, self.characters, None)
-
-
-#---------------------------------------------------------------------------------------
-def _set_chars_color(graphics_view, chars_to_highlight, color):
-    for c in chars_to_highlight:
-        _set_char_color(c, color, graphics_view)
 
 
 #---------------------------------------------------------------------------------------
@@ -1119,7 +1120,7 @@ class _CharSelectorAnyPair(object):
         click_coord = values['graph']
         if click_coord[0] is None:
             return
-        clicked_char = _find_clicked_char(self.characters, click_coord)
+        clicked_char = _find_char_closest_to(self.characters, click_coord)
         self.cleanup()
         if clicked_char in self.selected_chars:
             self.unselect_char(clicked_char)
@@ -1154,9 +1155,15 @@ class _CharSelectorAnyPair(object):
         _set_chars_color(self.graphics_view, self.characters, None)
 
 
-# =========================
+#---------------------------------------------------------------------------------------
+def _set_chars_color(graphics_view, chars_to_highlight, color):
+    for c in chars_to_highlight:
+        _set_char_color(c, color, graphics_view)
+
+
+#=================================================================
 # Geometry helpers
-# =========================
+#=================================================================
 
 #---------------------------------------------------------------------------------------
 def _get_expand_ratio(dots, screen_size, inner_margin, outer_margin):
@@ -1186,36 +1193,34 @@ def _get_expand_ratio(dots, screen_size, inner_margin, outer_margin):
 
 
 #---------------------------------------------------------------------------------------
-def _find_clicked_dot(dots, coord):
+def _find_dot_closest_to(dots, coord):
     distances = [distance2(d, coord) for d in dots]
     closest = int(np.argmin(distances))  # type: ignore
     return dots[closest]
 
 
 #---------------------------------------------------------------------------------------
-def _find_clicked_char(characters, coord):
+def _find_char_closest_to(characters, coord):
+
+    def char_coord_distance(char):
+        return min([distance2(dot, coord) for dot in char.on_paper_dots])
+
     characters = [c for c in characters]
-    distances = [_get_distance_to_char(s, coord) for s in characters]
+    distances = [char_coord_distance(c) for c in characters]
     closest = int(np.argmin(distances))  # type: ignore
     return characters[closest]
 
 
 #---------------------------------------------------------------------------------------
-def _get_distance_to_char(char, coord):
-    return min([distance2(dot, coord) for dot in char.on_paper_dots])
+def _find_stroke_closest_to(strokes, coord):
 
+    def stroke_coord_distance(stroke):
+        return min([distance2(dot, coord) for dot in stroke.trajectory])
 
-#---------------------------------------------------------------------------------------
-def _find_clicked_stroke(strokes, coord):
     strokes = [s for s in strokes]
-    distances = [_get_distance_to_stroke(s, coord) for s in strokes]
+    distances = [stroke_coord_distance(s) for s in strokes]
     closest = int(np.argmin(distances))  # type: ignore
     return strokes[closest]
-
-
-#---------------------------------------------------------------------------------------
-def _get_distance_to_stroke(stroke, coord):
-    return min([distance2(dot, coord) for dot in stroke.trajectory])
 
 
 #---------------------------------------------------------------------------------------

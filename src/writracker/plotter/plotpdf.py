@@ -3,6 +3,7 @@ Plot an experiment to a pdf file
 """
 
 import math
+import os.path
 import re
 from matplotlib.backends import backend_pdf
 import numpy as np
@@ -11,16 +12,18 @@ from matplotlib import patches
 
 import writracker.utils as u
 from writracker.encoder.charvalues import get_bounding_box
+import writracker.encoder.dataio as dio
 
 
 #------------------------------------------------------------------------------
-# noinspection PyMethodMayBeStatic
-class PdfPlotter(object):
+class PdfPlotterConfig(object):
 
     def __init__(self, bounding_box=False, char_order=False, temporal_gaps=False, fraction_of_x_points=None, fraction_of_y_points=None,
-                 cols_per_page=2, rows_per_page=5, n_colors=10, trial_title=None):
+                 cols_per_page=2, rows_per_page=5, n_colors=10, trial_title=None, description=None):
         """
-
+        :param trials: either a list of CodedTrial objects or an Experiment object (coded)
+        :param out_fn: PDF file name
+        :param max_trials: Plot only the first trials in the experiment
         :param bounding_box: plot bounding box for each character (True/False)
         :param char_order: Write the order of writing each character (possible only if bounding_box = True)
         :param temporal_gaps: Plot temporal gaps between adjacent characters (True/False)
@@ -33,6 +36,7 @@ class PdfPlotter(object):
         """
         if char_order:
             assert bounding_box, 'Cannot show character order without bounding box'
+
         self.bounding_box = bounding_box
         self.char_order = char_order
         self.temporal_gaps = temporal_gaps
@@ -42,11 +46,107 @@ class PdfPlotter(object):
         self.rows_per_page = rows_per_page
         self.n_colors = n_colors
         self.get_trial_title = trial_title or TrialTitle()
+        self.description = None if description is None or str(description).strip() == '' else description
 
         self.bounding_box_line_width = 0.5
 
+
+#------------------------------------------------------------------------------
+class MultiFilePdfPlotter(object):
+    """
+    Plot multiple experiments to pdf files, one file per experiment.
+    """
+
+    def __init__(self, input_dirs, out_path, config=None):
+        """
+        :param config: PdfPlotterConfig object
+        """
+        self.input_dirs = input_dirs
+        self.out_path = out_path
+        self.config = config or PdfPlotterConfig()
+        self.keep_working = True
+        self.current_file_plotter = None
+
+    def plot(self):
+        for i, ds_dir_name in enumerate(self.input_dirs):
+
+            if not self.keep_working:
+                break
+
+            self.on_ds_started(i, ds_dir_name)
+
+            exp = dio.load_experiment(ds_dir_name)
+            out_fn = os.path.basename(ds_dir_name)
+            try:
+                self.current_file_plotter = self.create_one_file_plotter(ds_dir_name,
+                                                                         out_fn=f'{self.out_path}/{out_fn}.pdf',
+                                                                         config=self.config)
+                self.current_file_plotter.init()
+                self.current_file_plotter.plot()
+            except Exception as e:
+                self.on_exception(i, ds_dir_name, e)
+                continue
+
+            self.on_ds_finished(i, ds_dir_name)
+
+
+    def create_one_file_plotter(self, ds_dir_name, out_fn, config):
+        return OneFilePdfPlotter(ds_dir_name, out_fn=out_fn, config=config)
+
+    def on_ds_started(self, ds_num, ds_dir):
+        pass
+
+    def on_ds_finished(self, ds_num, ds_dir):
+        pass
+
+    def on_exception(self, ds_num, ds_dir, e):
+        pass
+
+    def stop(self):
+        self.keep_working = False
+        if self.current_file_plotter is not None:
+            self.current_file_plotter.keep_working = False
+
+#------------------------------------------------------------------------------
+# noinspection PyMethodMayBeStatic
+class OneFilePdfPlotter(object):
+    """
+    Plot one experiment to pdf
+    """
+
+    def __init__(self, input, out_fn, max_trials=None, config=None):
+        """
+        :param input: a list of CodedTrial objects, an Experiment object (coded), or a directory name (string)
+        :param out_fn: PDF file name
+        :param max_trials: Plot only the first trials in the experiment
+        """
+        self.config = config or PdfPlotterConfig()
+        self.out_fn = out_fn
+        self.max_trials = max_trials
+        self.keep_working = True
+        self.input = input
+
     #------------------------------------------------------------------------------
-    def plot(self, trials, out_fn, max_trials=None, progress_desc=None):
+    # noinspection PyAttributeOutsideInit
+    def init(self):
+
+        if hasattr(self.input, 'sorted_trials'):
+            self.trials = list(self.input.sorted_trials)
+        elif isinstance(self.input, str):
+            self.trials = dio.load_experiment(self.input).sorted_trials
+        elif isinstance(self.input, list):
+            self.trials = self.input
+        else:
+            raise ValueError('Input must be a list of CodedTrial objects, an Experiment object (coded), or a directory name (string)')
+
+        if len(self.trials) == 0:
+            raise ValueError('No trials to plot')
+
+        if self.max_trials is not None:
+            trials = self.trials[:min(self.max_trials, len(self.trials))]
+
+    #------------------------------------------------------------------------------
+    def plot(self):
         """
         Plot the experiment raw data - the characters, as the subject wrote them - and save to a PDF file.
 
@@ -58,36 +158,34 @@ class PdfPlotter(object):
         :param max_trials: Plot only the first trials in the experiment
         """
 
-        if hasattr(trials, 'sorted_trials'):
-            trials = list(trials.sorted_trials)
+        if not hasattr(self, 'trials'):
+            raise Exception('plotter error: init() must be called before plot()')
 
-        assert len(trials) > 0
+        trials = list(self.trials)
 
-        n_trials_per_page = self.cols_per_page * self.rows_per_page
+        n_trials_per_page = self.config.cols_per_page * self.config.rows_per_page
 
-        pdf = backend_pdf.PdfPages(out_fn)
         z_values = np.array([point.z for t in trials for point in t.on_paper_points])
         if len(z_values) == 0:
-            print('WARNING: No data to plot' + ('' if progress_desc is None else f' for {progress_desc}'))
+            print('WARNING: No data to plot' + ('' if self.config.description is None else f' for {self.config.description}'))
             return
 
         max_z = max(z_values)
 
         def get_z_levels(z):
-            return _convert_z_to_level(z, max_z, self.n_colors)
-
-        if max_trials is not None:
-            trials = trials[:min(max_trials, len(trials))]
+            return _convert_z_to_level(z, max_z, self.config.n_colors)
 
         n_pages = math.ceil(len(trials) / n_trials_per_page)
 
-        progress = u.ProgressBar(len(trials), 'Preparing pdf...' if progress_desc is None else f'Preparing pdf for {progress_desc}...')
+        self.init_progress_bar()
         n_done = 0
+
+        pdf = backend_pdf.PdfPages(self.out_fn)
 
         while len(trials) > 0:
 
             curr_page_n_trials = min(n_trials_per_page, len(trials))
-            fig, axes = plt.subplots(self.rows_per_page, self.cols_per_page)
+            fig, axes = plt.subplots(self.config.rows_per_page, self.config.cols_per_page)
             fig.subplots_adjust(hspace=.8, wspace=0.3)
 
             axes = np.reshape(axes, [n_trials_per_page])
@@ -100,7 +198,7 @@ class PdfPlotter(object):
                 ax.get_yaxis().set_visible(False)
                 ax.get_xaxis().set_visible(False)
                 self.plot_trial(trial, ax=ax, get_z_levels=get_z_levels)
-                ax.set_title(self.get_trial_title(trial), fontdict=dict(fontsize=5))
+                ax.set_title(self.config.get_trial_title(trial), fontdict=dict(fontsize=5))
 
             if curr_page_n_trials < n_trials_per_page:
                 for i in range(curr_page_n_trials, n_trials_per_page):
@@ -111,12 +209,24 @@ class PdfPlotter(object):
             pdf.savefig(fig)
             plt.close(fig)
 
-            progress.progress(n_done)
+            self.update_progress_bar(n_done)
+
+            if not self.keep_working:
+                break
 
         pdf.close()
 
         if n_pages > 3:
             print('')
+
+    #------------------------------------------------------------------------------
+    def init_progress_bar(self):
+        msg = 'Preparing pdf...' if self.config.description is None else f'Preparing pdf for {self.config.description}...'
+        self.progress = u.ProgressBar(len(self.trials), msg)
+
+    #------------------------------------------------------------------------------
+    def update_progress_bar(self, n_done):
+        self.progress.progress(n_done)
 
     #------------------------------------------------------------------------------
     def plot_trial(self, trial, n_colors=10, get_z_levels=None, ax=None):
@@ -162,29 +272,30 @@ class PdfPlotter(object):
     #-------------------------------------------------------------
     def _draw_trial_rectangles(self, trial, ax):
 
-        if not self.bounding_box and not self.temporal_gaps:
+        if not self.config.bounding_box and not self.config.temporal_gaps:
             return
 
-        bounding_boxes = [get_bounding_box(c, fraction_of_x_points=self.fraction_of_x_points, fraction_of_y_points=self.fraction_of_y_points)
+        bounding_boxes = [get_bounding_box(c, fraction_of_x_points=self.config.fraction_of_x_points,
+                                           fraction_of_y_points=self.config.fraction_of_y_points)
                           for c in trial.characters]
 
-        trial.correct_writing_order = sum(np.diff([box.xmin for box in bounding_boxes]) < 0) == 0
+        trial.correct_writing_order = sum(np.diff([box.xmin for box in bounding_boxes]) < 0) == 0  # type: ignore
 
         #-- Plot bounding boxes
         for n, (c, box) in enumerate(zip(trial.characters, bounding_boxes)):
             bbox_color = 'r' if (n % 2 == 0) else 'b'
-            if self.bounding_box:
+            if self.config.bounding_box:
                 rect = patches.Rectangle((box.xmin, box.ymin), box.width, box.height,
                                          edgecolor=bbox_color, facecolor='none')
-                rect.set_linewidth(self.bounding_box_line_width)
+                rect.set_linewidth(self.config.bounding_box_line_width)
                 ax.add_patch(rect)
 
             #-- Plot character order
-            if self.char_order:
+            if self.config.char_order:
                 ax.text(box.xmin, box.ymin + box.height, str(c.char_num), fontsize=5, color=bbox_color)
 
         #-- Plot temporal gaps
-        if self.temporal_gaps:
+        if self.config.temporal_gaps:
             firstx = bounding_boxes[0].xmin
             gaps = [_bbox_gap(c) for c in trial.characters]
             ys = [int(box.ymin) for box in bounding_boxes]

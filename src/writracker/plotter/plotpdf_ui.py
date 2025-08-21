@@ -11,6 +11,14 @@ import writracker.plotter.plotpdf as ppdf
 
 
 #==================================================================================================
+def run():
+    app = QApplication(sys.argv)
+    dialog = SelectFilesDialog()
+    dialog.show()
+    sys.exit(app.exec_())
+
+
+#==================================================================================================
 class SelectFilesDialog(QDialog):
     """
     First dialog: select input and output directories
@@ -218,7 +226,7 @@ class PreparePdfProgressDialog(QDialog):
         # noinspection PyUnresolvedReferences
         self.btn_reveal.clicked.connect(self.reveal_in_finder)
         # noinspection PyUnresolvedReferences
-        self.btn_cancel.clicked.connect(self.cancel_work)
+        self.btn_cancel.clicked.connect(self.cancel_clicked)
 
     def closeEvent(self, event):
         super().closeEvent(event)
@@ -254,6 +262,9 @@ class PreparePdfProgressDialog(QDialog):
 
     #--------------------------------------------------------------------------
     def cancel_clicked(self):
+        if not hasattr(self, 'plotter') or self.plotter is None:
+            return
+
         self.btn_cancel.setEnabled(False)
         self.plotter.stop()
         self.top_label.setText("Operation cancelled")
@@ -349,10 +360,3 @@ class Plotter(ppdf.OneFilePdfPlotter):
         percent = int((n_done / len(self.trials)) * 100)
         self.signaller.progress_changed.emit(percent)
         QThread.yieldCurrentThread()
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    dialog = SelectFilesDialog()
-    dialog.show()
-    sys.exit(app.exec_())

@@ -780,7 +780,7 @@ class SplitStrokeDialog(qw.QDialog):
     def run(stroke, inner_margin, outer_margin, dot_radius=6):
         screen_size = uiu.screen_size()
         expand_ratio, offset, screen_size = _get_expand_ratio(stroke, screen_size, inner_margin, outer_margin)
-        window = SplitStrokeDialog(stroke, screen_size, expand_ratio, offset, screen_margin, dot_radius)
+        window = SplitStrokeDialog(stroke, screen_size, expand_ratio, offset, inner_margin, dot_radius)
         if window.exec_() == qw.QDialog.Accepted:
             return window.selected_dot.dot if window.selected_dot is not None else None
 

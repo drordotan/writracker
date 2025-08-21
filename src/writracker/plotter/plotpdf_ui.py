@@ -65,11 +65,19 @@ class SelectFilesDialog(QDialog):
 
         self.init_button_operations()
 
+        self.generating = False
+
+    #--------------------------------------------------------------------------
+    def closeEvent(self, event):
+        super().closeEvent(event)
+        if not self.generating:
+            QApplication.instance().quit()
+
     #--------------------------------------------------------------------------
     # noinspection PyUnresolvedReferences
     def init_button_operations(self):
-        self.btn_add.clicked.connect(self.add_folders)
-        self.btn_add_subfolders.clicked.connect(self.add_subfolders)
+        self.btn_add.clicked.connect(self.add_one_input_dir)
+        self.btn_add_subfolders.clicked.connect(self.add_input_subfolders)
         self.btn_remove.clicked.connect(self.remove_selected)
         self.btn_output_file.clicked.connect(self.select_output_directory)
         self.list_widget.itemSelectionChanged.connect(self.update_prepare_button)
@@ -83,29 +91,28 @@ class SelectFilesDialog(QDialog):
         self.update_prepare_button()
 
     #--------------------------------------------------------------------------
-    def add_folders(self):
-        dlg = QFileDialog(self, "Select Folders")
-        dlg.setFileMode(QFileDialog.Directory)
-        dlg.setOption(QFileDialog.ShowDirsOnly)
-        dlg.setOption(QFileDialog.DontUseNativeDialog, True)
-        if dlg.exec_():
-            selected_folders = dlg.selectedFiles()
-            self.list_widget.addItems(selected_folders)
-        self.update_prepare_button()
+    def add_one_input_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, 'Select a folder with the encoded data')
+        if folder is not None and folder != '':
+            self.update_input_dirs([folder])
 
     #--------------------------------------------------------------------------
-    def add_subfolders(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Parent Folder")
-        if folder:
+    def add_input_subfolders(self):
+        folder = QFileDialog.getExistingDirectory(self, 'Select a folder that contains several encoded datasets (each in a separate subfolder)')
+        if folder is not None and folder != '':
             try:
-                subfolders = [
-                    os.path.join(folder, name)
-                    for name in os.listdir(folder)
-                    if os.path.isdir(os.path.join(folder, name))
-                ]
-                self.list_widget.addItems(subfolders)
+                subfolders = [os.path.join(folder, name) for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))]
+                self.update_input_dirs(subfolders)
             except Exception as e:
                 print(f"Error listing subfolders: {e}")
+
+    #--------------------------------------------------------------------------
+    def update_input_dirs(self, add_dirs):
+        items = [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
+        items.extend(add_dirs)
+        items = sorted(set(items))  # Remove duplicates and sort
+        self.list_widget.clear()
+        self.list_widget.addItems(items)
         self.update_prepare_button()
 
     #--------------------------------------------------------------------------
@@ -129,16 +136,14 @@ class SelectFilesDialog(QDialog):
             return
 
         if not os.path.isdir(output_dir):
-            create = QMessageBox.question(
-                self, "Directory does not exist",
-                f"The directory '{output_dir}' does not exist.\nDo you want to create it?",
-                QMessageBox.Yes | QMessageBox.No
-            )
+            create = QMessageBox.question(self, 'Directory does not exist',
+                                          f'The directory {output_dir} does not exist.\nDo you want to create it?',
+                                          QMessageBox.Yes | QMessageBox.No)
             if create == QMessageBox.Yes:
                 try:
                     os.makedirs(output_dir)
                 except Exception as e:
-                    QMessageBox.critical(self, "Error", f"Failed to create directory:\n{e}")
+                    QMessageBox.critical(self, 'Error', f'Failed to create directory: \n{e}')
                     return
             else:
                 return
@@ -156,19 +161,21 @@ class SelectFilesDialog(QDialog):
             files_list = ", ".join(conflicting_files)
             result = QMessageBox.question(
                 self, "Overwrite confirmation",
-                f"The following files exist in '{dir_name}' and will be overridden:\n{files_list}\nAre you sure?",
+                f"The following files exist in '{dir_name}' and will be overridden: \n{files_list}\nAre you sure?",
                 QMessageBox.Yes | QMessageBox.No
             )
             if result != QMessageBox.Yes:
                 return
 
+        self.generating = True
         self.close()
         progress_dialog = PreparePdfProgressDialog(input_dirs, output_dir)
-        progress_dialog.show()
         progress_dialog.start_plotting()
+        progress_dialog.exec_()
 
 
 #==================================================================================================
+# noinspection PyAttributeOutsideInit
 class PreparePdfProgressDialog(QDialog):
     """
     Execute the plotting process
@@ -213,6 +220,10 @@ class PreparePdfProgressDialog(QDialog):
         # noinspection PyUnresolvedReferences
         self.btn_cancel.clicked.connect(self.cancel_work)
 
+    def closeEvent(self, event):
+        super().closeEvent(event)
+        QApplication.instance().quit()
+
     #--------------------------------------------------------------------------
     def on_dataset_started(self, ds_num, ds_name):
         self.top_label.setText(f"Processing dataset {ds_num}/{len(self.input_dirs)} ({ds_name})")
@@ -238,25 +249,23 @@ class PreparePdfProgressDialog(QDialog):
     def start_plotting(self):
         self.plotter = MultiPlotter(self.input_dirs, self.target_dir, config=ppdf.PdfPlotterConfig(),
                                     signaller=Signaller().connect_signals(self))
-        self.plotter.plot()
         self.runner = PlotRunner(self.plotter, self)
-        self.runner.run()
+        self.runner.start()
 
     #--------------------------------------------------------------------------
-    def cancel_work(self):
-        #todo self.plotter.stop(when finished close the dialog?)
+    def cancel_clicked(self):
         self.btn_cancel.setEnabled(False)
         self.plotter.stop()
-
         self.top_label.setText("Operation cancelled")
 
     #--------------------------------------------------------------------------
     def reveal_in_finder(self):
         if os.path.exists(self.target_dir):
             try:
-                subprocess.run(["open", "-R", self.target_dir])
+                fn1 = self.target_dir + os.sep + os.path.basename(self.input_dirs[0]) + ".pdf"
+                subprocess.run(["open", "-R", fn1])
             except Exception as e:
-                QMessageBox.warning(self, "Error", f"Failed to open in Finder:\n{e}")
+                QMessageBox.warning(self, "Error", f"Failed to open in Finder: \n{e}")
         else:
             QMessageBox.warning(self, "File not found", "The output file does not exist.")
 
@@ -270,14 +279,20 @@ class PlotRunner(QThread):
         self.signaller = Signaller().connect_signals(ui)
 
     def run(self):
+        QThread.msleep(200)  # Give the UI time to update
         self.plotter.plot()
 
 
 #==================================================================================================
 class Signaller(QObject):
+    """
+    As the pdf-generation is going on, we send signals from this thread to the UI in order to update the UI accordingly.
+    This object mediates the signal-sending
+    """
 
     ds_started = pyqtSignal(int, str)  # send progress percent
     ds_finished = pyqtSignal(str)  # send progress percent
+    all_finished = pyqtSignal()  # send progress percent
     progress_changed = pyqtSignal(int)  # send progress percent
 
     # noinspection PyUnresolvedReferences
@@ -285,6 +300,7 @@ class Signaller(QObject):
         self.ds_started.connect(ui.on_dataset_started)
         self.ds_finished.connect(ui.on_dataset_finished)
         self.progress_changed.connect(ui.on_progress)
+        self.all_finished.connect(ui.on_finished_all)
         return self
 
 
@@ -297,6 +313,10 @@ class MultiPlotter(ppdf.MultiFilePdfPlotter):
 
     def create_one_file_plotter(self, ds_dir_name, out_fn, config):
         return Plotter(ds_dir_name, out_fn, config, self.signaller)
+
+    def plot(self):
+        super().plot()
+        self.signaller.all_finished.emit()
 
     def on_ds_started(self, ds_num, ds_dir):
         self.signaller.ds_started.emit(ds_num+1, os.path.basename(ds_dir))

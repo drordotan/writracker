@@ -21,4 +21,4 @@ For me it's C:\Users\dror\AppData\Roaming\Python\Python312\Scripts
 If you previously ran pyinstaller on a previous conda environment - don't just change the environment; open a new shell.
 Then run it:
 Mac: pyinstaller --clean --noconsole ../../scripts/xxxx.py
-Windows: pyinstaller --clean --onefile --noconsole ../../scripts/xxxx.py
+Windows: pyinstaller --clean --onefile --noconsole ..\..\scripts\xxxx.py

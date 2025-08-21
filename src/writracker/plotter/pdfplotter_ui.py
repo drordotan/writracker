@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QMessageBox, QProgressBar, QTextEdit)
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, Qt
 
-import writracker.plotter.plotpdf as ppdf
+import writracker.plotter.pdfplotter as ppdf
 import writracker.utils as wu
 
 

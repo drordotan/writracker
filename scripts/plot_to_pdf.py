@@ -1,7 +1,7 @@
 
 import glob
 from writracker.encoder.dataio import load_experiment
-from writracker.plotter.plotpdf import OneFilePdfPlotter
+from writracker.plotter.pdfplotter import OneFilePdfPlotter
 
 #-- Comma-separated list of directories that contain encoded data
 coded_exp_dirs = [r'/Users/dror/data/students/active/Hila Bental-Israeli/results/encoded/103del']

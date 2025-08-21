@@ -1,0 +1,24 @@
+How to create an executable of WriTracker files:
+
+1. Use the relevant conda environment, with the minimal imports in each:
+
+For encoder: pandas PyQt5 (numpy needed but will be installed by default)
+For recorder: pandas PyQt5 mutagen pygame tk?
+For plotter: pandas PyQt5 matplotlib numpy
+
+also install pyinstaller
+
+
+2. Make sure writracker is in the python search path
+export PYTHONPATH=........./git/writracker/src
+set PATH=%PATH%;.........\git\writracker\src
+
+
+3. On windows, make sure you know where pysintaller is (add it to path)
+For me it's C:\Users\dror\AppData\Roaming\Python\Python312\Scripts
+
+3. Create the executable:
+If you previously ran pyinstaller on a previous conda environment - don't just change the environment; open a new shell.
+Then run it:
+Mac: pyinstaller --clean --noconsole ../../scripts/xxxx.py
+Windows: pyinstaller --clean --onefile --noconsole ../../scripts/xxxx.py

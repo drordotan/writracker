@@ -6,19 +6,19 @@ For encoder: pandas PyQt5 (numpy needed but will be installed by default)
 For recorder: pandas PyQt5 mutagen pygame tk?
 For plotter: pandas PyQt5 matplotlib numpy
 
-also install pyinstaller
+2. pip install pyinstaller
+On windows, also:
+pip install ordered-set zstandard    (this should help faster compilation)
 
-
-2. Make sure writracker is in the python search path
+3. Add writracker to the python search path
 export PYTHONPATH=........./git/writracker/src
 set PATH=%PATH%;.........\git\writracker\src
 
+3. On windows, add pysintaller to your path
+set PATH=%PATH%;(pysintaller-path)
+On my computer the path is C:\Users\dror\AppData\Roaming\Python\Python312\Scripts
 
-3. On windows, make sure you know where pysintaller is (add it to path)
-For me it's C:\Users\dror\AppData\Roaming\Python\Python312\Scripts
-
-3. Create the executable:
-If you previously ran pyinstaller on a previous conda environment - don't just change the environment; open a new shell.
-Then run it:
+4. Create the executable:
 Mac: pyinstaller --clean --noconsole ../../scripts/xxxx.py
 Windows: pyinstaller --clean --onefile --noconsole ..\..\scripts\xxxx.py
+IMPORTANT: If you previously ran pyinstaller on a different conda environment - don't just change the environment using "conda activate"; open a new shell. At least on Mac, it won't work otherwise.

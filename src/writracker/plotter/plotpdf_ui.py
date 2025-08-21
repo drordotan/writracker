@@ -2,12 +2,17 @@ import sys
 import os
 import subprocess
 import traceback
+import warnings
 from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
                              QListWidget, QPushButton, QFileDialog, QAbstractItemView,
                              QLabel, QLineEdit, QMessageBox, QProgressBar, QTextEdit)
-from PyQt5.QtCore import QThread, QObject, pyqtSignal
+from PyQt5.QtCore import QThread, QObject, pyqtSignal, Qt
 
 import writracker.plotter.plotpdf as ppdf
+import writracker.utils as wu
+
+
+warnings.filterwarnings("ignore", message="Starting a Matplotlib GUI outside of the main thread will likely fail.")
 
 
 #==================================================================================================
@@ -43,10 +48,17 @@ class SelectFilesDialog(QDialog):
 
         btn_layout = QVBoxLayout()
         self.btn_add = QPushButton('+')
+        self.btn_add.setToolTip('Add a single input folder')
         self.btn_add_subfolders = QPushButton('++')
+        self.btn_add_subfolders.setToolTip('Add all child folders of the selected folder')
+        self.btn_add_recursively = QPushButton('+++')
+        self.btn_add_recursively.setToolTip('Add any descendent folder that contains a "trials.csv" file')
         self.btn_remove = QPushButton('-')
+        self.btn_remove.setToolTip('Remove the selected folders')
+
         btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_add_subfolders)
+        btn_layout.addWidget(self.btn_add_recursively)
         btn_layout.addWidget(self.btn_remove)
         btn_layout.addStretch()
         mid_layout.addLayout(btn_layout)
@@ -84,38 +96,71 @@ class SelectFilesDialog(QDialog):
     #--------------------------------------------------------------------------
     # noinspection PyUnresolvedReferences
     def init_button_operations(self):
-        self.btn_add.clicked.connect(self.add_one_input_dir)
-        self.btn_add_subfolders.clicked.connect(self.add_input_subfolders)
-        self.btn_remove.clicked.connect(self.remove_selected)
-        self.btn_output_file.clicked.connect(self.select_output_directory)
+        self.btn_add.clicked.connect(self.on_clicked_add_one_input_dir)
+        self.btn_add_subfolders.clicked.connect(self.on_clicked_add_input_subfolders)
+        self.btn_add_recursively.clicked.connect(self.on_clicked_add_recursively)
+        self.btn_remove.clicked.connect(self.on_clicked_remove_selected)
+        self.btn_output_file.clicked.connect(self.on_clicked_select_output_directory)
         self.list_widget.itemSelectionChanged.connect(self.update_prepare_button)
         self.output_lineedit.textChanged.connect(self.update_prepare_button)
-        self.btn_prepare_pdf.clicked.connect(self.prepare_pdf)
+        self.btn_prepare_pdf.clicked.connect(self.on_clicked_prepare_pdf)
 
     #--------------------------------------------------------------------------
-    def remove_selected(self):
+    def on_clicked_remove_selected(self):
         for item in reversed(self.list_widget.selectedItems()):
             self.list_widget.takeItem(self.list_widget.row(item))
         self.update_prepare_button()
 
     #--------------------------------------------------------------------------
-    def add_one_input_dir(self):
-        folder = QFileDialog.getExistingDirectory(self, 'Select a folder with the encoded data')
-        if folder is not None and folder != '':
-            self.update_input_dirs([folder])
+    def on_clicked_add_one_input_dir(self):
+        folder = self.select_folder('Select a folder with the encoded data')
+        if folder is None:
+            return
+
+        self.add_selected_input_dirs([folder])
 
     #--------------------------------------------------------------------------
-    def add_input_subfolders(self):
-        folder = QFileDialog.getExistingDirectory(self, 'Select a folder that contains several encoded datasets (each in a separate subfolder)')
-        if folder is not None and folder != '':
-            try:
-                subfolders = [os.path.join(folder, name) for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))]
-                self.update_input_dirs(subfolders)
-            except Exception as e:
-                print(f"Error listing subfolders: {e}")
+    def on_clicked_add_input_subfolders(self):
+        folder = self.select_folder('Select a folder that contains several encoded datasets (each in a separate subfolder)')
+        if folder is None:
+            return
+
+        subfolders = self.get_descendent_folders(folder)
+        self.add_selected_input_dirs(subfolders)
 
     #--------------------------------------------------------------------------
-    def update_input_dirs(self, add_dirs):
+    def on_clicked_add_recursively(self):
+        folder = self.select_folder('Select a folder. All descendent folders will be added')
+        if folder is None:
+            return
+
+        subfolders = self.get_descendent_folders(folder, recursive=True)
+        self.add_selected_input_dirs(subfolders)
+
+    #--------------------------------------------------------------------------
+    def get_descendent_folders(self, folder, recursive=False, only_relevant=True):
+        children = [os.path.join(folder, name) for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))]
+        grandchildren = []
+        if recursive:
+            for child in list(children):
+                grandchildren.extend(self.get_descendent_folders(child, recursive=True, only_relevant=only_relevant))
+
+        if only_relevant:
+            children = [c for c in children if os.path.isfile(os.path.join(c, 'trials.csv'))]
+
+        children.extend(grandchildren)
+
+        return children
+
+    #--------------------------------------------------------------------------
+    def select_folder(self, msg):
+        if not wu.is_windows():
+            QMessageBox.information(None, 'Select folder', msg)
+        folder = QFileDialog.getExistingDirectory(self, msg)
+        return None if folder == '' else folder
+
+    #--------------------------------------------------------------------------
+    def add_selected_input_dirs(self, add_dirs):
         items = [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
         items.extend(add_dirs)
         items = sorted(set(items))  # Remove duplicates and sort
@@ -124,7 +169,7 @@ class SelectFilesDialog(QDialog):
         self.update_prepare_button()
 
     #--------------------------------------------------------------------------
-    def select_output_directory(self):
+    def on_clicked_select_output_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if directory:
             self.output_lineedit.setText(directory)
@@ -137,7 +182,7 @@ class SelectFilesDialog(QDialog):
         self.btn_prepare_pdf.setEnabled(list_not_empty and directory_not_empty)
 
     #--------------------------------------------------------------------------
-    def prepare_pdf(self):
+    def on_clicked_prepare_pdf(self):
         output_dir = os.path.abspath(self.output_lineedit.text().strip())
         if not output_dir:
             QMessageBox.critical(self, "Error", "Output directory cannot be empty.")
@@ -226,7 +271,11 @@ class PreparePdfProgressDialog(QDialog):
         # noinspection PyUnresolvedReferences
         self.btn_reveal.clicked.connect(self.reveal_in_finder)
         # noinspection PyUnresolvedReferences
-        self.btn_cancel.clicked.connect(self.cancel_clicked)
+        self.btn_cancel.clicked.connect(self.on_clicked_cancel)
+
+        self.n_done = 0
+        self.n_succeeded = 0
+        self.canceled = False
 
     def closeEvent(self, event):
         super().closeEvent(event)
@@ -238,7 +287,9 @@ class PreparePdfProgressDialog(QDialog):
         self.progress_bar.setValue(0)
 
     #--------------------------------------------------------------------------
-    def on_dataset_finished(self, msg):
+    def on_dataset_finished(self, ds_num, succeeded, msg):
+        self.n_done = ds_num + 1
+        self.n_succeeded += int(succeeded)
         self.message_box.append(msg)
         self.progress_bar.setValue(100)
 
@@ -248,7 +299,12 @@ class PreparePdfProgressDialog(QDialog):
 
     #--------------------------------------------------------------------------
     def on_finished_all(self):
-        self.top_label.setText("Preparation complete")
+        n_datasets = len(self.input_dirs)
+        if self.canceled:
+            self.top_label.setText(f'Canceled; still, created PDFs for {self.n_succeeded}/{n_datasets} datasets')
+        else:
+            self.top_label.setText(f'Finished creating PDFs for {self.n_succeeded}/{n_datasets} datasets')
+
         self.btn_cancel.setEnabled(False)
         self.btn_reveal.setText("reveal in finder")
         self.btn_reveal.setEnabled(True)
@@ -261,10 +317,11 @@ class PreparePdfProgressDialog(QDialog):
         self.runner.start()
 
     #--------------------------------------------------------------------------
-    def cancel_clicked(self):
+    def on_clicked_cancel(self):
         if not hasattr(self, 'plotter') or self.plotter is None:
             return
 
+        self.canceled = True
         self.btn_cancel.setEnabled(False)
         self.plotter.stop()
         self.top_label.setText("Operation cancelled")
@@ -302,7 +359,7 @@ class Signaller(QObject):
     """
 
     ds_started = pyqtSignal(int, str)  # send progress percent
-    ds_finished = pyqtSignal(str)  # send progress percent
+    ds_finished = pyqtSignal(int, bool, str)  # send progress percent
     all_finished = pyqtSignal()  # send progress percent
     progress_changed = pyqtSignal(int)  # send progress percent
 
@@ -335,13 +392,13 @@ class MultiPlotter(ppdf.MultiFilePdfPlotter):
 
     def on_ds_finished(self, ds_num, ds_dir):
         ds_name = os.path.basename(ds_dir)
-        self.signaller.ds_finished.emit(f"Finished processing dataset #{ds_num+1}: {ds_name}")
+        self.signaller.ds_finished.emit(ds_num, True, f"Finished processing dataset #{ds_num+1}: {ds_name}")
         QThread.yieldCurrentThread()
 
     def on_exception(self, ds_num, ds_dir, exc):
         traceback.print_exception(type(exc), exc, exc.__traceback__)
         ds_name = os.path.basename(ds_dir)
-        self.signaller.ds_finished.emit(f"Error in dataset #{ds_num+1} ({ds_name}): {exc}")
+        self.signaller.ds_finished.emit(ds_num, False, f"Error in dataset #{ds_num+1} ({ds_name}): {exc}")
         QThread.yieldCurrentThread()
 
 
@@ -356,7 +413,6 @@ class Plotter(ppdf.OneFilePdfPlotter):
         pass
 
     def update_progress_bar(self, n_done):
-        print(f'Finished {n_done} trials')
         percent = int((n_done / len(self.trials)) * 100)
         self.signaller.progress_changed.emit(percent)
         QThread.yieldCurrentThread()

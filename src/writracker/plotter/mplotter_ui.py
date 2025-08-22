@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent
 
 from writracker.plotter.mplotter import MoviePlotter
+import writracker.uiutils as uiu
 
 
 #---------------------------------------------------------------------------------------------------
@@ -221,6 +222,8 @@ class SelectFilesDialog(QDialog):
         self.btn_prepare_movie = QPushButton("Prepare movie!")
         self.btn_prepare_movie.setEnabled(False)
         main_layout.addWidget(self.btn_prepare_movie)
+
+        uiu.add_copyright_msg(main_layout)
 
         self._disable_ime_on_editors()
         self.init_button_operations()

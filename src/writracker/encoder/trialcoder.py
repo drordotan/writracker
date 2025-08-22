@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QPointF, pyqtSignal
 from PyQt5.QtGui import QPen, QBrush, QColor
 
 from writracker.encoder import dataio, manip
-import writracker.uiutil as uiu
+import writracker.uiutils as uiu
 
 
 #======================================================================================================
@@ -115,6 +115,9 @@ class SettingsDialog(qw.QDialog):
             row.addWidget(cancel_btn)
 
         layout.addLayout(row)
+
+        uiu.add_copyright_msg(layout)
+
         self.setLayout(layout)
 
     #---------------------------------------------------------------------------------------
@@ -308,6 +311,8 @@ class TrialEncodingWindow(qw.QMainWindow):
         row.addWidget(self.settings_button)
         row.addWidget(self.quit_button)
         layout.addLayout(row)
+
+        uiu.add_copyright_msg(layout)
 
         on_paper_chars = [c for c in self.characters if len(c.trajectory) > 0]
         if len(on_paper_chars) < 2:

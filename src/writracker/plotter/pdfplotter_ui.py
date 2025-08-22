@@ -10,6 +10,7 @@ from PyQt5.QtCore import QThread, QObject, pyqtSignal, Qt
 
 import writracker.plotter.pdfplotter as ppdf
 import writracker.utils as wu
+import writracker.uiutils as uiu
 
 
 warnings.filterwarnings("ignore", message="Starting a Matplotlib GUI outside of the main thread will likely fail.")
@@ -82,6 +83,8 @@ class SelectFilesDialog(QDialog):
         self.btn_prepare_pdf = QPushButton("Prepare pdf!")
         self.btn_prepare_pdf.setEnabled(False)
         main_layout.addWidget(self.btn_prepare_pdf)
+
+        uiu.add_copyright_msg(main_layout)
 
         self.init_button_operations()
 
@@ -267,6 +270,8 @@ class PreparePdfProgressDialog(QDialog):
         self.btn_cancel.setEnabled(True)
         button_layout.addWidget(self.btn_cancel)
         layout.addLayout(button_layout)
+
+        uiu.add_copyright_msg(layout)
 
         # noinspection PyUnresolvedReferences
         self.btn_reveal.clicked.connect(self.reveal_in_finder)

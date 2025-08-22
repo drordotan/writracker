@@ -11,38 +11,21 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QWidget)
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QEvent
 
-from mplotter import MoviePlotter
+from writracker.plotter.mplotter import MoviePlotter
 
-# ==================================================================================
-# UI-aware subclass: emits progress to the dialog
-class UIMoviePlotter(MoviePlotter):
-    def __init__(self, *args, progress_cb=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._progress_cb = progress_cb
 
-    def init_progress_bar(self):
-        # override to avoid printing to stdout; initialize UI at 0%
-        if self._progress_cb:
-            self._progress_cb(0, "Starting…")
-
-    def update_progress_bar(self, progress):
-        # called frequently during rendering; pipe to UI
-        if self._progress_cb:
-            try:
-                pc = max(0, min(100, int(round(progress))))
-            except Exception:
-                pc = 0
-            self._progress_cb(pc, None)
-
-# ==================================================================================
+#---------------------------------------------------------------------------------------------------
 def run():
     app = QApplication(sys.argv)
     dialog = SelectFilesDialog()
     dialog.show()
     sys.exit(app.exec_())
 
-# ==================================================================================
+
+#---------------------------------------------------------------------------------------------------
 class SelectFilesDialog(QDialog):
+
+    #-----------------------------------------------------------------
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Writracker: Movie plotter")
@@ -243,11 +226,13 @@ class SelectFilesDialog(QDialog):
         self.init_button_operations()
         self.generating = False
 
+    #-----------------------------------------------------------------
     def closeEvent(self, event):
         super().closeEvent(event)
         if not self.generating:
             QApplication.instance().quit()
 
+    #-----------------------------------------------------------------
     def _disable_ime_on_editors(self):
         # Text fields
         self.title_lineedit.setAttribute(Qt.WA_InputMethodEnabled, False)
@@ -260,6 +245,8 @@ class SelectFilesDialog(QDialog):
             if le is not None:
                 le.setAttribute(Qt.WA_InputMethodEnabled, False)
 
+    #-----------------------------------------------------------------
+    # noinspection PyUnresolvedReferences
     def init_button_operations(self):
         self.btn_add.clicked.connect(self.on_clicked_add_files)
         self.btn_remove.clicked.connect(self.on_clicked_remove_selected)
@@ -271,6 +258,7 @@ class SelectFilesDialog(QDialog):
         self.btn_prepare_movie.clicked.connect(self.on_clicked_prepare_movie)
         self.btn_preview_titles.clicked.connect(self.on_clicked_preview_titles)
 
+    #-----------------------------------------------------------------
     def on_clicked_add_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Select CSV files", "", "CSV Files (*.csv)")
         if files:
@@ -281,11 +269,13 @@ class SelectFilesDialog(QDialog):
             self.list_widget.addItems(items)
         self.update_prepare_button()
 
+    #-----------------------------------------------------------------
     def on_clicked_remove_selected(self):
         for item in reversed(self.list_widget.selectedItems()):
             self.list_widget.takeItem(self.list_widget.row(item))
         self.update_prepare_button()
 
+    #-----------------------------------------------------------------
     def on_clicked_move_up(self):
         row = self.list_widget.currentRow()
         if row > 0:
@@ -293,6 +283,7 @@ class SelectFilesDialog(QDialog):
             self.list_widget.insertItem(row - 1, item)
             self.list_widget.setCurrentRow(row - 1)
 
+    #-----------------------------------------------------------------
     def on_clicked_move_down(self):
         row = self.list_widget.currentRow()
         if row < self.list_widget.count() - 1:
@@ -300,6 +291,7 @@ class SelectFilesDialog(QDialog):
             self.list_widget.insertItem(row + 1, item)
             self.list_widget.setCurrentRow(row + 1)
 
+    #-----------------------------------------------------------------
     def on_clicked_select_output_file(self):
         filename, _ = QFileDialog.getSaveFileName(self, "Select output movie file", "", "MP4 Files (*.mp4)")
         if filename:
@@ -308,11 +300,13 @@ class SelectFilesDialog(QDialog):
             self.output_lineedit.setText(filename)
         self.update_prepare_button()
 
+    #-----------------------------------------------------------------
     def update_prepare_button(self):
         list_not_empty = self.list_widget.count() > 0
         output_not_empty = bool(self.output_lineedit.text().strip())
         self.btn_prepare_movie.setEnabled(list_not_empty and output_not_empty)
 
+    #-----------------------------------------------------------------
     def on_clicked_prepare_movie(self):
         input_files = [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
         output_file = self.output_lineedit.text().strip()
@@ -336,6 +330,7 @@ class SelectFilesDialog(QDialog):
         progress_dialog.start_plotting()
         progress_dialog.exec_()
 
+    #-----------------------------------------------------------------
     def on_clicked_preview_titles(self):
         input_files = [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
         title_format = self.title_lineedit.text().strip()
@@ -371,8 +366,11 @@ class SelectFilesDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-# ==================================================================================
+
+#---------------------------------------------------------------------------------------------------
 class PrepareMovieProgressDialog(QDialog):
+
+    #-----------------------------------------------------------------
     def __init__(self, input_files, output_file, config, title_format):
         super().__init__()
         self.setWindowTitle("Writracker: Movie plotter")
@@ -410,22 +408,26 @@ class PrepareMovieProgressDialog(QDialog):
         self.runner = None
         self.canceled = False
 
+    #-----------------------------------------------------------------
     def closeEvent(self, event):
         super().closeEvent(event)
         QApplication.instance().quit()
 
+    #-----------------------------------------------------------------
     def start_plotting(self):
         self.runner = PlotRunner(self.input_files, self.output_file, self.config, self.title_format, self)
         self.runner.progress_signal.connect(self.on_progress)
         self.runner.finished_signal.connect(self.on_finished)
         self.runner.start()
 
+    #-----------------------------------------------------------------
     def on_progress(self, percent, msg=None):
         if percent is not None:
             self.progress_bar.setValue(percent)
         if msg:
             self.message_box.append(msg)
 
+    #-----------------------------------------------------------------
     def on_finished(self, success):
         if self.canceled:
             self.top_label.setText("Cancelled; the file may be incomplete.")
@@ -438,6 +440,7 @@ class PrepareMovieProgressDialog(QDialog):
         self.btn_reveal.setText("reveal in finder")
         self.btn_reveal.setEnabled(True)
 
+    #-----------------------------------------------------------------
     def on_clicked_cancel(self):
         if self.runner and self.runner.isRunning():
             self.canceled = True
@@ -445,6 +448,7 @@ class PrepareMovieProgressDialog(QDialog):
             self.top_label.setText("Cancelling…")
             self.btn_cancel.setEnabled(False)
 
+    #-----------------------------------------------------------------
     def reveal_in_finder(self):
         if os.path.exists(self.output_file):
             try:
@@ -459,11 +463,14 @@ class PrepareMovieProgressDialog(QDialog):
         else:
             QMessageBox.warning(self, "File not found", "The output file does not exist.")
 
-# ==================================================================================
+
+#---------------------------------------------------------------------------------------------------
 class PlotRunner(QThread):
+
     progress_signal = pyqtSignal(int, str)
     finished_signal = pyqtSignal(bool)
 
+    #-----------------------------------------------------------------
     def __init__(self, input_files, output_file, config, title_format, ui):
         super().__init__()
         self.input_files = input_files
@@ -472,6 +479,8 @@ class PlotRunner(QThread):
         self.title_format = title_format
         self.ui = ui
 
+    #-----------------------------------------------------------------
+    # noinspection PyUnresolvedReferences
     def run(self):
         try:
             titles, warnings = generate_titles_for_files(self.input_files, self.title_format)
@@ -487,13 +496,15 @@ class PlotRunner(QThread):
             self.progress_signal.emit(0, f"Error: {e}")
             self.finished_signal.emit(False)
 
+    #-----------------------------------------------------------------
     # This callback is invoked inside the worker thread, but we forward to the main thread via signal
     def _on_progress(self, percent, msg):
         self.progress_signal.emit(percent, msg or "")
 
-# ==================================================================================
-# Title utilities
 
+#---------------------------------------------------------------------------------------------------
+#    Title utilities
+#---------------------------------------------------------------------------------------------------
 def generate_titles_for_files(input_files, title_format):
     warnings = []
     titles = []
@@ -544,18 +555,45 @@ def generate_titles_for_files(input_files, title_format):
     return titles, warnings
 
 
+#---------------------------------------------------------------------------------------------------
 def _replace_all_keywords_with_na(title_str):
     return re.sub(r"\{\w+\}", "NA", title_str)
 
 
+#---------------------------------------------------------------------------------------------------
 class NoIMEDoubleSpinBox(QDoubleSpinBox):
     def event(self, e):
         if e.type() in (QEvent.InputMethod, QEvent.InputMethodQuery):
             return True
         return super().event(e)
 
+
+#---------------------------------------------------------------------------------------------------
 class NoIMESpinBox(QSpinBox):
     def event(self, e):
         if e.type() in (QEvent.InputMethod, QEvent.InputMethodQuery):
             return True
         return super().event(e)
+
+
+#---------------------------------------------------------------------------------------------------
+class UIMoviePlotter(MoviePlotter):
+    """ UI-aware subclass: emits progress to the dialog """
+
+    def __init__(self, *args, progress_cb=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._progress_cb = progress_cb
+
+    def init_progress_bar(self):
+        # override to avoid printing to stdout; initialize UI at 0%
+        if self._progress_cb:
+            self._progress_cb(0, "Starting…")
+
+    def update_progress_bar(self, progress):
+        # called frequently during rendering; pipe to UI
+        if self._progress_cb:
+            try:
+                pc = max(0, min(100, int(round(progress))))
+            except Exception:
+                pc = 0
+            self._progress_cb(pc, None)

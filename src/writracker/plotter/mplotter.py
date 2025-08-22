@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from moviepy.editor import VideoClip
-from moviepy.video.io.bindings import mplfig_to_npimage
+from moviepy import VideoClip
 from collections import namedtuple
 import csv
-import logging
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 
 Point = namedtuple('Point', ['x', 'y', 'z', 't'])
@@ -325,7 +324,6 @@ class MoviePlotter(object):
                 visible=False
         )
 
-        self.plt_fig.tight_layout(rect=(0, 0, 1, 1))
         self.plt_xy = []
         self.plt_z = []
 
@@ -426,33 +424,9 @@ def _ds_duration(dataset):
 
 
 #--------------------------------------------------------------------------
-def _silent_logger(*args, **kwargs):
-    pass
-
-
-#--------------------------------------------------------------------------
-class SilentLogger(logging.Logger):
-
-    def __init__(self):
-        super().__init__('SilentLogger', level=logging.CRITICAL)
-
-    def handle(self, record):
-        pass
-
-    def addHandler(self, hdlr):
-        pass
-
-    def debug(self, msg, *args, **kwargs):
-        pass
-
-    def info(self, msg, *args, **kwargs):
-        pass
-
-    def warning(self, msg, *args, **kwargs):
-        pass
-
-    def error(self, msg, *args, **kwargs):
-        pass
-
-    def critical(self, msg, *args, **kwargs):
-        pass
+def mplfig_to_npimage(fig):
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()  # render the figure to the canvas
+    buffer = canvas.buffer_rgba()
+    arr = np.asarray(buffer)
+    return arr[:, :, :3]

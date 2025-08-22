@@ -3,8 +3,9 @@ How to create an executable of WriTracker files:
 1. Use the relevant conda environment, with the minimal imports in each:
 
 For encoder: pandas PyQt5 (numpy needed but will be installed by default)
-For recorder: pandas PyQt5 mutagen pygame tk?
-For plotter: pandas PyQt5 matplotlib numpy
+Recorder: pandas PyQt5 mutagen pygame tk?
+PDF plotter: pandas PyQt5 matplotlib numpy
+MPlotter: pandas PyQt5 matplotlib moviepy numpy
 
 2. pip install pyinstaller
 On windows, also:

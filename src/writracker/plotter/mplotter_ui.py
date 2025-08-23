@@ -158,10 +158,11 @@ class SelectFilesDialog(QDialog):
 
         # Pressure threshold
         self.spin_pressure = NoIMESpinBox()
-        self.spin_pressure.setRange(1, 255)
-        self.spin_pressure.setValue(128)
-        help_press = "Pressure value mapped to full black (for white background). Higher values are black too; lower values are lighter gray shades, 0 = white. Range: 1–255."
-        lbl_press = QLabel("Pressure threshold (black)")
+        self.spin_pressure.setRange(1, 100)
+        self.spin_pressure.setValue(100)
+        help_press = "Highest pressure value (mapped to black color in white background or vice versa). " + \
+                     "Higher pressure values are cropped. Lower values are plotted as gray shades. Range: 1–100."
+        lbl_press = QLabel("Maximal pressure value")
         lbl_press.setToolTip(help_press)
         self.spin_pressure.setToolTip(help_press)
         form.addRow(lbl_press, row_with_help(self.spin_pressure, help_press))

@@ -17,7 +17,7 @@ class MoviePlotter(object):
     def __init__(self, data, out_fn, titles=None, title_fontsize=8, speedup_factor=1.0,
                  end_of_dataset_delay=0.5, inter_dataset_delay=0.2, fps=20,
                  scale=1, plot_area_max_size=(5, 4), inner_margin=15, h_margin=0.1, v_margin=0.1,
-                 point_size=5, black_pressure=128, invert=False):
+                 point_size=5, black_pressure=100, invert=False):
         """
         Initialize MoviePlotter.
 

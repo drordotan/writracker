@@ -189,7 +189,7 @@ def GetPackets():
     recv_num = wintab.WTPacketsGet(hctx, cMaxPkts, lpPkts)
     if recv_num > 0:
         return lpPkts
-    return None
+    return ()
 
 
 hctx = None  # Context handle, used across importing modules (recorder.py)

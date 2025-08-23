@@ -133,18 +133,15 @@ def save_trials(results_path, targets):
 	Save the trials.csv file
 	"""
 
+	sorted_trials = [trial for target in targets for trial in target.trials]
+	sorted_trials.sort(key=lambda x: x.id)  # sort by unique trial ID
+
 	filename = results_path + os.sep + trials_csv_filename
 	with open(filename, mode='w', encoding='utf-8') as trials_file:
 		trials_csv_file = csv.DictWriter(trials_file, ['trial_id', 'target_id', 'target', 'rc',
 													   'time_in_session', 'date', 'time_in_day',
 													   'traj_file_name', 'sound_file_length'], lineterminator='\n')
 		trials_csv_file.writeheader()
-		sorted_trials = []
-		for target in targets:
-			for trial in target.trials:
-				sorted_trials.append(trial)
-
-		sorted_trials.sort(key=lambda x: x.id)  # sort by unique trial ID
 
 		for trial in sorted_trials:
 			row = dict(trial_id=trial.id, target_id=trial.target_id, target=trial.target,

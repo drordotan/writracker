@@ -57,13 +57,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.targets_file_name = None
 		self.remaining_targets_file = None     # keeps track of remaining targets, or targets to re-show.
 		self.trials_file = None                # keeps track of each trajectory file
-		self.current_active_trajectory = None  # saves X,Y, Pressure for each path
+		self.current_trajectory = None  # saves X,Y, Pressure for each path
 		self.results_folder_path = None        # Folder for the output files.
 		self.sounds_folder_path = None         # Folder containing input sound files.
 
 		#-- Stimuli and results
 		self.targets = []
-		self.stats = {}                     # session stats values, total/completed/remaining targets
 		self.targets_dict = {}              # holds trajectory counter for each target
 		self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
 
@@ -71,7 +70,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.trial_unique_id = 1
 		self.session_start_time = None      # Value assigned when starting a session (on_clicked_start_ssn)
 		self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
-		self.recording_on = False           # used in PaintEvent to catch events and draw
 		self.session_started = False        # Flag - ignore events before session started
 		self.current_trial_start_time = None
 
@@ -173,8 +171,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 		#-- Control plot area
 
-		self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
-		self.btn_rotate.clicked.connect(self.on_clicked_rotate)
+		btn_rotate_right = self.findChild(QPushButton, 'rotate_btn')
+		btn_rotate_right.clicked.connect(self.on_clicked_rotate_right)
 
 		btn_plus = self.findChild(QPushButton, 'plus_btn')
 		btn_plus.clicked.connect(self.on_clicked_plus)
@@ -229,12 +227,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		return self.btn_radio_ok.isChecked() or self.btn_radio_err.isChecked()
 
 	#=================================================================================================
-	#    Tablet polling
+	#    Poll data from tablet
 	#=================================================================================================
 
 	#--------------------------------------------------------------------------------------
 	def poll_tablet_periodically(self):
-
+		"""
+		Note: this polling runs on a separate thread, from timer
+		"""
 		display_changed = False
 		curr_time = time.time()
 		lp_pkts = wintab.GetPackets()
@@ -254,16 +254,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 			pen_pressure = int(packet.pkNormalPressure / 327.67)  # normalize to 0-100 range
 
-			#-- Starting a trial if:
-			#-- The session started but the trial did not;
-			#-- The user didn't choose OK/ERROR yet;
-			#-- And we are not in "play sounds" mode, in which case the trial starts when pressing play, not when touching the tablet.
-			if self.session_started \
-					and not self.trial_started \
-					and not self.user_selected_current_trial_rc \
-					and self.sounds_folder_path is None:
-				self.start_trial()
-
 			#-- Display stroke on screen
 			if pen_pressure > 0:
 				if self.last_pen_pressure == 0:  # Now is the first pen touch, start a new stroke
@@ -274,9 +264,21 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 			self.last_pen_pressure = pen_pressure
 
+			#-- Before the session starts: we showed the pen movement on screen, but no recording
+			if not self.session_started:
+				continue
+
+			#-- Starting a trial only if:
+			#-- The user didn't choose OK/ERROR yet;
+			#-- And we are not in "play sounds" mode, in which case the trial starts when pressing play, not when touching the tablet.
+			if not self.trial_started \
+					and not self.user_selected_current_trial_rc \
+					and self.sounds_folder_path is None:
+				self.start_trial()
+
 			#-- Save coordinate
-			if self.session_started and self.current_active_trajectory is not None:
-				self.current_active_trajectory.add_point(packet.pkX, packet.pkY, pen_pressure, curr_time - self.current_trial_start_time)
+			if self.trial_started:
+				self.current_trajectory.add_point(packet.pkX, packet.pkY, pen_pressure, curr_time - self.current_trial_start_time)
 
 		if display_changed:
 			self.update()
@@ -303,9 +305,12 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.tablet_paint_area.scale(-1, 1)
 
 	#------------------------------------------------------------------------------------------
-	def on_clicked_rotate(self):
-		""" rotate the graphicsView, then tablet_modulate the rotation factor for the points in the traj file """
+	def on_clicked_rotate_right(self):
+
+		#-- Rotate the display
 		self.tablet_paint_area.rotate(90)
+
+		#-- Save the rotation angle - this will affect the saved trajectory
 		self.rotation_angle = (self.rotation_angle+90) % 360  # allowed angles: 0,90,180,270
 
 	#=================================================================================================
@@ -347,7 +352,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		dialog.exec()
 
 	#=================================================================================================
-	#    Handle the session
+	#    Session operations: start, stop, continue, reset
 	#=================================================================================================
 
 	#------------------------------------------------------------------------------------------
@@ -358,7 +363,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 		while True:
 			if not self.choose_results_folder(continue_session=True):
-				return False
+				return
 
 			if not self.choose_targets_file(continue_session=True):
 				continue
@@ -373,22 +378,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				if answer == msg.Yes:
 					continue
 				else:
-					return True
+					return
 
-			self.session_start_time = time.time()
-			self.pop_config_menu()
-			self.session_started = True
-			self.set_navigation_buttons_enabled(True)
-			self.menu_add_error.setEnabled(True)
-			self.btn_end_ssn.setEnabled(True)
-			self.btn_start_ssn.setEnabled(False)
-			self.btn_continue_ssn.setEnabled(False)
-			self.stats_reset()
-			self.stats_update()
-			mixer.init()
-			self.read_next_target()  # read first target
-
-			return True
+			self.on_new_session()
 
 	#------------------------------------------------------------------------------------------
 	def on_clicked_start_session(self):
@@ -399,22 +391,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 						   "In the second dialog, choose the results folder, where all the raw" +
 						   " trajectories will be saved")
 
-		if self.choose_targets_file():
-			if self.choose_results_folder():
-				self.pop_config_menu()
-				self.session_start_time = time.time()
-				self.session_started = True
-				self.set_navigation_buttons_enabled(True)
-				self.menu_add_error.setEnabled(True)
-				self.btn_end_ssn.setEnabled(True)
-				self.btn_start_ssn.setEnabled(False)
-				self.btn_continue_ssn.setEnabled(False)
-				self.stats_reset()
-				self.stats_update()
-				self.read_next_target()  # read first target
+		if not self.choose_targets_file():
+			return
 
-		mixer.init()            # must initialize once before playing sound files
+		if not self.choose_results_folder():
+			return
 
+		self.on_new_session()
+
+	#------------------------------------------------------------------------------------------
+	def play_start_of_session_beep(self):
 		beep_path = os.path.dirname(writracker.recorder.__file__) + "/sounds/beep_sound.mp3"
 		try:
 			mixer.music.load(beep_path)
@@ -425,13 +411,62 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 			self.show_info_msg("Error!", "Error when trying to play sound file. (ERR-SND-BEEP-2)")
 
 	#------------------------------------------------------------------------------------------
+	def on_new_session(self):
+		mixer.init()
+		self.pop_config_menu()
+		self.set_navigation_buttons_enabled(True)
+		self.menu_add_error.setEnabled(True)
+		self.btn_end_ssn.setEnabled(True)
+		self.btn_start_ssn.setEnabled(False)
+		self.btn_continue_ssn.setEnabled(False)
+		self.update_session_statistics_in_ui()
+		self.goto_next_target()  # read first target
+
+		self.session_started = True
+		self.session_start_time = time.time()
+		self.play_start_of_session_beep()
+
+	#------------------------------------------------------------------------------------------
 	def on_clicked_end_session(self):
 		msg = QMessageBox()
 		msg.setIcon(QMessageBox.Warning)
 		answer = msg.question(self, 'Wait!', "Are you sure you want to end this session? \n", msg.Yes | msg.No, msg.No)
-		if answer == msg.Yes:
-			self.reset_session()
-		return
+		if answer != msg.Yes:
+			return
+
+		if self.trial_started is True:
+			self.close_current_trial()
+
+		self.clean_traj_display()
+		self.session_started = False
+
+		#-- Reset GUI  fields
+		self.update_target_textfields("", "")
+		self.combox_targets.clear()
+		self.combox_errors.clear()
+		self.lbl_targetsfile.clear()
+		self.set_navigation_buttons_enabled(False)
+		self.btn_reset.setEnabled(False)
+		self.menu_add_error.setEnabled(False)
+		self.btn_end_ssn.setEnabled(False)
+		self.btn_start_ssn.setEnabled(True)
+		self.btn_continue_ssn.setEnabled(True)
+		self.cfg_window = QDialog()
+
+		#-- reset session data
+		self.targets = []
+		self.targets_dict = {}
+		self.targets_file_name = None
+		self.remaining_targets_file = None
+		self.trials_file = None
+		self.trial_unique_id = 1
+		self.results_folder_path = None
+		self.curr_target_index = -1
+		self.trial_started = False
+		self.skip_ok_targets = False
+		self.cyclic_remaining_targets = True
+
+		self.update_session_statistics_in_ui()
 
 	#------------------------------------------------------------------------------------------
 	def on_clicked_quit(self):
@@ -440,9 +475,8 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		answer = msg.question(self, 'Wait!', "Are you sure you want to quit? \n Opened session will be saved.",
 							  msg.Yes | msg.No, msg.No)
 		if answer == msg.Yes:
-			if self.trial_started is True:
+			if self.trial_started:
 				self.close_current_trial()
-				self.save_trials_and_remaining_targets()
 			self.poll_timer.stop()
 			wintab.CloseTabletContext(wintab.hctx)
 			self.close()
@@ -550,74 +584,32 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 		return True
 
-	#----------------------------------------------------------------------------------
-	def reset_session(self):
-		"""
-		Resets all the session variables. Saves working files before closing. Resets configuration options.
-		"""
-		if self.trial_started is True:
-			self.close_current_trial()
-
-		self.set_recording_off()
-		self.session_started = False
-		# Gui fields reset
-		self.update_target_textfields("", "")
-		self.combox_targets.clear()
-		self.combox_errors.clear()
-		self.lbl_targetsfile.clear()
-		self.set_navigation_buttons_enabled(False)
-		self.btn_reset.setEnabled(False)
-		self.menu_add_error.setEnabled(False)
-		self.btn_end_ssn.setEnabled(False)
-		self.btn_start_ssn.setEnabled(True)
-		self.btn_continue_ssn.setEnabled(True)
-		self.cfg_window = QDialog()
-
-		# Save files before resetting
-		self.save_trials_and_remaining_targets()
-
-		# reset environment variables
-		self.targets.clear()
-		self.stats_update()
-		self.targets_dict = {}
-		self.targets_file_name = None
-		self.remaining_targets_file = None
-		self.trials_file = None
-		self.trial_unique_id = 1
-		self.current_active_trajectory = None
-		self.results_folder_path = None
-		self.targets = []
-		self.stats = {}
-		self.curr_target_index = -1
-		self.trial_started = False
-		self.skip_ok_targets = False
-		self.cyclic_remaining_targets = True
-
-	# ----------------------------------------------------------------------------------
-	def stats_reset(self):
-		self.stats['total_targets'] = 0
-		self.stats['completed_ok'] = 0
-		self.stats['completed_error'] = 0
-		self.stats['remaining'] = 0
+	#=================================================================================================
+	#    Showing session statistics in UI
+	#=================================================================================================
 
 	#----------------------------------------------------------------------------------
-	# ulate stats based on the current working mode, and update QLabel fields
-	def stats_update(self):
-		self.stats_reset()
-		self.stats['total_targets'] = len(self.targets)
+	def update_session_statistics_in_ui(self):
+
+		ntargets = len(self.targets)
+		ntargets_ok = 0
+		ntargets_err = 0
+		ntargets_remaining = 0
+
 		for target in self.targets:
-			if target.rc_code == "OK":
-				self.stats['completed_ok'] += 1
-			elif target.rc_code != "":             # reaching here means that's an error target
-				self.stats['completed_error'] += 1
+			if target.rc_code == 'OK':
+				ntargets_ok += 1
+			elif target.rc_code != '':
+				ntargets_err += 1
 			else:
-				self.stats['remaining'] += 1     # reaching here means an untagged target
+				ntargets_remaining += 1
+
 		if self.cyclic_remaining_targets:          # counting remaining targets according to the current config
-			self.stats['remaining'] += self.stats['completed_error']
-		self.lbl_total_targets.setText("Total targets: " + str(self.stats['total_targets']))
-		self.lbl_completed.setText("Completed targets: " + str(self.stats['completed_ok']) + " OK, " +
-								   str(self.stats['completed_error']) + " Error")
-		self.lbl_remaining.setText("Remaining targets: " + str(self.stats['remaining']))
+			ntargets_remaining += ntargets_err
+
+		self.lbl_total_targets.setText(f'Total targets: {ntargets}')
+		self.lbl_completed.setText(f'Completed targets: {ntargets_ok} OK, {ntargets_err} error')
+		self.lbl_remaining.setText(f'Remaining targets: {ntargets_remaining}')
 
 	#=================================================================================================
 	#    Trial navigation
@@ -625,13 +617,16 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 	#------------------------------------------------------------------------------------------
 	def on_clicked_reset_trial(self):
+
+		if not self.trial_started:
+			return
+
 		msg = QMessageBox()
 		msg.setIcon(QMessageBox.Warning)
 		answer = msg.question(self, 'Reset current Target', "This action will also delete the current trajectory\n Press yes to confirm",
 							  msg.Yes | msg.No, msg.No)
 		if answer == msg.Yes:
-			self.set_recording_on()
-			self.current_trial_start_time = time.time()
+			self.start_trial()
 			if self.allow_sound_play:
 				self.btn_play.setEnabled(True)
 
@@ -641,9 +636,9 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.cleanup_trial_before_navigating()
 
 		if self.skip_ok_targets:
-			self.read_next_error_target(read_backwards=False)
+			self.goto_next_error_target()
 		else:
-			self.read_next_target()
+			self.goto_next_target()
 
 		if self.allow_sound_play:
 			self.btn_play.setEnabled(True)
@@ -654,25 +649,27 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.cleanup_trial_before_navigating()
 
 		if self.skip_ok_targets:
-			self.read_next_error_target(read_backwards=True)
+			self.goto_next_error_target(backwards=True)
 		else:
-			self.read_prev_target()
+			self.goto_next_target(backwards=True)
 
 		if self.allow_sound_play:
 			self.btn_play.setEnabled(True)
 
 	#------------------------------------------------------------------------------------------
 	def on_clicked_goto_trial(self):
+
 		target_id = self.combox_targets.currentText().split("-")[0]
-		target_index = 0
+		target_ids = [target.id for target in self.targets]
+		if target_id not in target_ids:  # validate
+			return
+		target_ind = target_ids.index(target_id)
 
 		self.cleanup_trial_before_navigating()
+		self.goto_target_with_index(target_ind)
 
-		for target in self.targets:  # searching for the correct Array index matching the target id
-			if target.id == target_id:
-				break
-			target_index += 1
-		self.read_next_target(from_goto=True, goto_index=int(target_index))
+		if self.allow_sound_play:
+			self.btn_play.setEnabled(True)
 
 	#------------------------------------------------------------------------------------------
 	def cleanup_trial_before_navigating(self):
@@ -680,6 +677,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.set_rc_radio_buttons_enabled(False)
 		if self.trial_started:
 			self.close_current_trial()
+			self.targets[self.curr_target_index].next_trial_id += 1
 
 	#=================================================================================================
 	#    Stimulus and responses
@@ -864,14 +862,18 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 	#----------------------------------------------------------------------------------
 	def start_trial(self):
-		""" Start a trial -- start logging the trajectory """
-		print("Writracker: Starting new trial\n")
-		self.trial_started = True
+		""" Start a trial -- and start recording the trajectory """
+		print("Writracker: Starting q new trial\n")
+		self.clean_traj_display()
+		self.set_rc_radio_buttons_enabled(True)            # Enable radio buttons
+		self.set_navigation_buttons_enabled(False)
+		traj_fn = f'trajectory_trial_{self.trial_unique_id}_target_{self.targets[self.curr_target_index]}.csv'
+		self.current_trajectory = dataio.Trajectory(traj_fn, self.results_folder_path)
 		self.current_trial_start_time = time.time()
-		self.set_recording_on()
+		self.trial_started = True
 
 	#----------------------------------------------------------------------------------
-	def save_trials_and_remaining_targets(self):
+	def save_trials_index(self):
 		try:
 			dataio.save_trials(self.results_folder_path, self.targets)
 		except (IOError, FileNotFoundError):
@@ -890,24 +892,21 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 	#----------------------------------------------------------------------------------
 	def close_current_trial(self):
 
+		self.trial_started = False
+
+		self.clean_traj_display()
+
 		#-- Rotate trajectory file if a rotation was applied during the writing
 		if self.rotation_angle != 180:
-			self.current_active_trajectory.rotate(self.rotation_angle)
+			self.current_trajectory.rotate(self.rotation_angle)
 
-		# Handle RC code: Read radio buttons & read value from the combo box error list
-		rc_code = "N/A"
-		if self.btn_radio_ok.isChecked() is True:
-			rc_code = "OK"
-
-		elif self.btn_radio_err.isChecked() is True:
-			rc_code = self.combox_errors.currentText()
-
-		# Add new a new completed Trial inside the current Target
+		#-- Add new a new completed Trial inside the current Target
 		current_target = self.targets[self.curr_target_index]
-		current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
-		current_trial = dataio.Trial(self.trial_unique_id, current_target.id, current_target.value, rc_code=rc_code,
+		current_target.rc_code = self._current_trial_rc_code()
+		current_trial = dataio.Trial(self.trial_unique_id, current_target.id, current_target.value,
+									 rc_code=current_target.rc_code,
 									 time_in_session=self.current_trial_start_time - self.session_start_time,
-									 traj_file_name=self.current_active_trajectory.filename,
+									 traj_file_name=self.current_trajectory.filename,
 									 date=str(date.today()),
 									 abs_time=datetime.now().strftime("%H:%M:%S"),
 									 sound_file_length=current_target.sound_file_length)
@@ -915,10 +914,24 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		current_target.trials.append(current_trial)
 		self.trial_unique_id += 1
 
-		self.current_active_trajectory.save_to_file()  # Save the trajectory file
-		self.current_active_trajectory = None
+		self.current_trajectory.save_to_file()  # Save the trajectory file
+		self.current_trajectory = None
 
-		self.trial_started = False
+		self.save_trials_index()
+
+		self.update_session_statistics_in_ui()
+
+		self.targets[self.curr_target_index].next_trial_id += 1
+
+	#----------------------------------------------------------------------------------
+	def _current_trial_rc_code(self):
+		if self.btn_radio_ok.isChecked():
+			return "OK"
+
+		elif self.btn_radio_err.isChecked():
+			return self.combox_errors.currentText()
+
+		return "N/A"
 
 	#----------------------------------------------------------------------------------
 	def load_targets(self, targets_file_path):
@@ -964,25 +977,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 			copyfile(self.targets_file_name, self.results_folder_path + os.sep + "Original_targets_file_copy.csv")
 			copyfile(self.targets_file_name, self.results_folder_path + os.sep + "remaining_targets.csv")
 
-	# ----------------------------------------------------------------------------------
-	def set_recording_on(self):
-		""" Start recording the trajectory """
-		#print("Writracker: rec_on()")
-		self.recording_on = True
-		self.set_rc_radio_buttons_enabled(True)            # Enable radio buttons
-		self.set_navigation_buttons_enabled(False)
-		current_target = self.targets[self.curr_target_index]
-		self.clean_traj_display()
-		traj_fn = f'trajectory_trial_{self.trial_unique_id}_target_{current_target}.csv'
-		self.current_active_trajectory = dataio.Trajectory(traj_fn, self.results_folder_path)
-
-	# ----------------------------------------------------------------------------------
-	def set_recording_off(self):
-		""" Stop recording the trajectory """
-		self.recording_on = False
-		self.clean_traj_display()
-
-	# ----------------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------
 	def clean_traj_display(self):
 		self.scene.clear()
 		self.path = QPainterPath()  # Re-declare path for a fresh start
@@ -1000,34 +995,23 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.target_id_textedit.insertPlainText(str(target_id))
 
 	# ----------------------------------------------------------------------------------
-	def save_trial_record_off(self):
-		self.recording_on = False
-		self.save_trials_and_remaining_targets()
-		self.stats_update()
-
-	# ----------------------------------------------------------------------------------
-	# Read next with rc_code not "OK".
-	def read_next_error_target(self, read_backwards=False):
-
-		if self.recording_on:
-			self.save_trial_record_off()  # save files, set recording off
-			self.targets[self.curr_target_index].next_trial_id += 1
+	def goto_next_error_target(self, backwards=False):
+		"""
+		Go to the next target not yet marked as OK.
+		"""
 
 		a = self.targets[self.curr_target_index:]
 		b = self.targets[0:self.curr_target_index]
 		circular_targets_list = a + b
 		circular_targets_list.append(circular_targets_list.pop(0))  # Avoid restarting current error target
 
-		if read_backwards:  # If lookup is in "previous" direction, need to manipulate circular list
+		if backwards:  # If lookup is in "previous" direction, need to manipulate circular list
 			circular_targets_list.reverse()
 			circular_targets_list.append(circular_targets_list.pop(0))
 
 		for target in circular_targets_list:
 			if target.rc_code != "OK":
-				self.curr_target_index = self.targets.index(target)
-				current_target = self.targets[self.curr_target_index]
-				self.update_target_textfields(current_target.value, current_target.id)
-				self.allow_sound_play = current_target.has_sound
+				self.goto_target_with_index(self.targets.index(target))
 				break
 
 		else:   # No more error targets
@@ -1035,45 +1019,38 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 							   'All the targets has been marked as OK. For target navigation, use "goto"')
 			self.update_target_textfields('All targets marked OK', '')
 
-	# ----------------------------------------------------------------------------------
-	def read_prev_target(self):
-		if self.recording_on:
-			self.save_trial_record_off()  # save files, set recording off
-			self.targets[self.curr_target_index].next_trial_id += 1
+	#----------------------------------------------------------------------------------
+	def goto_prev_target(self):
 		if self.curr_target_index > 0:
-			self.curr_target_index -= 1
-			current_target = self.targets[self.curr_target_index]
-			self.update_target_textfields(current_target.value, current_target.id)
+			self.goto_target_with_index(self.curr_target_index - 1)
 
 	# ----------------------------------------------------------------------------------
-	# the goto parameters allow goto button to use this function when jumping instead of duplicating most of the code
-	# if from_goto is True, we also expects goto_index which is the index in targets[] to jump into.
-	def read_next_target(self, from_goto=False, goto_index=0):
+	def goto_next_target(self, backwards=False):
+		"""
+		Go to the next target in the list.
+		"""
+		increment = -1 if backwards else 1
 
-		if self.recording_on:
-			self.save_trial_record_off()  # save files, set recording off
-			self.targets[self.curr_target_index].next_trial_id += 1
-
-		if self.curr_target_index < len(self.targets)-1 or from_goto is True:
-			if from_goto is False:
-				self.curr_target_index += 1
-			else:
-				self.curr_target_index = goto_index
-			current_target = self.targets[self.curr_target_index]
-			self.update_target_textfields(current_target.value, current_target.id)
-			self.allow_sound_play = current_target.has_sound
+		if 0 <= self.curr_target_index + increment < len(self.targets):
+			self.goto_target_with_index(self.curr_target_index + increment)
 
 		elif self.cyclic_remaining_targets:  # reached end of targets list. check config to decide how to continue.
 			self.skip_ok_targets = True
-			self.read_next_error_target()
+			self.goto_next_error_target(backwards=backwards)
 
 		else:
 			self.show_info_msg("End of targets",
-							   'Reached the end of the targets file.\nClick "exit" to finish, or go back ' +
-							   'using the "prev" or "goto" buttons')
-			#todo: must the user click END SESSION?
+							   'Finished recording all targets. Click "End Session" to finish,\n' +
+							   'or use the navigation buttons to re-record some targets.')
 
 			self.update_target_textfields("*End of targets*", "")
+
+	#----------------------------------------------------------------------------
+	def goto_target_with_index(self, index):
+		self.curr_target_index = index
+		current_target = self.targets[self.curr_target_index]
+		self.update_target_textfields(current_target.value, current_target.id)
+		self.allow_sound_play = current_target.has_sound
 
 	#----------------------------------------------------------------------------
 	def show_info_msg(self, title, msg):

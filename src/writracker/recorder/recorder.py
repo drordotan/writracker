@@ -1,6 +1,11 @@
-from PyQt5.QtWidgets import *    # Classes for rendering a QML scene in traditional widgets
-from PyQt5.QtCore import *       # core core of QT classes
-from PyQt5.QtGui import *        # The core classes common to widget and OpenGL GUIs
+"""
+WtRecorder - An app that uses a tablet to record pen trajectories
+"""
+from PyQt5.QtWidgets import QMainWindow, QGraphicsView, QGraphicsScene, QPushButton, \
+	QComboBox, QTextEdit, QLabel, QRadioButton, QMessageBox, QInputDialog, QFileDialog, QLineEdit, \
+	QDialog, QVBoxLayout, QHBoxLayout, QApplication
+from PyQt5.QtCore import Qt, QPoint, QDir, QTimer, QUrl
+from PyQt5.QtGui import QPainterPath, QDesktopServices
 from PyQt5 import uic
 from datetime import datetime, date
 from pygame import error as pgerr  # handle pygame errors as exceptions
@@ -13,33 +18,34 @@ import sys
 import os
 import time
 from win32com.shell import shell, shellcon
-import numpy as np
 
 from writracker.recorder import dataio, wintab
+import writracker.uiutils as uiu
 import writracker.utils as u
 import writracker.recorder
 
 
-# CR check best for fit for both pens
-TABLET_POLL_TIME = 50   # defines the polling frequency for tablet packets, in milliseconds
+tablet_poll_interval = 50   # defines the polling frequency for tablet packets, in milliseconds
 
-	
 
 # -------------------------------------------------------------------------------------------------------------
-# noinspection PyPep8Naming
+# noinspection PyPep8Naming,PyAttributeOutsideInit
 class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define window = QMainWindow() or Qwidget()
-	def __init__(self, parent=None):
+
+	#=================================================================================================
+	#    Initialization
+	#=================================================================================================
+
+	#-------------------------------------------------------------------------------------------
+	def __init__(self, app, parent=None):
 		super(MainWindow, self).__init__(parent)
 
-		self.title = "WriTracker Recorder"
-		# Establish tablet connection & Start polling
-		h_wnd = int(self.winId())                            # Get current window's window handle
-		wintab.hctx = wintab.OpenTabletContexts(h_wnd)       # context handle for the tablet polling function.
-		self.poll_timer = QTimer(self)
-		# noinspection PyUnresolvedReferences
-		self.poll_timer.timeout.connect(self.tabletPoll)    # Start timer & Run polling function
-		self.poll_timer.start(TABLET_POLL_TIME)
-		# pen settings & variables
+		self.title = 'WriTracker Recorder'
+
+		self.establish_tablet_connection()
+		self.get_tablet_resolution()        # For converting tablet coordinates to centimeters
+
+		#-- pen settings & variables
 		self.pen_x = 0
 		self.pen_xtilt = 0
 		self.pen_ytilt = 0
@@ -47,270 +53,368 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.pen_pressure = 0
 		self.rotation_angle = 0             # Each rotate button press adds 90. used for rotating the traj file.
 		self.x_resolution = app.desktop().screenGeometry().right()  # this value is for mirroring X coordinates
-		# All files & paths
+
+		#-- All files & paths
 		self.targets_file_name = None
 		self.remaining_targets_file = None     # keeps track of remaining targets, or targets to re-show.
 		self.trials_file = None                # keeps track of each trajectory file
 		self.current_active_trajectory = None  # saves X,Y, Pressure for each path
 		self.results_folder_path = None        # Folder for the output files.
 		self.sounds_folder_path = None         # Folder containing input sound files.
-		# Data structures
+
+		#-- Stimuli and results
 		self.targets = []
 		self.stats = {}                     # session stats values, total/completed/remaining targets
 		self.targets_dict = {}              # holds trajectory counter for each target
 		self.curr_target_index = -1         # initial value is (-1) to avoid skipping first target.
-		# Counters and settings
+
+		#-- Counters and settings
 		self.trial_unique_id = 1
 		self.session_start_time = None      # Value assigned when starting a session (f_btn_start_ssn)
 		self.trial_started = False          # Defines our current working mode, paging (false) or recording (true).
 		self.recording_on = False           # used in PaintEvent to catch events and draw
 		self.session_started = False        # Flag - ignore events before session started
 		self.current_trial_start_time = None
-		# Config options:
+
+		#-- Config options
 		self.cyclic_remaining_targets = True    # Controls whether ERROR target returns to end of the targets line
 		self.allow_sound_play = False
 		self.skip_ok_targets = False        # Controls viewing mode: when True, skip targets where RC = "ok".
 
 		self.path = QPainterPath()
-		# UI settings
+
+		self.init_widget_actions()
+		self.init_ui()
+
+	#----------------------------------------------------------------------------
+	def establish_tablet_connection(self):
+
+		h_wnd = int(self.winId())                            # Get current window's window handle
+		wintab.hctx = wintab.OpenTabletContexts(h_wnd)       # context handle for the tablet polling function.
+		#todo: why not save hctx as a class data member, instead of on wintab?
+
+		self.poll_timer = QTimer(self)
+
+		# noinspection PyUnresolvedReferences
+		self.poll_timer.timeout.connect(self.poll_tablet_periodically)    # Start timer & Run polling function
+		self.poll_timer.start(tablet_poll_interval)
+
+	#----------------------------------------------------------------------------
+	def get_tablet_resolution(self):
+		TabletX = wintab.AXIS()
+		TabletY = wintab.AXIS()
+		coord_per_cm_xy = []
+		for axis in [TabletX, TabletY]:
+			if axis.axUnits == wintab.TU_CENTIMETERS:
+				ppc = axis.axResolution
+			elif axis.axUnits == wintab.TU_INCHES:
+				ppc = axis.axResolution / 2.54  # convert to cm
+			else:
+				ppc = None
+			coord_per_cm_xy.append(ppc)
+
+		self.coord_per_cm_xy = None if (None in coord_per_cm_xy) else coord_per_cm_xy
+
+	#----------------------------------------------------------------------------
+	# noinspection PyUnresolvedReferences
+	def init_widget_actions(self):
+
+		#-- UI settings
 		uic.loadUi(os.path.dirname(__file__) + os.sep + 'recorder_ui.ui', self)
 		self.cfg_window = QDialog()
-		# UI - Button
+
+		#-- Session start/stop
+
 		self.btn_start_ssn = self.findChild(QPushButton, 'start_ssn_btn')
+		self.btn_start_ssn.clicked.connect(self.f_btn_start_session)
+
 		self.btn_continue_ssn = self.findChild(QPushButton, 'continue_ssn_btn')
+		self.btn_continue_ssn.clicked.connect(self.f_btn_continue_session)
+
 		self.btn_end_ssn = self.findChild(QPushButton, 'end_ssn_btn')
-		self.btn_next = self.findChild(QPushButton, 'next_btn')
-		self.btn_play = self.findChild(QPushButton, 'play_btn')
-		self.btn_prv = self.findChild(QPushButton, 'prv_btn')
-		self.btn_reset = self.findChild(QPushButton, 'reset_btn')
-		self.btn_goto = self.findChild(QPushButton, 'goto_btn')
-		self.combox_targets = self.findChild(QComboBox, 'combobox_targets')
+		self.btn_end_ssn.clicked.connect(self.f_btn_end_session)
+
 		self.btn_quit = self.findChild(QPushButton, 'quit_btn')
-		self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
-		self.btn_plus = self.findChild(QPushButton, 'plus_btn')
-		self.btn_mirror = self.findChild(QPushButton, 'mirror_btn')
-		self.btn_minus = self.findChild(QPushButton, 'minus_btn')
-		self.menu_online_help = self.findChild(QAction, 'actionOnline_help')
-		self.menu_add_error = self.findChild(QAction, 'actionAddError')
-		self.sounds_settings = self.findChild(QAction, 'sounds_settings')
+		self.btn_quit.clicked.connect(self.f_btn_quit)
+
+		#-- Trial navigation
+
+		self.btn_next = self.findChild(QPushButton, 'next_btn')
+		self.btn_next.clicked.connect(self.f_btn_next_trial)
+
+		self.btn_prv = self.findChild(QPushButton, 'prv_btn')
+		self.btn_prv.clicked.connect(self.f_btn_prev_trial)
+
+		self.btn_reset = self.findChild(QPushButton, 'reset_btn')
+		self.btn_reset.clicked.connect(self.f_btn_reset_trial)
+
+		self.btn_goto = self.findChild(QPushButton, 'goto_btn')
+		self.btn_goto.clicked.connect(self.f_btn_goto_trial)
+
+		self.combox_targets = self.findChild(QComboBox, 'combobox_targets')
+
+		self.btn_play = self.findChild(QPushButton, 'play_btn')
+		self.btn_play.clicked.connect(self.f_btn_play)
+
+		#-- Trial results
+
 		self.btn_radio_ok = self.findChild(QRadioButton, 'radiobtn_ok')
+		self.btn_radio_ok.clicked.connect(self.f_btn_rb)
+
 		self.btn_radio_err = self.findChild(QRadioButton, 'radiobtn_err')
+		self.btn_radio_err.clicked.connect(self.f_btn_rb)
+
 		self.combox_errors = self.findChild(QComboBox, 'combobox_errortype')
-		# UI - text edits
+
 		self.target_textedit = self.findChild(QTextEdit, 'target_textedit')
+		self.target_textedit.setStyleSheet("QTextEdit {color:red}")
+
 		self.target_id_textedit = self.findChild(QTextEdit, 'targetnum_textedit_value')
+		self.target_id_textedit.setStyleSheet("QTextEdit {color:black}")
+
+		#-- Control plot area
+
+		self.btn_rotate = self.findChild(QPushButton, 'rotate_btn')
+		self.btn_rotate.clicked.connect(self.f_btn_rotate)
+
+		btn_plus = self.findChild(QPushButton, 'plus_btn')
+		btn_plus.clicked.connect(self.f_btn_plus)
+
+		btn_mirror = self.findChild(QPushButton, 'mirror_btn')
+		btn_mirror.clicked.connect(self.f_btn_mirror)
+
+		btn_minus = self.findChild(QPushButton, 'minus_btn')
+		btn_minus.clicked.connect(self.f_btn_minus)
+
 		# UI - central painting area
 		self.tablet_paint_area = self.findChild(QGraphicsView, 'tablet_paint_graphicsview')
 		# mirror painting area content
-		
+
 		self.scene = QGraphicsScene()
 		self.tablet_paint_area.setScene(self.scene)
-		# UI - labels (mostly used for statistics)
+
+		#-- Menu items
+		self.menu_add_error = self.findChild(QAction, 'actionAddError')
+		self.menu_add_error.triggered.connect(self.f_menu_add_error)
+
+		sounds_settings = self.findChild(QAction, 'sounds_settings')
+		sounds_settings.triggered.connect(self.pop_config_menu)
+
+		menu_online_help = self.findChild(QAction, 'actionOnline_help')
+		menu_online_help.triggered.connect(self.f_menu_online_help)
+
+		menu_about = self.findChild(QAction, 'actionAbout')
+		menu_about.triggered.connect(self.f_menu_about)
+
+		# Labels (mostly used for statistics)
 		self.lbl_targetsfile = self.findChild(QLabel, 'stats_targetsname_label')
 		self.lbl_total_targets = self.findChild(QLabel, 'stats_total_label')
 		self.lbl_completed = self.findChild(QLabel, 'stats_complete_label')
 		self.lbl_remaining = self.findChild(QLabel, 'stats_remaining_label')
 
-		self.init_ui()
-
-	# ----------------------------------------------------------------------------
-	def show_info_msg(self, title, msg):
-
-		if u.is_windows():
-			QMessageBox().about(self, title, msg)
-
-		else:
-			msgbox = QMessageBox()
-			msgbox.setWindowTitle(title)
-			msgbox.setText(msg)
-			msgbox.exec()
-
-
-	# ----------------------------------------------------------------------------
-	# Read from recorder_ui.ui and connect each button to function
+	#----------------------------------------------------------------------------
+	# noinspection PyUnresolvedReferences
 	def init_ui(self):
+		""" Read from recorder_ui.ui and connect each button to function """
 		# general window settings
 		self.setWindowTitle(self.title)
 		full_window = app.desktop().frameGeometry()            # get desktop resolution
 		self.resize(full_window.width(), full_window.height())  # set window size to full screen
 		self.move(0, 0)
-		# button links
-		self.btn_start_ssn.clicked.connect(self.f_btn_start_ssn)
-		self.btn_continue_ssn.clicked.connect(self.f_btn_continue_ssn)
-		self.btn_end_ssn.clicked.connect(self.f_btn_end_ssn)
-		self.btn_next.clicked.connect(self.f_btn_next)
-		self.btn_play.clicked.connect(self.f_btn_play)
-		self.btn_prv.clicked.connect(self.f_btn_prv)
-		self.btn_reset.clicked.connect(self.f_btn_reset)
-		self.btn_goto.clicked.connect(self.f_btn_goto)
-		self.btn_quit.clicked.connect(self.f_btn_quit)
-		self.btn_radio_ok.clicked.connect(self.f_btn_rb)
-		self.btn_radio_err.clicked.connect(self.f_btn_rb)
-		self.btn_rotate.clicked.connect(self.f_btn_rotate)
-		self.btn_mirror.clicked.connect(self.f_btn_mirror)
-		self.btn_plus.clicked.connect(self.f_btn_plus)
-		self.btn_minus.clicked.connect(self.f_btn_minus)
-		self.menu_add_error.triggered.connect(self.f_menu_add_error)
-		self.sounds_settings.triggered.connect(self.pop_config_menu)
-		self.menu_online_help.triggered.connect(self.f_menu_online_help)
-		self.target_textedit.setStyleSheet("QTextEdit {color:red}")
-		self.target_id_textedit.setStyleSheet("QTextEdit {color:black}")
+
 		self.tablet_paint_area.fitInView(800, 600, 0, 0, Qt.KeepAspectRatio)  # reset the graphicsView scaling
 		self.show()
 
+	#=================================================================================================
+	#    Tablet polling
+	#=================================================================================================
+
 	#--------------------------------------------------------------------------------------
-	def tabletPoll(self):
-		lp_pkts = (wintab.PACKET * 100)()
+	def poll_tablet_periodically(self):
+
 		lp_pkts = wintab.GetPackets()
 
-		if lp_pkts == 0:  # no packets received
+		if lp_pkts is None:  # no packets received
 			return
-		print("packet count: ", len(lp_pkts))
-		for i in range(len(lp_pkts)):
-			if (lp_pkts[i].pkX == 0 and lp_pkts[i].pkY == 0):
+
+		# print("packet count: ", len(lp_pkts))
+		for packet in lp_pkts:
+
+			if packet.pkX == 0 and packet.pkY == 0:  # dummy data
 				return
 
-			# if this pen and next pen are the same, return
-			if self.pen_x == lp_pkts[i].pkX and self.pen_y == lp_pkts[i].pkY:
+			#-- if the current pen coordiante is the same as the previous one, ignore it (only changes are registered)
+			if self.pen_x == packet.pkX and self.pen_y == packet.pkY:
 				continue
 
-			# CR add for loop for the points in the packet
-			self.pen_x = lp_pkts[i].pkX
-			self.pen_y = lp_pkts[i].pkY
+			#-- Save current coordinates
+			self.pen_x = packet.pkX
+			self.pen_y = packet.pkY
 
-			new_pressure = int(lp_pkts[i].pkNormalPressure / 327.67)  # normalized to 0-100 range
+			new_pressure = int(packet.pkNormalPressure / 327.67)  # normalized to 0-100 range
 
-			print(self.pen_x, self.pen_y, new_pressure)
-			# mark Trial started flag, but only if the ok/error are not checked.
+			# print(self.pen_x, self.pen_y, new_pressure)
+
+			# Trial started flag, but only if the ok/error are not checked.
 			# this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
-			if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
-				# When we the user chose to play sounds
-				# the trial will start when pressing play, and not when touching the tablet.
-				if not self.trial_started and self.sounds_folder_path is None:
-					print("self start in poll")
-					self.start_trial()
-			#
-			if self.pen_pressure == 0 and new_pressure > 0:  # "TabletPress"
+			# if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
+			# 	# When we the user chose to play sounds
+			# 	# the trial will start when pressing play, and not when touching the tablet.
+			# 	if not self.trial_started and self.sounds_folder_path is None:
+			# 		# print("self start in poll")
+			# 		self.start_trial()
+
+			#-- Start a trial if:
+			#-- The session started but the trial is not (i.e. it's the first pen touch);
+			#-- The user didn't choose OK/ERROR yet;
+			#-- And we are not in "play sounds" mode, in which case the trial starts when pressing play, not when touching the tablet.
+			if not self.trial_started \
+					and self.session_started \
+					and not self.btn_radio_ok.isChecked() \
+					and not self.btn_radio_err.isChecked() \
+					and self.sounds_folder_path is None:
+				self.start_trial()
+
+			#-- First touch in a stroke
+			if self.pen_pressure == 0 and new_pressure > 0:
 				self.path.moveTo(QPoint(int(wintab.X_AXIS_OUTPUT_RANGE_MAX - self.pen_x), int(self.pen_y)))
-			elif self.pen_pressure > 0 and new_pressure == 0:  # "TabletRelease"
+
+			#-- First touch in an inter-stroke segment (i.e. pen lifted from paper)
+			elif self.pen_pressure > 0 and new_pressure == 0:
 				if self.session_started:
 					# When the pen leaves the surface, add a sample point with zero pressure
 					self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
+
+			#-- Pen movement inside a stroke
 			elif new_pressure > 0:  # it's a "TabletMove" event
 				self.path.lineTo(QPoint(wintab.X_AXIS_OUTPUT_RANGE_MAX - self.pen_x, self.pen_y))
+
 			self.update()  # calls paintEvent
 			self.pen_pressure = new_pressure
-			# write to traj file:
+
+			#-- Save coordinate to trajectory file
 			if self.current_active_trajectory is not None and self.session_started:
 				self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
 
-	""" This is the old function to get tablet information using events. 
-		it work well, but does not allow recording tablet move above the surface ('hovering') """
-	# def tabletEvent(self, tabletEvent):
-	#     self.pen_x = self.x_resolution - tabletEvent.globalX()  # Fix tablet mirroring-flip X axis
-	#     self.pen_y = tabletEvent.globalY()
-	#     self.pen_pressure = int(tabletEvent.pressure() * 100)
-	#     self.pen_xtilt = tabletEvent.xTilt()
-	#     self.pen_ytilt = tabletEvent.yTilt()
-	#     # mark Trial started flag, but only if the ok/error are not checked.
-	#     # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
-	#     if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
-	#         # When we the user chose to play sounds
-	#         # the trial will start when pressing play, and not when touching the tablet.
-	#         if not self.trial_started and self.sounds_folder_path is None:
-	#             self.start_trial()
-	#
-	#     # write to traj file:
-	#     if self.current_active_trajectory is not None and self.session_started:
-	#         self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
-	#     if tabletEvent.type() == QTabletEvent.TabletPress:
-	#         self.path.moveTo(tabletEvent.pos())
-	#     elif tabletEvent.type() == QTabletEvent.TabletMove:
-	#         self.path.lineTo(tabletEvent.pos())
-	#     elif tabletEvent.type() == QTabletEvent.TabletRelease:
-	#         if self.pen_pressure != 0 and self.session_started:
-	#             # When the pen leaves the surface, add a sample point with zero pressure
-	#             self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
-	#     tabletEvent.accept()
-	#     self.update()                   # calls paintEvent behind the scenes
-
+	#--------------------------------------------------------------------------------------
+	# noinspection PyMethodOverriding
 	def paintEvent(self, event):
 		self.scene.addPath(self.path)
 
-	#               -------------------------- Button/Menu Functions --------------------------
+	#=================================================================================================
+	#    Zoom / rotate / etc.
+	#=================================================================================================
 
+	#------------------------------------------------------------------------------------------
+	def f_btn_plus(self):
+		self.tablet_paint_area.scale(1.25, 1.25)
 
+	#------------------------------------------------------------------------------------------
+	def f_btn_minus(self):
+		self.tablet_paint_area.scale(0.75, 0.75)
+
+	#--------------------------------------------------------------------------------------
 	def f_btn_mirror(self):
 		self.tablet_paint_area.scale(-1, 1)
+
 	#------------------------------------------------------------------------------------------
-	# This function rotates the graphicsView, then tablet_modulates the rotation factor for the points in the traj file.
 	def f_btn_rotate(self):
+		""" rotate the graphicsView, then tablet_modulate the rotation factor for the points in the traj file """
 		self.tablet_paint_area.rotate(90)
 		self.rotation_angle = (self.rotation_angle+90) % 360  # allowed angles: 0,90,180,270
 
+	#=================================================================================================
+	#    Misc. menu functions
+	#=================================================================================================
+
 	#------------------------------------------------------------------------------------------
 	def f_menu_add_error(self):
-		new_error, ok = QInputDialog.getText(self, "Insert new error type", "Type the new error and press OK \n"
-																			"The new error will be added to the list")
+		new_error, ok = \
+			QInputDialog.getText(self, 'Insert new error type',
+								 'Type the new error and press OK\nThe new error will be added to the list')
 		if ok:
 			self.combox_errors.addItem(new_error.strip())
 
 	#------------------------------------------------------------------------------------------
 	# noinspection PyMethodMayBeStatic
 	def f_menu_online_help(self):
-		qmbox = QMessageBox()
-		qmbox.setWindowTitle("Online help")
-		qmbox.setTextFormat(Qt.RichText)
-		qmbox.setText("<a href='http://mathinklab.org/writracker-recorder/'>"
-					  "Press here to visit WriTracker Recorder website</a>")
-		qmbox.exec()
+		QDesktopServices.openUrl(QUrl("http://mathinklab.org/writracker/recorder"))
 
 	#------------------------------------------------------------------------------------------
-	# This function loads previous session status, and continues it
-	def f_btn_continue_ssn(self):
+	def f_menu_about(self):
+		dialog = QDialog(self)
+		dialog.setWindowTitle('WriTracker Recorder')
+		dialog.setFixedSize(300, 150)
+
+		layout = QVBoxLayout()
+		ver = '.'.join(writracker.version())
+		label = QLabel(f'Writracker version {ver}')
+		layout.addWidget(label)
+
+		uiu.add_copyright_msg(layout)
+
+		ok_button = QPushButton("OK")
+		ok_button.clicked.connect(dialog.accept)
+		layout.addWidget(ok_button)
+
+		dialog.setLayout(layout)
+		dialog.exec()
+
+	#=================================================================================================
+	#    Handle the session
+	#=================================================================================================
+
+	#------------------------------------------------------------------------------------------
+	def f_btn_continue_session(self):
+		""" Loads a previous session and continue it """
 		self.clean_display()
 		self.show_info_msg("Continuing an existing session", "Choose the an existing results folder")
+
 		while True:
-			if self.pop_folder_selector(continue_session=True):
-				if self.choose_targets_file(continue_session=True):
-					try:
-						self.load_trials_csv()
-
-					except IOError:    # -- allow the user to exit the loop
-						msg = QMessageBox()
-						answer = msg.question(self, "Error",
-											  "Couldn't load {}\nWould you like to try another folder?".format(dataio.trials_csv_filename),
-											  msg.Yes | msg.No, msg.Yes)
-						if answer == msg.Yes:
-							continue
-						else:
-							return True
-
-					self.session_start_time = time.time()
-					self.pop_config_menu()
-					self.session_started = True
-					self.toggle_buttons(True)
-					self.menu_add_error.setEnabled(True)
-					self.btn_end_ssn.setEnabled(True)
-					self.btn_start_ssn.setEnabled(False)
-					self.btn_continue_ssn.setEnabled(False)
-					self.stats_reset()
-					self.stats_update()
-					mixer.init()      
-					self.read_next_target()  # read first target
-					return True
-			else:
+			if not self.choose_results_folder(continue_session=True):
 				return False
 
+			if not self.choose_targets_file(continue_session=True):
+				continue
+
+			try:
+				self.load_trials_csv()
+			except IOError:
+				#-- allow the user to exit the loop
+				msg = QMessageBox()
+				answer = msg.question(self, "Error", f"Couldn't load {dataio.trials_csv_filename}\nWould you like to try another folder?",
+									  msg.Yes | msg.No, msg.Yes)
+				if answer == msg.Yes:
+					continue
+				else:
+					return True
+
+			self.session_start_time = time.time()
+			self.pop_config_menu()
+			self.session_started = True
+			self.toggle_buttons(True)
+			self.menu_add_error.setEnabled(True)
+			self.btn_end_ssn.setEnabled(True)
+			self.btn_start_ssn.setEnabled(False)
+			self.btn_continue_ssn.setEnabled(False)
+			self.stats_reset()
+			self.stats_update()
+			mixer.init()
+			self.read_next_target()  # read first target
+
+			return True
+
 	#------------------------------------------------------------------------------------------
-	def f_btn_start_ssn(self):
+	def f_btn_start_session(self):
+
 		self.clean_display()
 		self.show_info_msg("Starting a new session",
-						   "In the first dialog, choose the targets file (excel or .csv File)\n"
-						   "In the second dialog, choose the results folder, where all the raw"
+						   "In the first dialog, choose the targets file (excel or .csv File)\n" +
+						   "In the second dialog, choose the results folder, where all the raw" +
 						   " trajectories will be saved")
+
 		if self.choose_targets_file():
-			if self.pop_folder_selector():
+			if self.choose_results_folder():
 				self.pop_config_menu()
 				self.session_start_time = time.time()
 				self.session_started = True
@@ -329,93 +433,19 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		try:
 			mixer.music.load(beep_path)
 			mixer.music.play(0)
-		except TypeError as e:
+		except TypeError:
 			self.show_info_msg("Error!", "Error when trying to access internal sound file (ERR-SND-BEEP-1).")
-		except pgerr as e:
+		except pgerr:
 			self.show_info_msg("Error!", "Error when trying to play sound file. (ERR-SND-BEEP-2)")
 
 	#------------------------------------------------------------------------------------------
-	def f_btn_reset(self):
+	def f_btn_end_session(self):
 		msg = QMessageBox()
 		msg.setIcon(QMessageBox.Warning)
-		answer = msg.question(self, 'Reset current Target', "This action will also delete the current trajectory file\n Press yes to confirm",
-							  msg.Yes | msg.No, msg.No)
+		answer = msg.question(self, 'Wait!', "Are you sure you want to end this session? \n", msg.Yes | msg.No, msg.No)
 		if answer == msg.Yes:
-			print("Writracker: trajectory file deleted, " + str(self.current_active_trajectory))
-			os.remove(str(self.current_active_trajectory))
-			self.set_recording_on()
-			if self.allow_sound_play:
-				self.btn_play.setEnabled(True)
-			self.current_active_trajectory.reset_start_time()
-			return
-		else:
-			return
-
-	#------------------------------------------------------------------------------------------
-	def f_btn_next(self):
-		self.clean_display()
-		if self.trial_started is True:
-			self.close_current_trial()
-		self.trial_started = False
-		self.toggle_rb(False)
-		if self.skip_ok_targets:
-			self.read_next_error_target(read_backwards=False)
-		else:
-			self.read_next_target()
-		if self.allow_sound_play:
-			self.btn_play.setEnabled(True)
-
-	#------------------------------------------------------------------------------------------
-	def f_btn_play(self):
-		print("play")
-		self.btn_play.setEnabled(False)
-		current_target = self.targets[self.curr_target_index]
-		try:
-			soundfile = os.path.join(self.sounds_folder_path, current_target.sound_file_name)
-			print("soundfile", soundfile)
-			mixer.music.load(soundfile)
-			self.start_trial()
-			mixer.music.play(0)
-			self.targets[self.curr_target_index].sound_file_length = round(MP3(soundfile).info.length, 2)
-		except TypeError:
-			self.show_info_msg("Error!", "Error when trying to access sound file.")
-		except pgerr as pger:
-			print("error" + str(pger))
-			self.show_info_msg("Error!", "Error when trying to play sound file.")
-
-	#------------------------------------------------------------------------------------------
-	def f_btn_prv(self):
-		self.clean_display()
-		if self.trial_started is True:
-			self.close_current_trial()
-		self.trial_started = False
-		self.toggle_rb(False)
-		if self.skip_ok_targets:
-			self.read_next_error_target(read_backwards=True)
-		else:
-			self.read_prev_target()
-		if self.allow_sound_play:
-			self.btn_play.setEnabled(True)
-
-	#------------------------------------------------------------------------------------------
-	# when pressing any of the radio buttons
-	def f_btn_rb(self):
-		self.toggle_buttons(True)
-
-	#------------------------------------------------------------------------------------------
-	def f_btn_goto(self):
-		target_id = self.combox_targets.currentText().split("-")[0]
-		target_index = 0
-		self.clean_display()
-		if self.trial_started is True:
-			self.close_current_trial()
-		self.trial_started = False
-		self.toggle_rb(False)
-		for target in self.targets:  # searching for the correct Array index matching the target id
-			if target.id == target_id:
-				break
-			target_index += 1
-		self.read_next_target(from_goto=True, goto_index=int(target_index))
+			self.reset_session()
+		return
 
 	#------------------------------------------------------------------------------------------
 	def f_btn_quit(self):
@@ -432,27 +462,39 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 			wintab.CloseTabletContext(wintab.hctx)
 			self.close()
 
-	#------------------------------------------------------------------------------------------
-	def f_btn_end_ssn(self):
-		msg = QMessageBox()
-		msg.setIcon(QMessageBox.Warning)
-		answer = msg.question(self, 'Wait!', "Are you sure you want to end this session? \n", msg.Yes | msg.No, msg.No)
-		if answer == msg.Yes:
-			self.reset_session()
-		return
-
-	#------------------------------------------------------------------------------------------
-	def f_btn_plus(self):
-		self.tablet_paint_area.scale(1.25, 1.25)
-
-	#------------------------------------------------------------------------------------------
-	def f_btn_minus(self):
-		self.tablet_paint_area.scale(0.75, 0.75)
-
-
-	#               -------------------------- GUI/messages Functions --------------------------
-
 	# ----------------------------------------------------------------------------------
+	def choose_results_folder(self, continue_session=False):
+
+		error_str = ""
+
+		while True:
+			folder = QDir.toNativeSeparators(QFileDialog.getExistingDirectory(self, "Select results directory"))
+			folder = str(folder)
+			if folder:
+				path_ok = os.access(folder, os.W_OK | os.X_OK)
+				if os.access(folder + os.sep + dataio.trials_csv_filename, os.W_OK):
+					error_str = "It already contains a '{}' file from an older session\n".format(dataio.trials_csv_filename)
+
+				if not continue_session:
+					if os.listdir(folder):  # verify the chosen folder is empty for a new session
+						QMessageBox.warning(self, "Folder is not empty",
+											"Warning, The chosen folder is not empty \n " + error_str +
+											"Please make sure no old session files are stored in this folder \n"
+											"otherwise, use 'continue session' option instead")
+				if path_ok:
+					self.results_folder_path = folder
+					return True
+
+			msg = QMessageBox()
+			answer = msg.question(self, "Error", "The chosen folder is not valid, or doesn't have write permissions \n"
+												 "would you like to try another folder?",
+								  msg.Yes | msg.No, msg.Yes)
+			if answer == msg.Yes:
+				continue
+			else:
+				return False
+
+	#----------------------------------------------------------------------------------
 	def choose_targets_file(self, continue_session=False):
 		while True:
 			if not continue_session:
@@ -482,163 +524,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				continue
 			else:
 				return False
-
-
-	# ----------------------------------------------------------------------------------
-	# For results folder
-	def pop_folder_selector(self, continue_session=False):
-		error_str = ""
-		while True:
-			folder = QDir.toNativeSeparators(QFileDialog.getExistingDirectory(self, "Select results directory"))
-			folder = str(folder)
-			if folder:
-				path_ok = os.access(folder, os.W_OK | os.X_OK)
-				if os.access(folder + os.sep + dataio.trials_csv_filename, os.W_OK):
-					error_str = "It already contains a '{}' file from an older session\n".format(dataio.trials_csv_filename)
-
-				if not continue_session:
-					if os.listdir(folder):  # verify the chosen folder is empty for a new session
-						QMessageBox.warning(self, "Folder is not empty",
-											"Warning, The chosen folder is not empty \n " + error_str +
-											"Please make sure no old session files are stored in this folder \n"
-											"otherwise, use 'continue session' option instead")
-				if path_ok:
-					self.results_folder_path = folder
-					return True
-			msg = QMessageBox()
-			answer = msg.question(self, "Error", "The chosen folder is not valid, or doesn't have write permissions \n"
-												 "would you like to try another folder?",
-								  msg.Yes | msg.No, msg.Yes)
-			if answer == msg.Yes:
-				continue
-			else:
-				return False
-
-	# ----------------------------------------------------------------------------------
-	# Show file dialog and choose folder containing the sound files to be played for each target.
-	def pop_soundfiles_folder(self):
-		while True:
-			folder = str(QFileDialog.getExistingDirectory(self, "Select sound files directory"))
-			if folder:
-				path_ok = os.access(folder, os.W_OK | os.X_OK)
-				if path_ok:
-					self.sounds_folder_path = folder
-					self.cfg_window.findChild(QLabel, "label_chosen_folder").setText(self.sounds_folder_path)
-					return True
-			msg = QMessageBox()
-			answer = msg.question(self, "Error", "The chosen folder is not valid, or doesn't have write permissions \n"
-												 "would you like to try another folder?",
-								  msg.Yes | msg.No, msg.Yes)
-			if answer == msg.Yes:
-				continue
-			else:
-				return False
-
-	# ----------------------------------------------------------------------------------
-	# Read the text input in the config window and inserts the values into the combox
-	def fill_combox_errors(self):
-		errors_input = self.cfg_window.findChild(QLineEdit, "lineedit_error_types").text()
-		if errors_input == "":
-			self.combox_errors.addItems(["Spelling", "Motor", "Incomplete"])
-			return True
-		error_list = errors_input.split(",")
-		for error_type in error_list:
-			if error_type.strip() != "":
-				self.combox_errors.addItem(error_type.strip())
-
-	# ----------------------------------------------------------------------------------
-	def check_cfg_before_exit(self):
-		if os.path.isdir(self.results_folder_path):
-			self.fill_combox_errors()
-			self.cfg_window.close()
-			# Reset, otherwise left for the next time a session is started in the current run:
-			self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path: ")
-			self.create_dir_copy_targets()
-			if self.sounds_folder_path is not None and self.allow_sound_play:
-				self.btn_play.setEnabled(True)
-			else:
-				self.allow_sound_play = False
-
-		else:
-			QMessageBox.about(self, "Configuration error", "Please choose another results folder")
-
-	# ----------------------------------------------------------------------------------
-	# This function creates & shows the configuration window, before starting a session.
-	# noinspection PyUnresolvedReferences,PyArgumentList
-	def pop_config_menu(self):
-		self.cfg_window.setWindowTitle("Session configuration")
-		layout_v = QVBoxLayout()
-		layout_h = QHBoxLayout()
-		ok_btn = QPushButton("OK")
-		ok_btn.setDefault(True)
-		ok_btn.clicked.connect(self.check_cfg_before_exit)
-		choose_folder_btn = QPushButton("Choose folder with MP3 files")
-		choose_folder_btn.clicked.connect(self.pop_soundfiles_folder)
-		label_chosen_folder = QLabel(objectName="label_chosen_folder")
-		rbtn = QRadioButton("Only trials that were coded as 'OK'.")
-		rbtn.setChecked(True)
-		rbtn.clicked.connect(self.cfg_set_cyclic_targets_on)
-		layout_h.addWidget(rbtn)
-		layout_h.addStretch()
-		rbtn = QRadioButton("Any trial that was presented and coded (including errors)")
-		rbtn.clicked.connect(self.cfg_set_cyclic_targets_off)
-		layout_h.addWidget(rbtn)
-		label_sound_folder = QLabel("Sound files folder (not mandatory):")
-		label_cyclic_cfg = QLabel("Which trials should be considered as completed (and not displayed again by default)?")
-		label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
-								   " errors list. \nInsert Error types, divided by commas(',') "
-								   "or leave empty to use default error types")
-
-
-		lineedit_error_types = QLineEdit(objectName="lineedit_error_types")
-				# lineedit_error_types add default value if self.combox_errors is not empty
-
-		if self.combox_errors.count() > 0:
-			error_types = ""
-			for i in range(self.combox_errors.count()):
-				error_types += self.combox_errors.itemText(i) + ", "
-			lineedit_error_types.setText(error_types[:-2])
-			
-		lineedit_error_types.setPlaceholderText("Spelling, Motor, Incomplete")
-		# Add everything to the the main layout, layout_v (vertical)
-		layout_v.addWidget(label_sound_folder)
-		layout_v.addWidget(choose_folder_btn)
-		layout_v.addWidget(label_chosen_folder)
-		layout_v.addWidget(label_cyclic_cfg)
-		layout_v.addLayout(layout_h)
-		layout_v.addWidget(label_error_types)
-		layout_v.addWidget(lineedit_error_types)
-		layout_v.addWidget(ok_btn)
-		if not self.allow_sound_play:
-			choose_folder_btn.setEnabled(False)
-			label_sound_folder.setText("No 'sound_file_name' column in targets file. Sound playing is disabled")
-
-		self.cfg_window.setLayout(layout_v)
-		self.cfg_window.setGeometry(QRect(100, 200, 100, 100))
-		self.cfg_window.setWindowModality(Qt.ApplicationModal)  # Block main windows until OK is pressed
-		# Center the window in the middle of the screen:
-		fr_gm = self.cfg_window.frameGeometry()
-		sc_gm = app.desktop().screenGeometry().center()
-		fr_gm.moveCenter(sc_gm)
-		self.cfg_window.move(fr_gm.topLeft())
-		self.cfg_window.exec()
-
-	# ----------------------------------------------------------------------------------
-	def cfg_set_cyclic_targets_off(self):
-		self.cyclic_remaining_targets = False
-
-	# ----------------------------------------------------------------------------------
-	def cfg_set_cyclic_targets_on(self):
-		self.cyclic_remaining_targets = True
-
-	#               -------------------------- rest of the Functions --------------------------
-
-	# start logging data from the tablet. The trigger might come from play button, or tabletEvent
-	def start_trial(self):
-		print("Writracker: Starting new trial\n")
-		self.trial_started = True
-		self.current_trial_start_time = time.time()
-		self.set_recording_on()
 
 	# ----------------------------------------------------------------------------------
 	def load_trials_csv(self):
@@ -680,11 +565,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 		return True
 
-	# ----------------------------------------------------------------------------------
-	# Resets all the session variables. Saves working files before closing. Resets configuration options.
+	#----------------------------------------------------------------------------------
 	def reset_session(self):
+		"""
+		Resets all the session variables. Saves working files before closing. Resets configuration options.
+		"""
 		if self.trial_started is True:
 			self.close_current_trial()
+
 		self.set_recording_off()
 		self.session_started = False
 		# Gui fields reset
@@ -718,6 +606,279 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		self.trial_started = False
 		self.skip_ok_targets = False
 		self.cyclic_remaining_targets = True
+
+	# ----------------------------------------------------------------------------------
+	def stats_reset(self):
+		self.stats['total_targets'] = 0
+		self.stats['completed_ok'] = 0
+		self.stats['completed_error'] = 0
+		self.stats['remaining'] = 0
+
+	#----------------------------------------------------------------------------------
+	# ulate stats based on the current working mode, and update QLabel fields
+	def stats_update(self):
+		self.stats_reset()
+		self.stats['total_targets'] = len(self.targets)
+		for target in self.targets:
+			if target.rc_code == "OK":
+				self.stats['completed_ok'] += 1
+			elif target.rc_code != "":             # reaching here means that's an error target
+				self.stats['completed_error'] += 1
+			else:
+				self.stats['remaining'] += 1     # reaching here means an untagged target
+		if self.cyclic_remaining_targets:          # counting remaining targets according to the current config
+			self.stats['remaining'] += self.stats['completed_error']
+		self.lbl_total_targets.setText("Total targets: " + str(self.stats['total_targets']))
+		self.lbl_completed.setText("Completed targets: " + str(self.stats['completed_ok']) + " OK, " +
+								   str(self.stats['completed_error']) + " Error")
+		self.lbl_remaining.setText("Remaining targets: " + str(self.stats['remaining']))
+
+	#=================================================================================================
+	#    Trial navigation
+	#=================================================================================================
+
+	#------------------------------------------------------------------------------------------
+	def f_btn_reset_trial(self):
+		msg = QMessageBox()
+		msg.setIcon(QMessageBox.Warning)
+		answer = msg.question(self, 'Reset current Target', "This action will also delete the current trajectory file\n Press yes to confirm",
+							  msg.Yes | msg.No, msg.No)
+		if answer == msg.Yes:
+			print("Writracker: trajectory file deleted, " + str(self.current_active_trajectory))
+			os.remove(str(self.current_active_trajectory))
+			self.set_recording_on()
+			if self.allow_sound_play:
+				self.btn_play.setEnabled(True)
+			self.current_active_trajectory.reset_start_time()
+			return
+		else:
+			return
+
+	#------------------------------------------------------------------------------------------
+	def f_btn_next_trial(self):
+		self.clean_display()
+		if self.trial_started is True:
+			self.close_current_trial()
+		self.trial_started = False
+		self.toggle_rb(False)
+		if self.skip_ok_targets:
+			self.read_next_error_target(read_backwards=False)
+		else:
+			self.read_next_target()
+		if self.allow_sound_play:
+			self.btn_play.setEnabled(True)
+
+	#------------------------------------------------------------------------------------------
+	def f_btn_prev_trial(self):
+		self.clean_display()
+		if self.trial_started is True:
+			self.close_current_trial()
+		self.trial_started = False
+		self.toggle_rb(False)
+		if self.skip_ok_targets:
+			self.read_next_error_target(read_backwards=True)
+		else:
+			self.read_prev_target()
+		if self.allow_sound_play:
+			self.btn_play.setEnabled(True)
+
+	#------------------------------------------------------------------------------------------
+	def f_btn_goto_trial(self):
+		target_id = self.combox_targets.currentText().split("-")[0]
+		target_index = 0
+		self.clean_display()
+		if self.trial_started is True:
+			self.close_current_trial()
+		self.trial_started = False
+		self.toggle_rb(False)
+		for target in self.targets:  # searching for the correct Array index matching the target id
+			if target.id == target_id:
+				break
+			target_index += 1
+		self.read_next_target(from_goto=True, goto_index=int(target_index))
+
+	#=================================================================================================
+	#    Stimulus and responses
+	#=================================================================================================
+
+	#------------------------------------------------------------------------------------------
+	def f_btn_play(self):
+		print("play")
+		self.btn_play.setEnabled(False)
+		current_target = self.targets[self.curr_target_index]
+		try:
+			soundfile = os.path.join(self.sounds_folder_path, current_target.sound_file_name)
+			print("soundfile", soundfile)
+			mixer.music.load(soundfile)
+			self.start_trial()
+			mixer.music.play(0)
+			self.targets[self.curr_target_index].sound_file_length = round(MP3(soundfile).info.length, 2)
+		except TypeError:
+			self.show_info_msg("Error!", "Error when trying to access sound file.")
+		except pgerr as pger:
+			print("error" + str(pger))
+			self.show_info_msg("Error!", "Error when trying to play sound file.")
+
+	#------------------------------------------------------------------------------------------
+	# when pressing any of the radio buttons
+	def f_btn_rb(self):
+		self.toggle_buttons(True)
+
+	#----------------------------------------------------------------------------------
+	# toggle radio buttons
+	def toggle_rb(self, state):
+		if state is False:
+			self.btn_radio_err.setAutoExclusive(False)  # MUST set false in order to uncheck both of the radio button
+			self.btn_radio_ok.setAutoExclusive(False)
+			self.btn_radio_ok.setChecked(False)
+			self.btn_radio_err.setChecked(False)
+			self.btn_radio_err.setAutoExclusive(True)
+			self.btn_radio_ok.setAutoExclusive(True)
+		self.btn_radio_ok.setEnabled(state)
+		self.btn_radio_err.setEnabled(state)
+
+	# ----------------------------------------------------------------------------------
+	# buttons effected by this action: next, prev, reset, goto, start session
+	def toggle_buttons(self, state):
+		self.btn_next.setEnabled(state)
+		self.btn_prv.setEnabled(state)
+		self.btn_goto.setEnabled(state)
+		self.btn_reset.setEnabled(not state)    # reset always in opposite mode to navigation buttons
+
+	#=================================================================================================
+	#    Settings
+	#=================================================================================================
+
+	#----------------------------------------------------------------------------------
+	# noinspection PyUnresolvedReferences,PyArgumentList
+	def pop_config_menu(self):
+		"""
+		Create & show the configuration window, before starting a session.
+		"""
+		self.cfg_window.setWindowTitle("Session configuration")
+
+		layout_v = QVBoxLayout()
+		layout_h = QHBoxLayout()
+		ok_btn = QPushButton("OK")
+		ok_btn.setDefault(True)
+		ok_btn.clicked.connect(self.check_cfg_before_exit)
+		choose_folder_btn = QPushButton("Choose folder with MP3 files")
+		choose_folder_btn.clicked.connect(self.pop_soundfiles_folder)
+		label_chosen_folder = QLabel(objectName="label_chosen_folder")
+		rbtn = QRadioButton("Only trials that were coded as 'OK'.")
+		rbtn.setChecked(True)
+		rbtn.clicked.connect(self.cfg_set_cyclic_targets_on)
+		layout_h.addWidget(rbtn)
+		layout_h.addStretch()
+		rbtn = QRadioButton("Any trial that was presented and coded (including errors)")
+		rbtn.clicked.connect(self.cfg_set_cyclic_targets_off)
+		layout_h.addWidget(rbtn)
+		label_sound_folder = QLabel("Sound files folder (not mandatory):")
+		label_cyclic_cfg = QLabel("Which trials should be considered as completed (and not displayed again by default)?")
+		label_error_types = QLabel("\nError tagging / rc codes: You can choose which types of errors will appear in the"
+								   " errors list. \nInsert Error types, divided by commas(',') "
+								   "or leave empty to use default error types")
+
+		lineedit_error_types = QLineEdit(objectName="lineedit_error_types")
+		# lineedit_error_types add default value if self.combox_errors is not empty
+
+		if self.combox_errors.count() > 0:
+			error_types = ""
+			for i in range(self.combox_errors.count()):
+				error_types += self.combox_errors.itemText(i) + ", "
+			lineedit_error_types.setText(error_types[:-2])
+
+		lineedit_error_types.setPlaceholderText("Spelling, Motor, Incomplete")
+		# Add everything to the main layout, layout_v (vertical)
+		layout_v.addWidget(label_sound_folder)
+		layout_v.addWidget(choose_folder_btn)
+		layout_v.addWidget(label_chosen_folder)
+		layout_v.addWidget(label_cyclic_cfg)
+		layout_v.addLayout(layout_h)
+		layout_v.addWidget(label_error_types)
+		layout_v.addWidget(lineedit_error_types)
+		layout_v.addWidget(ok_btn)
+		if not self.allow_sound_play:
+			choose_folder_btn.setEnabled(False)
+			label_sound_folder.setText("No 'sound_file_name' column in targets file. Sound playing is disabled")
+
+		self.cfg_window.setLayout(layout_v)
+		self.cfg_window.setGeometry(QRect(100, 200, 100, 100))
+		self.cfg_window.setWindowModality(Qt.ApplicationModal)  # Block main windows until OK is pressed
+		# Center the window in the middle of the screen:
+		fr_gm = self.cfg_window.frameGeometry()
+		sc_gm = app.desktop().screenGeometry().center()
+		fr_gm.moveCenter(sc_gm)
+		self.cfg_window.move(fr_gm.topLeft())
+		self.cfg_window.exec()
+
+	#----------------------------------------------------------------------------------
+	def pop_soundfiles_folder(self):
+		""" Show file dialog and choose folder containing the sound files to be played for each target """
+		while True:
+			folder = str(QFileDialog.getExistingDirectory(self, "Select sound files directory"))
+			if folder:
+				path_ok = os.access(folder, os.W_OK | os.X_OK)
+				if path_ok:
+					self.sounds_folder_path = folder
+					self.cfg_window.findChild(QLabel, "label_chosen_folder").setText(self.sounds_folder_path)
+					return True
+			msg = QMessageBox()
+			answer = msg.question(self, "Error", "The chosen folder is not valid, or doesn't have write permissions \n"
+												 "would you like to try another folder?",
+								  msg.Yes | msg.No, msg.Yes)
+			if answer == msg.Yes:
+				continue
+			else:
+				return False
+
+	# ----------------------------------------------------------------------------------
+	def check_cfg_before_exit(self):
+
+		if not os.path.isdir(self.results_folder_path):
+			QMessageBox.about(self, "Configuration error", "Please choose another results folder")
+			return
+
+		self.init_error_types_in_combo()
+		self.cfg_window.close()
+		# Reset, otherwise left for the next time a session is started in the current run:
+		self.cfg_window.findChild(QLabel, "label_chosen_folder").setText("Path: ")
+		self.create_dir_copy_targets()
+		if self.sounds_folder_path is not None and self.allow_sound_play:
+			self.btn_play.setEnabled(True)
+		else:
+			self.allow_sound_play = False
+
+	# ----------------------------------------------------------------------------------
+	def init_error_types_in_combo(self):
+		""" Read the text input in the config window and inserts the values into the combox """
+		errors_input = self.cfg_window.findChild(QLineEdit, "lineedit_error_types").text()
+		if errors_input == "":
+			self.combox_errors.addItems(["Spelling", "Motor", "Incomplete"])
+			return True
+		error_list = errors_input.split(",")
+		for error_type in error_list:
+			if error_type.strip() != "":
+				self.combox_errors.addItem(error_type.strip())
+
+	#----------------------------------------------------------------------------------
+	def cfg_set_cyclic_targets_off(self):
+		self.cyclic_remaining_targets = False
+
+	#----------------------------------------------------------------------------------
+	def cfg_set_cyclic_targets_on(self):
+		self.cyclic_remaining_targets = True
+
+	#=================================================================================================
+	#    Handle trials and data I/O
+	#=================================================================================================
+
+	def start_trial(self):
+		""" Start a trial -- start logging the trajectory """
+		print("Writracker: Starting new trial\n")
+		self.trial_started = True
+		self.current_trial_start_time = time.time()
+		self.set_recording_on()
 
 	#----------------------------------------------------------------------------------
 	def save_trials_file(self):
@@ -764,32 +925,6 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 		current_target.rc_code = rc_code    # Update the target's RC code based on the last evaluated trial
 		self.trial_unique_id += 1
 
-	# ----------------------------------------------------------------------------------
-	def stats_reset(self):
-		self.stats['total_targets'] = 0
-		self.stats['completed_ok'] = 0
-		self.stats['completed_error'] = 0
-		self.stats['remaining'] = 0
-
-	#----------------------------------------------------------------------------------
-	# ulate stats based on the current working mode, and update QLabel fields
-	def stats_update(self):
-		self.stats_reset()
-		self.stats['total_targets'] = len(self.targets)
-		for target in self.targets:
-			if target.rc_code == "OK":
-				self.stats['completed_ok'] += 1
-			elif target.rc_code != "":             # reaching here means that's an error target
-				self.stats['completed_error'] += 1
-			else:
-				self.stats['remaining'] += 1     # reaching here means an untagged target
-		if self.cyclic_remaining_targets:          # counting remaining targets according to the current config
-			self.stats['remaining'] += self.stats['completed_error']
-		self.lbl_total_targets.setText("Total targets: " + str(self.stats['total_targets']))
-		self.lbl_completed.setText("Completed targets: " + str(self.stats['completed_ok']) + " OK, " +
-								   str(self.stats['completed_error']) + " Error")
-		self.lbl_remaining.setText("Remaining targets: " + str(self.stats['remaining']))
-
 	#----------------------------------------------------------------------------------
 	def load_targets(self, targets_file_path):
 		"""
@@ -811,30 +946,7 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 		return True
 
-
-	#----------------------------------------------------------------------------------
-	# toggle radio buttons
-	def toggle_rb(self, state):
-		if state is False:
-			self.btn_radio_err.setAutoExclusive(False)  # MUST set false in order to uncheck both of the radio button
-			self.btn_radio_ok.setAutoExclusive(False)
-			self.btn_radio_ok.setChecked(False)
-			self.btn_radio_err.setChecked(False)
-			self.btn_radio_err.setAutoExclusive(True)
-			self.btn_radio_ok.setAutoExclusive(True)
-		self.btn_radio_ok.setEnabled(state)
-		self.btn_radio_err.setEnabled(state)
-
 	# ----------------------------------------------------------------------------------
-	# buttons effected by this action: next, prev, reset, goto, start session
-	def toggle_buttons(self, state):
-		self.btn_next.setEnabled(state)
-		self.btn_prv.setEnabled(state)
-		self.btn_goto.setEnabled(state)
-		self.btn_reset.setEnabled(not state)    # reset always in opposite mode to navigation buttons
-
-	# ----------------------------------------------------------------------------------
-	#todo: move to "io" package
 	def create_dir_copy_targets(self):
 		# If the file already exists, we assume the user chose "continue existing session". no need to create copies.
 		if os.path.isfile(self.results_folder_path+"\\remaining_targets.csv"):
@@ -884,8 +996,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 	def update_target_textfields(self, target, target_id):
 		self.target_textedit.clear()
 		self.target_id_textedit.clear()
+		# noinspection PyUnresolvedReferences
 		self.target_textedit.setAlignment(Qt.AlignCenter)  # Must set the alignment right before appending text
 		self.target_textedit.insertPlainText(target)
+		# noinspection PyUnresolvedReferences
 		self.target_id_textedit.setAlignment(Qt.AlignCenter)  # Must set the alignment right before appending text
 		self.target_id_textedit.insertPlainText(str(target_id))
 
@@ -921,10 +1035,10 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 				self.allow_sound_play = current_target.has_sound
 				break
 
-		else:   # No more error targets.   # todo Diskin looks like an indentation bug here
-			self.show_info_msg("End of targets",
+		else:   # No more error targets
+			self.show_info_msg('End of targets',
 							   'All the targets has been marked as OK. For target navigation, use "goto"')
-			self.update_target_textfields("All targets marked OK", "")
+			self.update_target_textfields('All targets marked OK', '')
 
 	# ----------------------------------------------------------------------------------
 	def read_prev_target(self):
@@ -966,12 +1080,23 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 
 			self.update_target_textfields("*End of targets*", "")
 
+	#----------------------------------------------------------------------------
+	def show_info_msg(self, title, msg):
+		if u.is_windows():
+			QMessageBox().about(self, title, msg)
+		else:
+			msgbox = QMessageBox()
+			msgbox.setWindowTitle(title)
+			msgbox.setText(msg)
+			msgbox.exec()
 
-# ---------------------------------------------------------------------------------------------------------
-#todo: move the tablet-related functions to another package
-# Check if a wacom tablet is connected. This check works on windows device - depended on PowerShell
-# The check isn't blocking the program from running - for the case the device status is not 100% reliable.
+
+#---------------------------------------------------------------------------------------------------------
 def check_if_tablet_connected():
+	"""
+	Test if a wacom tablet is connected. This check works on windows device - depended on PowerShell
+	The test isn't blocking the program from running - for the case the device status is not 100% reliable.
+	"""
 	if os.name == 'nt':
 		return check_if_tablet_connected_windows()
 
@@ -979,7 +1104,7 @@ def check_if_tablet_connected():
 		return check_if_tablet_connected_mac()
 
 	else:
-		_critical_msg("Unsupported system", "WriTracker can only run on Windows or Mac")
+		_critical_msg("Unsupported system", "WriTracker Recorder can only run on Windows/MacOS systems")
 		return False
 
 
@@ -1021,6 +1146,7 @@ def _critical_msg(title, msg):
 	# noinspection PyTypeChecker
 	QMessageBox().critical(None, title, msg)
 
+
 #----------------------------------------
 def user_documents_folder():
 	return shell.SHGetFolderPath(0, shellcon.CSIDL_PERSONAL, None, 0)
@@ -1028,10 +1154,9 @@ def user_documents_folder():
 
 #---------------------------------------------------------------------------------------------------------
 def run():
-	global app
 	app = QApplication(sys.argv)        # must initialize when working with pyqt5. can send arguments using argv
 	app.setStyle('Fusion')
-	mainform = MainWindow()
+	mainform = MainWindow(app)
 	mainform.show()
 	check_if_tablet_connected()
 	sys.exit(app.exec_())                 # set exit code ass the app exit code

@@ -769,6 +769,7 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
      <string>Help</string>
     </property>
     <addaction name="actionOnline_help"/>
+    <addaction name="actionAbout"/>
    </widget>
    <addaction name="menuChoose_targets_file"/>
    <addaction name="menuHelp"/>
@@ -798,6 +799,11 @@ The software will use &quot;remaining_targets_file.csv&quot; and will load the s
    </property>
    <property name="toolTip">
     <string>Go to the Writracker-Recorder website</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>About WriTracker Recorder</string>
    </property>
   </action>
  </widget>

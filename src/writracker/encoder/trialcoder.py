@@ -116,7 +116,7 @@ class SettingsDialog(qw.QDialog):
 
         layout.addLayout(row)
 
-        uiu.add_copyright_msg(layout)
+        add_copyright(layout)
 
         self.setLayout(layout)
 
@@ -312,7 +312,7 @@ class TrialEncodingWindow(qw.QMainWindow):
         row.addWidget(self.quit_button)
         layout.addLayout(row)
 
-        uiu.add_copyright_msg(layout)
+        add_copyright(layout)
 
         on_paper_chars = [c for c in self.characters if len(c.trajectory) > 0]
         if len(on_paper_chars) < 2:
@@ -1255,3 +1255,7 @@ def _set_extending_characters(all_chars, selection_handler):
         manip.disconnect_extending_characters(selection_handler.selected_chars)
     else:
         manip.set_extending_characters(all_chars, selection_handler.selected_chars)
+
+
+def add_copyright(layout):
+    uiu.add_copyright_msg(layout, 2020, ['Dror Dotan', 'Maya Yachini'])

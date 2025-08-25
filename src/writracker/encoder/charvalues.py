@@ -421,13 +421,13 @@ def _get_bounding_box_traj(trajectory, fraction_of_x_points=None, fraction_of_y_
     (x) = ([float(pt.x) for pt in trajectory])
     (y) = ([float(pt.y) for pt in trajectory])
 
-    if fraction_of_x_points is not None:
+    if fraction_of_x_points is not None and 0 < fraction_of_x_points < 1:
         xmin, xmax = find_interval_containing(x, fraction_of_x_points, in_place=True)
     else:
         xmin = min(x)
         xmax = max(x)
 
-    if fraction_of_y_points is not None:
+    if fraction_of_y_points is not None and 0 < fraction_of_x_points < 1:
         ymin, ymax = find_interval_containing(y, fraction_of_y_points, in_place=True)
     else:
         ymin = min(y)

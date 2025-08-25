@@ -5,7 +5,8 @@ import traceback
 import warnings
 from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
                              QListWidget, QPushButton, QFileDialog, QAbstractItemView,
-                             QLabel, QLineEdit, QMessageBox, QProgressBar, QTextEdit)
+                             QLabel, QLineEdit, QMessageBox, QProgressBar, QTextEdit,
+                             QGroupBox, QFormLayout, QComboBox, QDoubleSpinBox, QSpinBox, QWidget)
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, Qt
 
 import writracker.plotter.pdfplotter as ppdf
@@ -80,13 +81,155 @@ class SelectFilesDialog(QDialog):
 
         main_layout.addLayout(output_layout)
 
+        # ---------------- Parameters (Dialog #1) ----------------
+        params_group = QGroupBox("")
+        params_vbox = QVBoxLayout(params_group)
+        params_vbox.setSpacing(6)
+
+        def hline():
+            line = QWidget()
+            line.setFixedHeight(1)
+            line.setStyleSheet("background-color: #C0C0C0;")
+            return line
+
+        # Small helpers (like the other app)
+        def help_link(text):
+            link = QLabel("<a href='#'>?</a>")
+            link.setToolTip(text)
+            link.setTextFormat(Qt.RichText)
+            link.setOpenExternalLinks(False)
+            link.setFixedWidth(16)
+            def _click():
+                QMessageBox.information(self, "Help", text)
+            link.linkActivated.connect(lambda _: _click())
+            return link
+
+        def row_with_help(widget, helptext):
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.addWidget(widget, 1)
+            h.addWidget(help_link(helptext), 0)
+            return w
+
+        # --- Contents section ---
+        params_vbox.addWidget(hline())
+        params_vbox.addWidget(QLabel("<b>Information to show</b>"))
+        contents_form = QFormLayout()
+        contents_form.setHorizontalSpacing(12)
+        contents_form.setVerticalSpacing(6)
+
+        # 1) Bounding box (Yes/No) + percentages for X/Y to the right
+        self.combo_bounding_box = QComboBox()
+        self.combo_bounding_box.addItems(["No", "Yes"])
+        help_bb = ("Display each character's bounding box. "
+                   "You can specify the fraction of pixels that would fit in the bounding box, separately for the x/y axes (100% = all pixels)")
+        bb_row_widget = QWidget()
+        bb_row = QHBoxLayout(bb_row_widget)
+        bb_row.setContentsMargins(0, 0, 0, 0)
+        bb_row.addWidget(self.combo_bounding_box)
+        bb_row.addSpacing(12)
+        lbl_pct = QLabel("% of pixels in the b.box:")
+        lbl_pct.setToolTip(help_bb)
+        bb_row.addWidget(lbl_pct)
+        self.spin_frac_x = QDoubleSpinBox()
+        self.spin_frac_x.setRange(0.0, 100.0)
+        self.spin_frac_x.setSingleStep(1.0)
+        self.spin_frac_x.setValue(100)
+        self.spin_frac_x.setSuffix("% X")
+        self.spin_frac_x.setToolTip(help_bb)
+        self.spin_frac_y = QDoubleSpinBox()
+        self.spin_frac_y.setRange(0.0, 100.0)
+        self.spin_frac_y.setSingleStep(1.0)
+        self.spin_frac_y.setValue(100)
+        self.spin_frac_y.setSuffix("% Y")
+        self.spin_frac_y.setToolTip(help_bb)
+        bb_row.addWidget(self.spin_frac_x)
+        bb_row.addWidget(self.spin_frac_y)
+        bb_row.addStretch()
+        contents_form.addRow(QLabel("Character bounding box"), row_with_help(bb_row_widget, help_bb))
+
+        # 2) Character order (Yes/No)
+        self.combo_char_order = QComboBox()
+        self.combo_char_order.addItems(["No", "Yes"])
+        help_order = "Overlay an index showing the order in which the participant wrote each character."
+        contents_form.addRow(QLabel("Character writing order"), row_with_help(self.combo_char_order, help_order))
+
+        # 3) Temporal gaps (Yes/No)
+        self.combo_temporal_gaps = QComboBox()
+        self.combo_temporal_gaps.addItems(["No", "Yes"])
+        help_gaps = "Display the inter-character temporal gaps on the page."
+        contents_form.addRow(QLabel("Inter-character temporal gaps"), row_with_help(self.combo_temporal_gaps, help_gaps))
+
+        # 4) Trial title — identical style to the other app (line edit + '?' help; preview button removed)
+        ttip_trial_title = ('The title to show on each trial (empty = no title). You can use {keyword} for trial-specific values')
+        help_trial_title = ('The title to show on each trial (empty = no title). You can use {keyword} with any of these:\n' +
+                            '{target} - The ID/number of the target stimulus\n' +
+                            '{trial_id} - The trial number (two attempts = two separate IDs)\n' +
+                            '{block} - Block number in the experiment\n' +
+                            '{stimulus} - The target shown\n' +
+                            '{response} - What the participant wrote, "=" for correct\n' +
+                            '{rc} - "OK" or the error code\n' +
+                            '{nchars} - Number of response characters\n' +
+                            '{nstrokes} - Number of response strokes')
+        title_row_widget = QWidget()
+        title_row = QHBoxLayout(title_row_widget)
+        title_row.setContentsMargins(0, 0, 0, 0)
+        self.title_lineedit = QLineEdit()
+        self.title_lineedit.setAttribute(Qt.WA_InputMethodEnabled, False)
+        self.title_lineedit.setPlaceholderText("Enter title or use {keywords}")
+        self.title_lineedit.setToolTip(ttip_trial_title)
+        self.title_lineedit.setMinimumWidth(600)
+        self.title_lineedit.setText("Trial #{trial_id}")
+        title_row.addWidget(self.title_lineedit)
+        title_row.addWidget(help_link(help_trial_title))
+        contents_form.addRow(QLabel("Trial title"), title_row_widget)
+
+        params_vbox.addLayout(contents_form)
+
+        # --- Page looks section ---
+        params_vbox.addWidget(hline())
+        params_vbox.addWidget(QLabel("<b>Page looks</b>"))
+        looks_form = QFormLayout()
+        looks_form.setHorizontalSpacing(12)
+        looks_form.setVerticalSpacing(6)
+
+        # Dot size
+        self.spin_dot_size = QDoubleSpinBox()
+        self.spin_dot_size.setRange(1.0, 10.0)
+        self.spin_dot_size.setSingleStep(0.5)
+        self.spin_dot_size.setValue(2.0)
+        help_dot = "Size of the plotted points on the page."
+        looks_form.addRow(QLabel("Dot size"), row_with_help(self.spin_dot_size, help_dot))
+
+        # Number of columns
+        self.spin_cols = QSpinBox()
+        self.spin_cols.setRange(1, 3)
+        self.spin_cols.setValue(2)
+        help_cols = "Number of columns (pages are laid out as a grid of rows × columns)."
+        looks_form.addRow(QLabel("Number of columns"), row_with_help(self.spin_cols, help_cols))
+
+        # Number of rows
+        self.spin_rows = QSpinBox()
+        self.spin_rows.setRange(1, 10)
+        self.spin_rows.setValue(5)
+        help_rows = "Number of rows (pages are laid out as a grid of rows × columns)."
+        looks_form.addRow(QLabel("Number of rows"), row_with_help(self.spin_rows, help_rows))
+
+        params_vbox.addLayout(looks_form)
+        main_layout.addWidget(params_group)
+
+        # Prepare button
         self.btn_prepare_pdf = QPushButton("Prepare pdf!")
         self.btn_prepare_pdf.setEnabled(False)
         main_layout.addWidget(self.btn_prepare_pdf)
 
-        uiu.add_copyright_msg(main_layout)
+        uiu.add_copyright_msg(main_layout, 2025, 'Dror Dotan')
 
         self.init_button_operations()
+        # Enable/disable fraction fields depending on bounding-box toggle
+        self.combo_bounding_box.currentIndexChanged.connect(self.update_fraction_enabled)
+        self.update_fraction_enabled()
 
         self.generating = False
 
@@ -107,6 +250,12 @@ class SelectFilesDialog(QDialog):
         self.list_widget.itemSelectionChanged.connect(self.update_prepare_button)
         self.output_lineedit.textChanged.connect(self.update_prepare_button)
         self.btn_prepare_pdf.clicked.connect(self.on_clicked_prepare_pdf)
+
+    #--------------------------------------------------------------------------
+    def update_fraction_enabled(self):
+        enable = (self.combo_bounding_box.currentText() == "Yes")
+        self.spin_frac_x.setEnabled(enable)
+        self.spin_frac_y.setEnabled(enable)
 
     #--------------------------------------------------------------------------
     def on_clicked_remove_selected(self):
@@ -223,9 +372,45 @@ class SelectFilesDialog(QDialog):
             if result != QMessageBox.Yes:
                 return
 
+        # ------ collect parameters -> PdfPlotterConfig ------
+        bounding_box = (self.combo_bounding_box.currentText() == "Yes")
+        char_order = (self.combo_char_order.currentText() == "Yes")
+        temporal_gaps = (self.combo_temporal_gaps.currentText() == "Yes")
+        # Convert percent spinners to fractions in [0,1]
+        fx = self.spin_frac_x.value() / 100.0 if bounding_box else None
+        fy = self.spin_frac_y.value() / 100.0 if bounding_box else None
+        cols = self.spin_cols.value()
+        rows = self.spin_rows.value()
+        dot_size = float(self.spin_dot_size.value())
+        title_txt = self.title_lineedit.text().strip() or None
+
+        # --- VALIDATE title keywords against ppdf.TrialTitle().keywords ---
+        if title_txt:
+            import re
+            requested = set(re.findall(r"\{(\w+)\}", title_txt))
+            allowed = set(ppdf.TrialTitle().keywords)
+            invalid = sorted(requested - allowed)
+            if invalid:
+                msg = 'Unknown keyword(s) in "Trial Title" definition: {}\n'.format(", ".join(invalid)) + \
+                      'Allowed keywords are: {}'.format(", ".join(sorted(allowed)))
+                QMessageBox.critical(self, 'Invalid keyword in trial title', msg)
+                return
+
+        cfg = ppdf.PdfPlotterConfig(
+            bounding_box=bounding_box,
+            char_order=char_order,
+            temporal_gaps=temporal_gaps,
+            fraction_of_x_points=fx,
+            fraction_of_y_points=fy,
+            cols_per_page=cols,
+            rows_per_page=rows,
+            trial_title=ppdf.TrialTitle(title=title_txt),
+            dot_size=dot_size
+        )
+
         self.generating = True
         self.close()
-        progress_dialog = PreparePdfProgressDialog(input_dirs, output_dir)
+        progress_dialog = PreparePdfProgressDialog(input_dirs, output_dir, cfg)
         progress_dialog.start_plotting()
         progress_dialog.exec_()
 
@@ -238,11 +423,12 @@ class PreparePdfProgressDialog(QDialog):
     """
 
     #--------------------------------------------------------------------------
-    def __init__(self, input_dirs, target_dir):
+    def __init__(self, input_dirs, target_dir, config):
         super().__init__()
         self.setWindowTitle("WriTracker: pdf Plotter")
         self.target_dir = target_dir
         self.input_dirs = input_dirs
+        self.config = config
 
         self.resize(500, 350)
 
@@ -271,7 +457,7 @@ class PreparePdfProgressDialog(QDialog):
         button_layout.addWidget(self.btn_cancel)
         layout.addLayout(button_layout)
 
-        uiu.add_copyright_msg(layout)
+        uiu.add_copyright_msg(layout, 2025, 'Dror Dotan')
 
         # noinspection PyUnresolvedReferences
         self.btn_reveal.clicked.connect(self.reveal_in_finder)
@@ -316,7 +502,7 @@ class PreparePdfProgressDialog(QDialog):
 
     #--------------------------------------------------------------------------
     def start_plotting(self):
-        self.plotter = MultiPlotter(self.input_dirs, self.target_dir, config=ppdf.PdfPlotterConfig(),
+        self.plotter = MultiPlotter(self.input_dirs, self.target_dir, config=self.config,
                                     signaller=Signaller().connect_signals(self))
         self.runner = PlotRunner(self.plotter, self)
         self.runner.start()
@@ -411,7 +597,7 @@ class MultiPlotter(ppdf.MultiFilePdfPlotter):
 class Plotter(ppdf.OneFilePdfPlotter):
 
     def __init__(self, ds_dir_name, out_fn, config, signaller):
-        super().__init__(input=ds_dir_name, out_fn=out_fn, config=config)
+        super().__init__(ds_spec=ds_dir_name, out_fn=out_fn, config=config)
         self.signaller = signaller
 
     def init_progress_bar(self):

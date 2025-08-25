@@ -19,10 +19,11 @@ def screen_size(only_available_area=True):
 
 
 #-----------------------------------------------------------------------------------------
-def add_copyright_msg(layout):
+def add_copyright_msg(layout, year, names):
     row = qw.QHBoxLayout()
     row.setAlignment(Qt.AlignCenter)
-    row.addWidget(qw.QLabel('Copyright © 2020 to Dror Dotan, Maya Yachini, Ron Diskin, Ron Levy'))
+    s_names = names if isinstance(names, str) else 'to ' + ', '.join(names)
+    row.addWidget(qw.QLabel(f'copyright © {year} {s_names}'))
     mtl_label = qw.QLabel('<a href="http://mathinklab.org/writracker">mathinklab.org</a>')
     mtl_label.setOpenExternalLinks(True)
     mtl_label.setTextFormat(Qt.RichText)

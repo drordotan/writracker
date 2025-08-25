@@ -79,9 +79,8 @@ class SelectFilesDialog(QDialog):
 
         # --- Parameters ---
         params_group = QGroupBox("Parameters")
-        form = QFormLayout()
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(6)
+        params_vbox = QVBoxLayout()
+        params_vbox.setSpacing(6)
 
         # helpers: clickable help link and row builder
         def help_link(text):
@@ -90,8 +89,10 @@ class SelectFilesDialog(QDialog):
             link.setTextFormat(Qt.RichText)
             link.setOpenExternalLinks(False)
             link.setFixedWidth(16)
+
             def _click():
                 QMessageBox.information(self, "Help", text)
+
             link.linkActivated.connect(lambda _: _click())
             return link
 
@@ -103,58 +104,48 @@ class SelectFilesDialog(QDialog):
             h.addWidget(help_link(helptext), 0)
             return w
 
-        # Speedup factor
-        self.spin_speedup = NoIMEDoubleSpinBox()
-        self.spin_speedup.setRange(0.1, 10.0)
-        self.spin_speedup.setSingleStep(0.1)
-        self.spin_speedup.setValue(1.0)
-        help_speed = "Multiply playback speed. 1.0 = real time; 2.0 = twice as fast. Range: 0.1–10."
-        lbl_speed = QLabel("Speedup factor")
-        lbl_speed.setToolTip(help_speed)
-        self.spin_speedup.setToolTip(help_speed)
-        form.addRow(lbl_speed, row_with_help(self.spin_speedup, help_speed))
+        def hline():
+            line = QWidget()
+            line.setFixedHeight(1)
+            line.setStyleSheet("background-color: #C0C0C0;")
+            return line
 
-        # End-of-trial delay
-        self.spin_end_delay = NoIMEDoubleSpinBox()
-        self.spin_end_delay.setRange(0.0, 20.0)
-        self.spin_end_delay.setSingleStep(0.1)
-        self.spin_end_delay.setValue(0.5)
-        help_end = "Pause on the last frame of each trial before ending the trial."
-        lbl_end = QLabel("End-of-trial delay (seconds)")
-        lbl_end.setToolTip(help_end)
-        self.spin_end_delay.setToolTip(help_end)
-        form.addRow(lbl_end, row_with_help(self.spin_end_delay, help_end))
+        # --- Picture section ---
+        params_vbox.addWidget(hline())
+        lbl_sec_pic = QLabel("<b>Picture</b>")
+        params_vbox.addWidget(lbl_sec_pic)
+        pic_form = QFormLayout()
+        pic_form.setHorizontalSpacing(12)
+        pic_form.setVerticalSpacing(6)
 
-        # Inter-trial delay
-        self.spin_inter_delay = NoIMEDoubleSpinBox()
-        self.spin_inter_delay.setRange(0.0, 20.0)
-        self.spin_inter_delay.setSingleStep(0.1)
-        self.spin_inter_delay.setValue(0.2)
-        help_inter = "Blank screen between trials."
-        lbl_inter = QLabel("Inter-trial delay (seconds)")
-        lbl_inter.setToolTip(help_inter)
-        self.spin_inter_delay.setToolTip(help_inter)
-        form.addRow(lbl_inter, row_with_help(self.spin_inter_delay, help_inter))
-
-        # FPS
-        self.spin_fps = NoIMESpinBox()
-        self.spin_fps.setRange(1, 30)
-        self.spin_fps.setValue(20)
-        help_fps = "Video frame rate. Higher = smoother but larger file."
-        lbl_fps = QLabel("Frames per second")
-        lbl_fps.setToolTip(help_fps)
-        self.spin_fps.setToolTip(help_fps)
-        form.addRow(lbl_fps, row_with_help(self.spin_fps, help_fps))
+        # Background color
+        self.combo_bg = QComboBox()
+        self.combo_bg.addItems(["White", "Black"])
+        help_bg = "White = black/gray ink on white; Black = inverted (white/gray ink on black)."
+        lbl_bg = QLabel("Background color")
+        lbl_bg.setToolTip(help_bg)
+        self.combo_bg.setToolTip(help_bg)
+        #pic_form.addRow(lbl_bg, row_with_help(self.combo_bg, help_bg))
 
         # Dot size
         self.spin_dot_size = NoIMESpinBox()
         self.spin_dot_size.setRange(1, 30)
         self.spin_dot_size.setValue(5)
-        help_dot = "Marker size for plotted points (visual ‘ink’ thickness)."
+        help_dot = "Size of the plotted points."
         lbl_dot = QLabel("Dot size")
         lbl_dot.setToolTip(help_dot)
         self.spin_dot_size.setToolTip(help_dot)
-        form.addRow(lbl_dot, row_with_help(self.spin_dot_size, help_dot))
+
+        # Background color + Dot size on one row
+        bg_dot_row = QWidget()
+        bg_dot = QHBoxLayout(bg_dot_row)
+        bg_dot.setContentsMargins(0, 0, 0, 0)
+        bg_dot.addWidget(row_with_help(self.combo_bg, help_bg))
+        bg_dot.addSpacing(12)
+        bg_dot.addWidget(QLabel("Dot size"))
+        bg_dot.addWidget(row_with_help(self.spin_dot_size, help_dot))
+        bg_dot.addStretch(1)
+        pic_form.addRow(lbl_bg, bg_dot_row)
 
         # Pressure threshold
         self.spin_pressure = NoIMESpinBox()
@@ -165,38 +156,7 @@ class SelectFilesDialog(QDialog):
         lbl_press = QLabel("Maximal pressure value")
         lbl_press.setToolTip(help_press)
         self.spin_pressure.setToolTip(help_press)
-        form.addRow(lbl_press, row_with_help(self.spin_pressure, help_press))
-
-        # Background color
-        self.combo_bg = QComboBox()
-        self.combo_bg.addItems(["White", "Black"])
-        help_bg = "White = black/gray ink on white; Black = inverted (white/gray ink on black)."
-        lbl_bg = QLabel("Background color")
-        lbl_bg.setToolTip(help_bg)
-        self.combo_bg.setToolTip(help_bg)
-        form.addRow(lbl_bg, row_with_help(self.combo_bg, help_bg))
-
-        # Movie maximal size (plot_area_max_size)
-        size_row_widget = QWidget()
-        size_row = QHBoxLayout(size_row_widget)
-        size_row.setContentsMargins(0, 0, 0, 0)
-        size_row.addWidget(QLabel("width:"))
-        self.spin_max_w = NoIMEDoubleSpinBox()
-        self.spin_max_w.setRange(0.5, 50.0)
-        self.spin_max_w.setSingleStep(0.5)
-        self.spin_max_w.setValue(5.0)
-        size_row.addWidget(self.spin_max_w)
-        size_row.addSpacing(12)
-        size_row.addWidget(QLabel("height:"))
-        self.spin_max_h = NoIMEDoubleSpinBox()
-        self.spin_max_h.setRange(0.5, 50.0)
-        self.spin_max_h.setSingleStep(0.5)
-        self.spin_max_h.setValue(4.0)
-        size_row.addWidget(self.spin_max_h)
-        help_size = "Maximal plot area (inches) used for the dots region before margins; controls scale relative to dot size."
-        lbl_size = QLabel("Video max. size (inches)")
-        lbl_size.setToolTip(help_size)
-        form.addRow(lbl_size, row_with_help(size_row_widget, help_size))
+        pic_form.addRow(lbl_press, row_with_help(self.spin_pressure, help_press))
 
         # Title row
         title_row_widget = QWidget()
@@ -214,9 +174,103 @@ class SelectFilesDialog(QDialog):
         title_row.addWidget(self.title_lineedit)
         title_row.addWidget(help_link(help_trial_title))
         title_row.addWidget(self.btn_preview_titles)
-        form.addRow(QLabel("Trial title"), title_row_widget)
+        pic_form.addRow(QLabel("Trial title"), title_row_widget)
 
-        params_group.setLayout(form)
+        # Title font size
+        self.spin_title_font = NoIMESpinBox()
+        self.spin_title_font.setRange(4, 72)
+        self.spin_title_font.setValue(8)
+        help_title_font = "Font size (points) for the trial title."
+        lbl_title_font = QLabel("Title font size")
+        lbl_title_font.setToolTip(help_title_font)
+        self.spin_title_font.setToolTip(help_title_font)
+        pic_form.addRow(lbl_title_font, row_with_help(self.spin_title_font, help_title_font))
+
+        params_vbox.addLayout(pic_form)
+
+        # --- Animation section ---
+        params_vbox.addWidget(hline())
+        lbl_sec_anim = QLabel("<b>Animation</b>")
+        params_vbox.addWidget(lbl_sec_anim)
+        anim_form = QFormLayout()
+        anim_form.setHorizontalSpacing(12)
+        anim_form.setVerticalSpacing(6)
+
+        # Speedup factor
+        self.spin_speedup = NoIMEDoubleSpinBox()
+        self.spin_speedup.setRange(0.1, 10.0)
+        self.spin_speedup.setSingleStep(0.1)
+        self.spin_speedup.setValue(1.0)
+        help_speed = "Multiply playback speed. 1.0 = real time; 2.0 = twice as fast. Range: 0.1–10."
+        lbl_speed = QLabel("Speedup factor")
+        lbl_speed.setToolTip(help_speed)
+        self.spin_speedup.setToolTip(help_speed)
+        anim_form.addRow(lbl_speed, row_with_help(self.spin_speedup, help_speed))
+
+        # End-of-trial delay (seconds)
+        self.spin_end_delay = NoIMEDoubleSpinBox()
+        self.spin_end_delay.setRange(0.0, 20.0)
+        self.spin_end_delay.setSingleStep(0.1)
+        self.spin_end_delay.setValue(0.5)
+        help_end = "Pause on the last frame of each trial before ending the trial."
+        lbl_end = QLabel("End-of-trial delay (seconds)")
+        lbl_end.setToolTip(help_end)
+        self.spin_end_delay.setToolTip(help_end)
+        anim_form.addRow(lbl_end, row_with_help(self.spin_end_delay, help_end))
+
+        # Inter-trial delay
+        self.spin_inter_delay = NoIMEDoubleSpinBox()
+        self.spin_inter_delay.setRange(0.0, 20.0)
+        self.spin_inter_delay.setSingleStep(0.1)
+        self.spin_inter_delay.setValue(0.2)
+        help_inter = "Pause between trials on a blank screen."
+        lbl_inter = QLabel("Inter-trial delay (seconds)")
+        lbl_inter.setToolTip(help_inter)
+        self.spin_inter_delay.setToolTip(help_inter)
+        anim_form.addRow(lbl_inter, row_with_help(self.spin_inter_delay, help_inter))
+
+        params_vbox.addLayout(anim_form)
+
+        # --- Output video section ---
+        params_vbox.addWidget(hline())
+        lbl_sec_out = QLabel("<b>Output video</b>")
+        params_vbox.addWidget(lbl_sec_out)
+        out_form = QFormLayout()
+        out_form.setHorizontalSpacing(12)
+        out_form.setVerticalSpacing(6)
+
+        # FPS
+        self.spin_fps = NoIMESpinBox()
+        self.spin_fps.setRange(1, 30)
+        self.spin_fps.setValue(20)
+        help_fps = "Video frame rate. Higher = smoother but larger file."
+        lbl_fps = QLabel("Frames per second")
+        lbl_fps.setToolTip(help_fps)
+        self.spin_fps.setToolTip(help_fps)
+        out_form.addRow(lbl_fps, row_with_help(self.spin_fps, help_fps))
+
+        # Video max size (inches): width x height
+        size_row_widget = QWidget()
+        size_row = QHBoxLayout(size_row_widget)
+        size_row.setContentsMargins(0, 0, 0, 0)
+        self.spin_max_w = NoIMEDoubleSpinBox()
+        self.spin_max_w.setRange(0.5, 50.0)
+        self.spin_max_w.setSingleStep(0.5)
+        self.spin_max_w.setValue(5.0)
+        size_row.addWidget(self.spin_max_w)
+        self.spin_max_h = NoIMEDoubleSpinBox()
+        self.spin_max_h.setRange(0.5, 50.0)
+        self.spin_max_h.setSingleStep(0.5)
+        self.spin_max_h.setValue(4.0)
+        size_row.addWidget(self.spin_max_h)
+        help_size = "Maximal plot area (inches) used for the dots region before margins; controls scale relative to dot size."
+        lbl_size = QLabel("Video max. size (inches)")
+        lbl_size.setToolTip(help_size)
+        out_form.addRow(lbl_size, row_with_help(size_row_widget, help_size))
+
+        params_vbox.addLayout(out_form)
+
+        params_group.setLayout(params_vbox)
         main_layout.addWidget(params_group)
 
         # --- Start button ---
@@ -224,7 +278,7 @@ class SelectFilesDialog(QDialog):
         self.btn_prepare_movie.setEnabled(False)
         main_layout.addWidget(self.btn_prepare_movie)
 
-        uiu.add_copyright_msg(main_layout)
+        uiu.add_copyright_msg(main_layout, 2025, 'Dror Dotan')
 
         self._disable_ime_on_editors()
         self.init_button_operations()
@@ -324,6 +378,7 @@ class SelectFilesDialog(QDialog):
             black_pressure=self.spin_pressure.value(),
             invert=(self.combo_bg.currentText() == "Black"),
             plot_area_max_size=(self.spin_max_w.value(), self.spin_max_h.value()),
+            title_font_size=self.spin_title_font.value(),
         )
 
         title_format = self.title_lineedit.text().strip()

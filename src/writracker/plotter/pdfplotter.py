@@ -1,7 +1,7 @@
 """
 Plot an experiment to a pdf file
 """
-
+import numbers
 import math
 import os.path
 import re
@@ -19,11 +19,8 @@ import writracker.encoder.dataio as dio
 class PdfPlotterConfig(object):
 
     def __init__(self, bounding_box=False, char_order=False, temporal_gaps=False, fraction_of_x_points=None, fraction_of_y_points=None,
-                 cols_per_page=2, rows_per_page=5, n_colors=10, trial_title=None, description=None):
+                 cols_per_page=2, rows_per_page=5, n_colors=10, trial_title=None, description=None, dot_size=2):
         """
-        :param trials: either a list of CodedTrial objects or an Experiment object (coded)
-        :param out_fn: PDF file name
-        :param max_trials: Plot only the first trials in the experiment
         :param bounding_box: plot bounding box for each character (True/False)
         :param char_order: Write the order of writing each character (possible only if bounding_box = True)
         :param temporal_gaps: Plot temporal gaps between adjacent characters (True/False)
@@ -45,6 +42,7 @@ class PdfPlotterConfig(object):
         self.cols_per_page = cols_per_page
         self.rows_per_page = rows_per_page
         self.n_colors = n_colors
+        self.dot_size = dot_size
         self.get_trial_title = trial_title or TrialTitle()
         self.description = None if description is None or str(description).strip() == '' else description
 
@@ -59,7 +57,7 @@ class MultiFilePdfPlotter(object):
 
     def __init__(self, input_dirs, out_path, config=None):
         """
-        :param config: PdfPlotterConfig object
+        :param config: plotting configuration parameters (PdfPlotterConfig object)
         """
         self.input_dirs = input_dirs
         self.out_path = out_path
@@ -75,7 +73,6 @@ class MultiFilePdfPlotter(object):
 
             self.on_ds_started(i, ds_dir_name)
 
-            exp = dio.load_experiment(ds_dir_name)
             out_fn = os.path.basename(ds_dir_name)
             try:
                 self.current_file_plotter = self.create_one_file_plotter(ds_dir_name,
@@ -107,16 +104,17 @@ class MultiFilePdfPlotter(object):
         if self.current_file_plotter is not None:
             self.current_file_plotter.keep_working = False
 
+
 #------------------------------------------------------------------------------
-# noinspection PyMethodMayBeStatic
+# noinspection PyMethodMayBeStatic,PyAttributeOutsideInit
 class OneFilePdfPlotter(object):
     """
     Plot one experiment to pdf
     """
 
-    def __init__(self, input, out_fn, max_trials=None, config=None):
+    def __init__(self, ds_spec, out_fn, max_trials=None, config=None):
         """
-        :param input: a list of CodedTrial objects, an Experiment object (coded), or a directory name (string)
+        :param ds_spec: a list of CodedTrial objects, an Experiment object (coded), or a directory name (string)
         :param out_fn: PDF file name
         :param max_trials: Plot only the first trials in the experiment
         """
@@ -124,18 +122,18 @@ class OneFilePdfPlotter(object):
         self.out_fn = out_fn
         self.max_trials = max_trials
         self.keep_working = True
-        self.input = input
+        self.ds_spec = ds_spec
 
     #------------------------------------------------------------------------------
     # noinspection PyAttributeOutsideInit
     def init(self):
 
-        if hasattr(self.input, 'sorted_trials'):
-            self.trials = list(self.input.sorted_trials)
-        elif isinstance(self.input, str):
-            self.trials = dio.load_experiment(self.input).sorted_trials
-        elif isinstance(self.input, list):
-            self.trials = self.input
+        if hasattr(self.ds_spec, 'sorted_trials'):
+            self.trials = list(self.ds_spec.sorted_trials)
+        elif isinstance(self.ds_spec, str):
+            self.trials = dio.load_experiment(self.ds_spec).sorted_trials
+        elif isinstance(self.ds_spec, list):
+            self.trials = self.ds_spec
         else:
             raise ValueError('Input must be a list of CodedTrial objects, an Experiment object (coded), or a directory name (string)')
 
@@ -143,19 +141,12 @@ class OneFilePdfPlotter(object):
             raise ValueError('No trials to plot')
 
         if self.max_trials is not None:
-            trials = self.trials[:min(self.max_trials, len(self.trials))]
+            self.trials = self.trials[:min(self.max_trials, len(self.trials))]
 
     #------------------------------------------------------------------------------
     def plot(self):
         """
         Plot the experiment raw data - the characters, as the subject wrote them - and save to a PDF file.
-
-        :param trials: either a list of CodedTrial objects or an Experiment object (coded)
-        :param out_fn: PDF file name
-        :param cols_per_page: No. of trial columns in each page
-        :param rows_per_page: No. of trial rows in each page
-        :param n_colors: No. of colors to use to denote level of pressure
-        :param max_trials: Plot only the first trials in the experiment
         """
 
         if not hasattr(self, 'trials'):
@@ -267,7 +258,7 @@ class OneFilePdfPlotter(object):
                 #c = int(minz/10)
                 #mult = c if (c>3 and c< 5) else 3
                 #color = (color, ) * (int(mult))
-                ax.scatter(x[inds], y[inds], color=color, s=4)
+                ax.scatter(x[inds], y[inds], color=color, s=self.config.dot_size**2)
 
     #-------------------------------------------------------------
     def _draw_trial_rectangles(self, trial, ax):
@@ -344,20 +335,30 @@ def _trial_stim(trial):
 
 #---------------------------------------------------
 def _trial_response(trial):
-    if str(trial.stimulus) == str(trial.response):
-        return '='
-    else:
-        return str(trial.response)
+    stim = _to_str(trial.stimulus)
+    resp = _to_str(trial.response)
+    return '=' if stim == resp else resp
 
 
 #-------------------------------------------------------------
+# noinspection PyTypeChecker
+def _to_str(val):
+    if isinstance(val, numbers.Number) and val == int(val):
+        val = int(val)
+    if isinstance(val, str) and re.match(r'^\d+\.0$', val):
+        val = val[:-2]
+    return str(val)
+
+
+#-------------------------------------------------------------
+# noinspection PyAttributeOutsideInit
 class TrialTitle(object):
     """
     Default way to write the title of a trial in the PDF plotter. You can change the format by setting the `format` property and using keywords.
     """
 
     #---------------------------------------------------
-    def __init__(self, format='Trial {trial_id}(#{target_id}): {stimulus}', additional_keywords=None):
+    def __init__(self, title='Trial {trial_id}(#{target_id}): {stimulus}', additional_keywords=None):
         self.keywords = dict(
                 block=lambda trial: str(trial.block),
                 trial_id=lambda trial: str(trial.trial_id),
@@ -370,17 +371,17 @@ class TrialTitle(object):
         )
         if additional_keywords is not None:
             self.keywords.update(additional_keywords)
-        self.format = format
+        self.title = title
 
     #---------------------------------------------------
     @property
-    def format(self):
-        return self._format
+    def title(self):
+        return self._title
 
-    @format.setter
-    def format(self, value):
+    @title.setter
+    def title(self, value):
         self.set_keyword_appliers(value)
-        self._format = value
+        self._title = value
 
     #---------------------------------------------------
     def set_keyword_appliers(self, title_format):
@@ -400,7 +401,7 @@ class TrialTitle(object):
 
     #---------------------------------------------------
     def __call__(self, trial):
-        title = self.format
+        title = self.title
         for keyword, applier in self.keyword_appliers.items():
             title = title.replace(keyword, applier(trial))
 

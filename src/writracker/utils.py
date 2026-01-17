@@ -84,6 +84,15 @@ def newline():
 
 #------------------------------------------
 def parse_int(arg_name, arg_value, err_location='configuration file', allow_empty=False):
+    if isinstance(arg_value, int):
+        return arg_value
+
+    if isinstance(arg_value, float):
+        if arg_value.is_integer():
+            return int(arg_value)
+        else:
+            raise ValueError('Invalid parameter {:} in {:}: expecting a whole number, got "{:}"'.format(arg_name, err_location, arg_value))
+
     arg_value = arg_value.strip()
     if arg_value == '' and allow_empty:
         return None

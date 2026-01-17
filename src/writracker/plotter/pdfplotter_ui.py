@@ -1,12 +1,13 @@
 import sys
 import os
+import re
 import subprocess
 import traceback
 import warnings
 from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
                              QListWidget, QPushButton, QFileDialog, QAbstractItemView,
                              QLabel, QLineEdit, QMessageBox, QProgressBar, QTextEdit,
-                             QGroupBox, QFormLayout, QComboBox, QDoubleSpinBox, QSpinBox, QWidget)
+                             QGroupBox, QFormLayout, QComboBox, QDoubleSpinBox, QSpinBox, QWidget, QCheckBox)
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, Qt
 
 import writracker.plotter.pdfplotter as ppdf
@@ -108,8 +109,16 @@ class SelectFilesDialog(QDialog):
             w = QWidget()
             h = QHBoxLayout(w)
             h.setContentsMargins(0, 0, 0, 0)
+            h.addWidget(widget, alignment=Qt.AlignLeft)
+            h.addWidget(help_link(helptext), alignment=Qt.AlignLeft)
+            h.addStretch()
+            return w
+
+        def align_left(widget):
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 0, 0)
             h.addWidget(widget, 1)
-            h.addWidget(help_link(helptext), 0)
             return w
 
         # --- Contents section ---
@@ -119,15 +128,21 @@ class SelectFilesDialog(QDialog):
         contents_form.setHorizontalSpacing(12)
         contents_form.setVerticalSpacing(6)
 
-        # 1) Bounding box (Yes/No) + percentages for X/Y to the right
-        self.combo_bounding_box = QComboBox()
-        self.combo_bounding_box.addItems(["No", "Yes"])
-        help_bb = ("Display each character's bounding box. "
-                   "You can specify the fraction of pixels that would fit in the bounding box, separately for the x/y axes (100% = all pixels)")
+        # Show out-of-char strokes?
+        self.show_out_of_char_strokes = QCheckBox('Plot deleted strokes')
+        self.show_out_of_char_strokes.setChecked(False)
+        contents_form.addRow(self.show_out_of_char_strokes)
+
+        # Bounding box (Yes/No) + percentages for X/Y to the right
+        self.show_bounding_box = QCheckBox('Display bounding box for each character')
+        self.show_bounding_box.setChecked(False)
+        self.show_bounding_box.toggled.connect(self.on_show_bounding_box_changed)
+
+        help_bb = ("You can specify the fraction of pixels that would fit in the bounding box, separately for the x/y axes (100% = all pixels)")
         bb_row_widget = QWidget()
         bb_row = QHBoxLayout(bb_row_widget)
         bb_row.setContentsMargins(0, 0, 0, 0)
-        bb_row.addWidget(self.combo_bounding_box)
+        bb_row.addWidget(self.show_bounding_box)
         bb_row.addSpacing(12)
         lbl_pct = QLabel("% of pixels in the b.box:")
         lbl_pct.setToolTip(help_bb)
@@ -147,19 +162,19 @@ class SelectFilesDialog(QDialog):
         bb_row.addWidget(self.spin_frac_x)
         bb_row.addWidget(self.spin_frac_y)
         bb_row.addStretch()
-        contents_form.addRow(QLabel("Character bounding box"), row_with_help(bb_row_widget, help_bb))
+        contents_form.addRow(row_with_help(bb_row_widget, help_bb))
 
         # 2) Character order (Yes/No)
-        self.combo_char_order = QComboBox()
-        self.combo_char_order.addItems(["No", "Yes"])
+        self.show_char_writing_order = QCheckBox('Show character writing order')
+        self.show_char_writing_order.setChecked(False)
+        self.show_char_writing_order.toggled.connect(self.on_show_char_writing_order_changed)
         help_order = "Overlay an index showing the order in which the participant wrote each character."
-        contents_form.addRow(QLabel("Character writing order"), row_with_help(self.combo_char_order, help_order))
+        contents_form.addRow(row_with_help(self.show_char_writing_order, help_order))
 
         # 3) Temporal gaps (Yes/No)
-        self.combo_temporal_gaps = QComboBox()
-        self.combo_temporal_gaps.addItems(["No", "Yes"])
+        self.temporal_gaps = QCheckBox('Show Inter-character temporal gaps')
         help_gaps = "Display the inter-character temporal gaps on the page."
-        contents_form.addRow(QLabel("Inter-character temporal gaps"), row_with_help(self.combo_temporal_gaps, help_gaps))
+        contents_form.addRow(row_with_help(self.temporal_gaps, help_gaps), QLabel())
 
         # 4) Trial title — identical style to the other app (line edit + '?' help; preview button removed)
         ttip_trial_title = ('The title to show on each trial (empty = no title). You can use {keyword} for trial-specific values')
@@ -187,12 +202,33 @@ class SelectFilesDialog(QDialog):
 
         params_vbox.addLayout(contents_form)
 
-        # --- Page looks section ---
+        #--------------- Page looks section ----------------
+
         params_vbox.addWidget(hline())
         params_vbox.addWidget(QLabel("<b>Page looks</b>"))
         looks_form = QFormLayout()
         looks_form.setHorizontalSpacing(12)
         looks_form.setVerticalSpacing(6)
+
+        # Use real x/y proportions
+        self.real_xy_proportions = QCheckBox('Use the real x/y proportions')
+        self.real_xy_proportions.setChecked(True)
+        help_proportions = ('By default, the plotted responses reflect the real x/y proportions, as written on the tablet.\n' +
+                            'Uncheck this to use the whole print area for plotting the response, ' +
+                            'irrespective of its real proportions.\n' +
+                            'Even when the checkbox is checked, it is ignored for trials with extremely disproportionate ' +
+                            'bounding boxes (an orange border in the output PDF marks these trials).')
+        looks_form.addRow(row_with_help(self.real_xy_proportions, help_proportions), QLabel())
+
+        # Mirror x
+        self.mirror_x = QCheckBox("Mirror on X axis")
+        self.mirror_x.setChecked(False)
+        looks_form.addRow(self.mirror_x)
+
+        self.mirror_y = QCheckBox("Mirror on Y axis")
+        self.mirror_y.setChecked(False)
+        looks_form.addRow(self.mirror_y)
+
 
         # Dot size
         self.spin_dot_size = QDoubleSpinBox()
@@ -228,8 +264,7 @@ class SelectFilesDialog(QDialog):
 
         self.init_button_operations()
         # Enable/disable fraction fields depending on bounding-box toggle
-        self.combo_bounding_box.currentIndexChanged.connect(self.update_fraction_enabled)
-        self.update_fraction_enabled()
+        self.on_show_bounding_box_changed()
 
         self.generating = False
 
@@ -252,10 +287,17 @@ class SelectFilesDialog(QDialog):
         self.btn_prepare_pdf.clicked.connect(self.on_clicked_prepare_pdf)
 
     #--------------------------------------------------------------------------
-    def update_fraction_enabled(self):
-        enable = (self.combo_bounding_box.currentText() == "Yes")
-        self.spin_frac_x.setEnabled(enable)
-        self.spin_frac_y.setEnabled(enable)
+    def on_show_bounding_box_changed(self):
+        show = self.show_bounding_box.isChecked()
+        if not show:
+            self.show_char_writing_order.setChecked(False)
+        self.spin_frac_x.setEnabled(show)
+        self.spin_frac_y.setEnabled(show)
+
+    #--------------------------------------------------------------------------
+    def on_show_char_writing_order_changed(self):
+        if self.show_char_writing_order.isChecked():
+            self.show_bounding_box.setChecked(True)
 
     #--------------------------------------------------------------------------
     def on_clicked_remove_selected(self):
@@ -373,12 +415,9 @@ class SelectFilesDialog(QDialog):
                 return
 
         # ------ collect parameters -> PdfPlotterConfig ------
-        bounding_box = (self.combo_bounding_box.currentText() == "Yes")
-        char_order = (self.combo_char_order.currentText() == "Yes")
-        temporal_gaps = (self.combo_temporal_gaps.currentText() == "Yes")
         # Convert percent spinners to fractions in [0,1]
-        fx = self.spin_frac_x.value() / 100.0 if bounding_box else None
-        fy = self.spin_frac_y.value() / 100.0 if bounding_box else None
+        fx = self.spin_frac_x.value() / 100.0 if self.show_bounding_box.isChecked() else None
+        fy = self.spin_frac_y.value() / 100.0 if self.show_bounding_box.isChecked() else None
         cols = self.spin_cols.value()
         rows = self.spin_rows.value()
         dot_size = float(self.spin_dot_size.value())
@@ -386,26 +425,28 @@ class SelectFilesDialog(QDialog):
 
         # --- VALIDATE title keywords against ppdf.TrialTitle().keywords ---
         if title_txt:
-            import re
-            requested = set(re.findall(r"\{(\w+)\}", title_txt))
-            allowed = set(ppdf.TrialTitle().keywords)
-            invalid = sorted(requested - allowed)
-            if invalid:
-                msg = 'Unknown keyword(s) in "Trial Title" definition: {}\n'.format(", ".join(invalid)) + \
+            invalid_kw = ppdf.TrialTitle().get_formatters(title_txt, return_invalid_keywords=True)
+            if len(invalid_kw) > 0:
+                allowed = {formatter.keyword for formatter in ppdf.TrialTitle().all_title_formatters}
+                msg = 'Unknown keyword(s) in "Trial Title" definition: {}\n'.format(", ".join(invalid_kw)) + \
                       'Allowed keywords are: {}'.format(", ".join(sorted(allowed)))
                 QMessageBox.critical(self, 'Invalid keyword in trial title', msg)
                 return
 
         cfg = ppdf.PdfPlotterConfig(
-            bounding_box=bounding_box,
-            char_order=char_order,
-            temporal_gaps=temporal_gaps,
-            fraction_of_x_points=fx,
-            fraction_of_y_points=fy,
-            cols_per_page=cols,
-            rows_per_page=rows,
-            trial_title=ppdf.TrialTitle(title=title_txt),
-            dot_size=dot_size
+                bounding_box=self.show_bounding_box.isChecked(),
+                char_order=self.show_char_writing_order.isChecked(),
+                temporal_gaps=self.temporal_gaps.isChecked(),
+                fraction_of_x_points=fx,
+                fraction_of_y_points=fy,
+                cols_per_page=cols,
+                rows_per_page=rows,
+                trial_title=ppdf.TrialTitle(title=title_txt),
+                dot_size=dot_size,
+                mirror_x=self.mirror_x.isChecked(),
+                mirror_y=self.mirror_y.isChecked(),
+                plot_out_of_char_strokes=self.show_out_of_char_strokes,
+                real_proportions=self.real_xy_proportions.isChecked(),
         )
 
         self.generating = True

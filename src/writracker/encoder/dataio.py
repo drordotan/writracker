@@ -29,6 +29,7 @@ def load_experiment(dir_names, block_nums=None, trial_index_filter=None):
     Load full experiment (including trajectories)
 
     :param dir_names: The directory with WEncoder data, or a list of directories
+    :param block_nums: If provided, a list of block numbers to assign to each directory in the 'dir_names' argument
     :param trial_index_filter: A function that gets a trials.csv row (as dict) and returns T/F (whether to load it or not)
     """
 
@@ -61,7 +62,8 @@ def load_experiment(dir_names, block_nums=None, trial_index_filter=None):
             if not _load_trajectory(traj_filename, trial_strokes):
                 continue
 
-            characters = _create_characters(trial_strokes, trial_spec['trial_id'], trial_spec['target_id'])
+            characters = _create_characters(trial_strokes, trial_spec['trial_id'], trial_spec['target_id'],
+                                            trial_spec['rc'] == 'OK', trial_spec['response'])
 
             if block_nums is None:
                 out_block_num = block_num + 1 if multi_dir else None
@@ -99,7 +101,7 @@ def is_encoder_results_directory(dir_name):
     with open(index_fn, 'r') as fp:
         reader = csv.DictReader(fp)
         try:
-            u.validate_csv_format(index_fn, reader, trials_index_cols)
+            u.validate_csv_format(index_fn, reader.fieldnames, trials_index_cols)
         except ValueError:
             return False
 
@@ -120,21 +122,24 @@ def _load_trials_index(dir_name):
     if not os.path.isfile(index_fn):
         return []
 
-    with open(index_fn, 'r', encoding="utf-8", errors='ignore') as fp:
-        reader = csv.DictReader(fp)
-        u.validate_csv_format(index_fn, reader, ['trial_id', 'sub_trial_num'])
+    df = pd.read_csv(index_fn, encoding="utf-8", dtype=dict(response='string'))
 
-        result = []
-        for row in reader:
-            location = 'line {} in {}'.format(reader.line_num, index_fn)
+    missing_fields = [f for f in ['trial_id', 'sub_trial_num', 'response'] if f not in df]
+    if len(missing_fields) > 0:
+        raise ValueError(f'Invalid format for {index_fn}: the file does not contain the field/s {", ".join(missing_fields)}')
 
-            row['trial_id'] = u.parse_int('trial_id', row['trial_id'], location)
-            row['sub_trial_num'] = u.parse_int('sub_trial_num', row['sub_trial_num'], location)
+    df.response = df.response.fillna('').str.replace(r'\.0$', '', regex=True)
+    if 'sound_file_length' in df:
+        df.sound_file_length = df.sound_file_length.fillna(0)
 
-            if 'sound_file_length' in row and (row['sound_file_length'] is None or row['sound_file_length'] == ""):
-                row['sound_file_length'] = "0"
+    result = []
+    for i, row in df.iterrows():
+        location = 'line {} in {}'.format(i+2, os.path.basename(index_fn))  # type: ignore
 
-            result.append(row)
+        row.trial_id = u.parse_int('trial_id', row.trial_id, location)
+        row.sub_trial_num = u.parse_int('sub_trial_num', row.sub_trial_num, location)
+
+        result.append(row)
 
     return result
 
@@ -323,11 +328,14 @@ def append_to_characters_file(out_dir, raw_trial, sub_trial_num, trial_rc, respo
 
 
 #--------------------------------------------------------------------------------------------------------------------
-def _create_characters(strokes, trial_id, target_id):
+def _create_characters(strokes, trial_id, target_id, trial_rc_ok=False, response=None):
 
     characters = _create_characters_without_spaces(strokes, trial_id)
     _validate_consecutive_char_numbers(characters, trial_id, target_id)
     _update_between_char_spaces(characters, strokes)
+
+    if response is not None:
+        _update_response_characters(characters, response, trial_id, target_id, trial_rc_ok)
 
     return characters
 
@@ -349,9 +357,10 @@ def _create_characters_without_spaces(strokes, trial_id):
         if stroke.char_num == 0:
             continue
 
-        #-- Open new character
+        #-- Finished a character: create the Character object
         if stroke.char_num != curr_char_num:
 
+            #-- The stroke belongs to a character that was already created: error
             if stroke.char_num in existing_char_nums():
                 char = [c for c in characters if c.char_num == stroke.char_num][0]
                 char_stroke_nums = [s.stroke_num for s in char.strokes]
@@ -359,9 +368,9 @@ def _create_characters_without_spaces(strokes, trial_id):
                 raise ValueError('Invalid format for trial #{}: non-consecutive strokes belong to the same character (char={}, strokes={})'
                                  .format(trial_id, stroke.char_num, char_stroke_nums))
 
+            #-- Keep the just-ended character info
             if curr_char_num is not None:
-                char = datatypes.Character(curr_char_num, curr_char_strokes)
-                characters.append(char)
+                characters.append(datatypes.Character(curr_char_num, curr_char_strokes))
 
             curr_char_strokes = []
             curr_char_num = stroke.char_num
@@ -369,8 +378,7 @@ def _create_characters_without_spaces(strokes, trial_id):
         curr_char_strokes.append(stroke)
 
     if curr_char_num is not None:
-        char = datatypes.Character(curr_char_num, curr_char_strokes)
-        characters.append(char)
+        characters.append(datatypes.Character(curr_char_num, curr_char_strokes))
 
     return characters
 
@@ -420,6 +428,15 @@ def _update_post_char_space(characters, strokes, space_stroke_ind):
         return
     chars[0].post_char_space = strokes[space_stroke_ind]
 
+
+#--------------------------------------------------------------------------
+def _update_response_characters(characters, response, trial_id, target_id, response_must_match_nchars):
+    if response_must_match_nchars and len(characters) != len(response):
+        print(f'ERROR in trial {trial_id} (target {target_id}): {len(characters)} characters were encoded but the response has {len(response)}')
+        return
+
+    for char, resp_char in zip(characters, response):
+        char.character = resp_char
 
 
 #endregion

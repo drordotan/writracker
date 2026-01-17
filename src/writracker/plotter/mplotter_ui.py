@@ -378,7 +378,7 @@ class SelectFilesDialog(QDialog):
             black_pressure=self.spin_pressure.value(),
             invert=(self.combo_bg.currentText() == "Black"),
             plot_area_max_size=(self.spin_max_w.value(), self.spin_max_h.value()),
-            title_font_size=self.spin_title_font.value(),
+            title_fontsize=self.spin_title_font.value(),
         )
 
         title_format = self.title_lineedit.text().strip()
@@ -639,8 +639,8 @@ class NoIMESpinBox(QSpinBox):
 class UIMoviePlotter(MoviePlotter):
     """ UI-aware subclass: emits progress to the dialog """
 
-    def __init__(self, *args, progress_cb=None, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, data, out_fn, progress_cb=None, **kwargs):
+        super().__init__(data, out_fn, **kwargs)
         self._progress_cb = progress_cb
 
     def init_progress_bar(self):

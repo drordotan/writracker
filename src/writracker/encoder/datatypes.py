@@ -63,7 +63,29 @@ class CodedTrial(object):
 
     @property
     def on_paper_points(self):
+        """ All points (from any stroke) with z > 0 """
         return [pt for pt in self.traj_points if pt.z > 0]
+
+    @property
+    def on_paper_char_points(self):
+        """ All points (from any stroke) with z > 0 that belong to a character """
+        return [pt for s in self.strokes if s.char_num > 0 for pt in s if pt.z > 0]
+
+    def on_paper_points_with_char_num(self):
+        """ Same as on_paper_points, but returns also the character number for each point """
+        return [(pt, s.char_num) for s in self.strokes for pt in s if pt.z > 0]
+
+    def mirror_in_place(self, x=False, y=False):
+        if not (x or y):
+            return
+
+        if x:
+            for pt in self.traj_points:
+                pt.x = -pt.x
+
+        if y:
+            for pt in self.traj_points:
+                pt.y = -pt.y
 
 
 #-------------------------------------------------------------------------------------

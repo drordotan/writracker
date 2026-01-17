@@ -24,7 +24,7 @@ ColGeneratorSpec = namedtuple('ColGeneratorSpec', ['generator', 'nparams'])
 class Merger(object):
 
     def __init__(self, new_cols_trials=None, new_cols_chars=None, traj_file_prefix='trajectory_trial_', has_block_col=True,
-                 trace=False):
+                 set_response_in_ok_trials=False, trace=False):
         """
         :param new_cols_trials: Specification of new columns to create in the trials.csv file.
                 The specification is a dict; in each entry,
@@ -41,12 +41,15 @@ class Merger(object):
                     the dataset directory + the subject ID. It can also get a 4th argument: the trial (a DataFrame row from trials.csv).
         :param traj_file_prefix:
         :param has_block_col:
+        :param set_response_in_ok_trials: If True, set the response to be equal to the target in all trials with rc=='OK'
         """
         self.new_cols_trials = self._parse_generators(new_cols_trials, valid_n_params={1, 3})
         self.new_cols_chars = self._parse_generators(new_cols_chars, valid_n_params={1, 3, 4})
         self.traj_file_prefix = traj_file_prefix
         self.has_block_col = has_block_col
         self.merge_errors = {}
+        self.overriden_cols = set()
+        self.set_response_in_ok_trials = set_response_in_ok_trials
         self.trace = trace
 
     #-------------------------------------------------------------------
@@ -72,12 +75,12 @@ class Merger(object):
         return result
 
     #-------------------------------------------------------------------
-    def merge_dataset(self, subj_dirs, find_session_dirs, out_chars_fn=None, out_trials_fn=None):
+    def merge_dataset(self, subj_location, find_session_dirs, out_chars_fn=None, out_trials_fn=None):
         """
         Merge character.csv files of multiple subjects into a single file
         and trials.csv files of multiple subjects into a single file
 
-        :param subj_dirs: a dictionary of subject IDs and their directories
+        :param subj_location: a dictionary of subject IDs and their locations (e.g., a directory)
         :param find_session_dirs: a function that finds the directories of relevant sessions in given subject's directory.
                                   The function should return a list of SessionDir objects
         :param out_chars_fn: the output file name (CSV, one line per character)
@@ -87,26 +90,54 @@ class Merger(object):
         chars_data = []
         self.merge_errors = dict(N_MISSING_IN_TRIALS_CSV=0, N_MISSING_TRAJ_FILES=0)
 
-        for subj_id, subj_dir in subj_dirs.items():
+        for subj_id, subj_loc in subj_location.items():
             if self.trace:
-                print(f'\nProcessing subject {subj_id} in {subj_dir}')
+                print(f'\nProcessing subject {subj_id} in {subj_loc}')
 
-            ds_dirs = find_session_dirs(subj_dir)
+            ds_dirs = find_session_dirs(subj_loc)
             if ds_dirs is None:
-                print(f"ERROR: No data found in {subj_dir}")
+                print(f"ERROR: No data found in {subj_loc}")
                 continue
 
             for ds_dir in ds_dirs:
-                curr_trials_df = pd.read_csv(ds_dir.dir_name + os.sep + 'trials.csv')
+                curr_trials_df, curr_chars_df = self._load_session(ds_dir, subj_id)
                 if out_trials_fn is not None:
-                    tdf = self._load_session_trials(curr_trials_df, ds_dir, subj_id)
-                    trials_data.append(tdf)
+                    trials_data.append(curr_trials_df)
 
-                curr_chars_df = self._load_session_characters(ds_dir, tdf, subj_id)
                 if not curr_chars_df.empty:
                     chars_data.append(curr_chars_df)
 
-        all_chars_df = pd.concat(chars_data, axis='rows')
+        if out_trials_fn is not None:
+            all_trials_df = self._merge_trials(trials_data)
+            all_trials_df.to_csv(out_trials_fn, index=False, float_format='%.3g')
+
+        all_chars_df = self._merge_characters(chars_data)
+        if out_chars_fn is not None:
+            all_chars_df.to_csv(out_chars_fn, index=False, float_format='%.5g')
+
+        return all_chars_df
+
+    #-------------------------------------------------------------------
+    def _load_session(self, ds_dir, subj_id, ):
+        trials_df = self._load_session_trials(ds_dir.dir_name + os.sep + 'trials.csv', ds_dir, subj_id)
+        chars_df = self._load_session_characters(ds_dir, trials_df, subj_id)
+
+        for col in list(chars_df):
+            if col != 'extends' and chars_df[col].isna().all():
+                print(f'NOTE: column "{col}" is empty in all rows of subject {subj_id} dataset {ds_dir.dir_name}')
+                break
+
+        return trials_df, chars_df
+
+    #-------------------------------------------------------------------
+    def _merge_trials(self, trials_df_per_subdir):
+        return pd.concat(trials_df_per_subdir, axis='rows')
+
+    #-------------------------------------------------------------------
+    def _merge_characters(self, chars_df_per_subdir):
+
+        to_concat = [df for df in chars_df_per_subdir if not df.empty]
+        all_chars_df = pd.concat(to_concat, axis='rows')
 
         for first_col in ('block', 'subject'):
             if first_col not in list(all_chars_df):
@@ -125,32 +156,31 @@ class Merger(object):
             all_chars_df['post_stim_char1_delay'] = all_chars_df.pre_trial_delay - all_chars_df.sound_file_length
             self.zscore_col(all_chars_df, 'post_stim_char1_delay', True)
 
-        if out_trials_fn is not None:
-            all_trials_df = pd.concat(trials_data, axis='rows')
-            all_trials_df.to_csv(out_trials_fn, index=False, float_format='%.3g')
-
-        if out_chars_fn is not None:
-            all_chars_df.to_csv(out_chars_fn, index=False, float_format='%.5g')
-
         return all_chars_df
 
     #-------------------------------------------------------------------
-    def _load_session_trials(self, raw_df, ds_dir, subj_id):
+    def _load_session_trials(self, trials_fn, ds_dir, subj_id):
         """
         Add a DataFrame with the current dataset's trials to the trials_data array
+
+        :param raw_df: the data loaded from trials.csv
         """
 
         if self.trace:
             print('Loading trials file')
 
+        raw_df = pd.read_csv(trials_fn)
+
+        all_rc = raw_df.rc.str.strip()
         new_df = dict(subject=[subj_id] * raw_df.shape[0],
                       trial_id=raw_df.trial_id,
                       target_id=raw_df.target_id,
                       sub_trial_num=raw_df.sub_trial_num,
                       target=raw_df.target,
-                      response=raw_df.response,
+                      response=[trg if (self.set_response_in_ok_trials and rc == 'OK') else resp
+                                for trg, resp, rc in zip(raw_df.target, raw_df.response, all_rc)],
                       time_in_session=raw_df.time_in_session,
-                      rc=raw_df.rc,
+                      rc=all_rc,
                       traj_file_name=raw_df.traj_file_name)
 
         new_df = pd.DataFrame(new_df)
@@ -160,6 +190,8 @@ class Merger(object):
 
         if self.has_block_col:
             new_df['block'] = [ds_dir.block_unique] * raw_df.shape[0]
+
+        rows = [dict(row) for _, row in new_df.iterrows()]
 
         #-- Add new columns to the DataFrame
         for new_col_name, (new_col_generator, nparams) in self.new_cols_trials.items():
@@ -175,15 +207,41 @@ class Merger(object):
             else:
                 raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
 
-            new_col_values = [new_col_generator(*gen_args(row)) for _, row in new_df.iterrows()]
-
-            if u.is_collection(new_col_name):
-                for i, col_name in enumerate(new_col_name):
-                    new_df[col_name] = [v[i] for v in new_col_values]
-            else:
-                new_df[new_col_name] = new_col_values
+            self.apply_generator(new_col_generator, new_col_name, gen_args, rows, new_df)
 
         return new_df
+
+    #-------------------------------------------------------------------
+    def apply_generator(self, new_col_generator, new_col_name, gen_args_func, rows, new_df):
+
+        if len(rows) == 0:
+            return
+
+        new_col_values = [new_col_generator(*gen_args_func(row)) for row in rows]
+
+        if isinstance(new_col_name, str) and new_col_name.startswith('__'):
+            # No new values generated. This generator probably just keeps stuff on 'row'
+            return
+
+        if u.is_collection(new_col_name):
+            new_col_names = new_col_name
+        else:
+            new_col_names = new_col_name,
+            new_col_values = [[v] for v in new_col_values]
+
+        for i, col_name in enumerate(new_col_names):
+
+            if col_name not in self.overriden_cols:
+                if col_name in new_df:
+                    print(f'WARNING: column "{col_name}" generated twice / overriden')
+                    self.overriden_cols.add(col_name)
+                elif col_name in rows[0]:
+                    print(f'WARNING: column "{col_name}" overrides a column that exists in the input data')
+                    self.overriden_cols.add(col_name)
+
+            new_df[col_name] = [v[i] for v in new_col_values]
+            for row, v in zip(rows, new_col_values):
+                row[col_name] = v[i]
 
     #-------------------------------------------------------------------
     def _load_session_characters(self, ds_dir, trials, subj_id):
@@ -195,10 +253,19 @@ class Merger(object):
 
         get_trial_by_id = GetTrialWithID(trials)
 
+        #-- Read characters.csv file -- only trials with rc=OK
         curr_chars_df = pd.read_csv(ds_dir.filename, dtype=dict(char=str))
         curr_chars_df = self.filter_good_trials(curr_chars_df, ds_dir.dir_name)
 
         curr_chars_df['subject'] = subj_id
+
+        if self.set_response_in_ok_trials:
+            ddf_char = curr_chars_df.\
+                drop('response', axis='columns').\
+                merge(trials[['trial_id', 'sub_trial_num', 'response']], on=['trial_id', 'sub_trial_num'], how='left')
+            curr_chars_df.response = ddf_char.response
+
+        rows = [dict(row) for _, row in curr_chars_df.iterrows()]
 
         for new_col_name, (new_col_generator, nparams) in self.new_cols_chars.items():
 
@@ -217,13 +284,7 @@ class Merger(object):
             else:
                 raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
 
-            new_col_values = [new_col_generator(*gen_args(row)) for _, row in curr_chars_df.iterrows()]
-
-            if u.is_collection(new_col_name):
-                for i, col_name in enumerate(new_col_name):
-                    curr_chars_df[col_name] = [v[i] for v in new_col_values]
-            else:
-                curr_chars_df[new_col_name] = new_col_values
+            self.apply_generator(new_col_generator, new_col_name, gen_args, rows, curr_chars_df)
 
         return curr_chars_df
 

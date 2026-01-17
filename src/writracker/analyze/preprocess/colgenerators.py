@@ -26,6 +26,18 @@ class EliminateSpaces(object):
 
 
 #----------------------------------------------------------------------------------
+class ColMapper(object):
+
+    def __init__(self, col_name, mapping):
+        self.col_name = col_name
+        self.mapping = mapping
+
+    def __call__(self, row):
+        value = row[self.col_name]
+        return self.mapping.get(value, value)
+
+
+#----------------------------------------------------------------------------------
 def integer_target_length(row):
     """ The number of digits in an integer target """
     return len(str(int(row['target'])))

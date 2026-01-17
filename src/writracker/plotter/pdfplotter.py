@@ -401,7 +401,7 @@ class OneFilePdfPlotter(object):
             gap_x = [(box0.xmid + box1.xmid)/2 for box0, box1 in zip(bounding_boxes[:-1], bounding_boxes[1:])]
             gaps = [c.pre_char_delay for c in trial.characters[1:]]
             ax2 = ax.twinx()
-            ax2.bar(gap_x, gaps, color=temporal_gaps_bar_color, width=xrange / 10, zorder=5)
+            ax2.bar(gap_x, gaps, color=temporal_gaps_bar_color, width=xrange / (len(trial.characters) * 2), zorder=5)
 
             ax2.set_zorder(ax.get_zorder() - 1)
             ax.patch.set_alpha(0)
@@ -683,8 +683,8 @@ class ResponseTitleFormatterRunner(KwTitleFormatter):
         if resp == '' or resp is None:
             return ''
 
-        stim = _to_str(trial.stimulus)
-        return self.prefix + ('=' if stim == resp else resp) + self.suffix
+        stim = _to_str(trial.stimulus).replace(' ', '')
+        return self.prefix + ('=' if stim == resp.replace(' ', '') else resp) + self.suffix
 
 
 #-------------------------------------------------------------

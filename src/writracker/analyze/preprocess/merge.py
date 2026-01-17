@@ -43,7 +43,7 @@ class Merger(object):
         :param has_block_col:
         :param set_response_in_ok_trials: If True, set the response to be equal to the target in all trials with rc=='OK'
         """
-        self.new_cols_trials = self._parse_generators(new_cols_trials, valid_n_params={1, 3})
+        self.new_cols_trials = self._parse_generators(new_cols_trials, valid_n_params={1, 3, 4})
         self.new_cols_chars = self._parse_generators(new_cols_chars, valid_n_params={1, 3, 4})
         self.traj_file_prefix = traj_file_prefix
         self.has_block_col = has_block_col
@@ -67,7 +67,8 @@ class Merger(object):
                 continue
 
             if nparams not in valid_n_params:
-                print(f'ERROR: generator for column {key} has {nparams} parameters, but expected {" or ".join(valid_n_params)}')
+                expected = " or ".join(str(s) for s in valid_n_params)
+                print(f'ERROR: generator for column {key} has {nparams} parameters, but expected {expected}')
                 continue
 
             result[key] = ColGeneratorSpec(generator=gen, nparams=nparams)
@@ -118,9 +119,12 @@ class Merger(object):
         return all_chars_df
 
     #-------------------------------------------------------------------
-    def _load_session(self, ds_dir, subj_id, ):
+    def _load_session(self, ds_dir, subj_id):
         trials_df = self._load_session_trials(ds_dir.dir_name + os.sep + 'trials.csv', ds_dir, subj_id)
         chars_df = self._load_session_characters(ds_dir, trials_df, subj_id)
+
+        self._apply_trials_col_generators(trials_df, ds_dir, subj_id, chars_df)
+        self._apply_char_col_generators(chars_df, ds_dir, subj_id, trials_df)
 
         for col in list(chars_df):
             if col != 'extends' and chars_df[col].isna().all():
@@ -191,9 +195,16 @@ class Merger(object):
         if self.has_block_col:
             new_df['block'] = [ds_dir.block_unique] * raw_df.shape[0]
 
+        return new_df
+
+    #-------------------------------------------------------------------
+    def _apply_trials_col_generators(self, new_df, ds_dir, subj_id, chars_df):
+        """ Add new columns to the trials DataFrame """
+
+        trial_characters = chars_df.groupby(['trial_id', 'sub_trial_num'])
+
         rows = [dict(row) for _, row in new_df.iterrows()]
 
-        #-- Add new columns to the DataFrame
         for new_col_name, (new_col_generator, nparams) in self.new_cols_trials.items():
             if self.trace:
                 print(f'  Add column {new_col_name} to trials file')
@@ -204,12 +215,14 @@ class Merger(object):
             elif nparams == 3:
                 def gen_args(row):
                     return row, ds_dir, subj_id
+            elif nparams == 4:
+                def gen_args(row):
+                    trial_key = row['trial_id'], row['sub_trial_num']
+                    return row, ds_dir, subj_id, trial_characters.get_group(trial_key) if trial_key in trial_characters.groups else pd.DataFrame()
             else:
                 raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
 
             self.apply_generator(new_col_generator, new_col_name, gen_args, rows, new_df)
-
-        return new_df
 
     #-------------------------------------------------------------------
     def apply_generator(self, new_col_generator, new_col_name, gen_args_func, rows, new_df):
@@ -251,8 +264,6 @@ class Merger(object):
         if self.trace:
             print('Loading characters file')
 
-        get_trial_by_id = GetTrialWithID(trials)
-
         #-- Read characters.csv file -- only trials with rc=OK
         curr_chars_df = pd.read_csv(ds_dir.filename, dtype=dict(char=str))
         curr_chars_df = self.filter_good_trials(curr_chars_df, ds_dir.dir_name)
@@ -264,6 +275,13 @@ class Merger(object):
                 drop('response', axis='columns').\
                 merge(trials[['trial_id', 'sub_trial_num', 'response']], on=['trial_id', 'sub_trial_num'], how='left')
             curr_chars_df.response = ddf_char.response
+
+        return curr_chars_df
+
+    #-------------------------------------------------------------------
+    def _apply_char_col_generators(self, curr_chars_df, ds_dir, subj_id, trials):
+
+        get_trial_by_id = GetTrialWithID(trials)
 
         rows = [dict(row) for _, row in curr_chars_df.iterrows()]
 
@@ -285,8 +303,6 @@ class Merger(object):
                 raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
 
             self.apply_generator(new_col_generator, new_col_name, gen_args, rows, curr_chars_df)
-
-        return curr_chars_df
 
     #-------------------------------------------------------------------
     def update_prev_and_next_char(self, data):

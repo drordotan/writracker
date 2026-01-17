@@ -1,14 +1,13 @@
 import sys
 import os
-import re
+
 import subprocess
 import traceback
 import warnings
-from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
-                             QListWidget, QPushButton, QFileDialog, QAbstractItemView,
-                             QLabel, QLineEdit, QMessageBox, QProgressBar, QTextEdit,
-                             QGroupBox, QFormLayout, QComboBox, QDoubleSpinBox, QSpinBox, QWidget, QCheckBox)
-from PyQt5.QtCore import QThread, QObject, pyqtSignal, Qt
+from PyQt5.QtCore import Qt
+import PyQt5.QtWidgets as qw
+import PyQt5.QtCore as qc
+import PyQt5.QtGui as qg
 
 import writracker.plotter.pdfplotter as ppdf
 import writracker.utils as wu
@@ -20,14 +19,14 @@ warnings.filterwarnings("ignore", message="Starting a Matplotlib GUI outside of 
 
 #==================================================================================================
 def run():
-    app = QApplication(sys.argv)
+    app = qw.QApplication(sys.argv)
     dialog = SelectFilesDialog()
     dialog.show()
     sys.exit(app.exec_())
 
 
 #==================================================================================================
-class SelectFilesDialog(QDialog):
+class SelectFilesDialog(qw.QDialog):
     """
     First dialog: select input and output directories
     """
@@ -37,26 +36,26 @@ class SelectFilesDialog(QDialog):
         super().__init__()
         self.setWindowTitle("WriTracker: pdf Plotter")
 
-        main_layout = QVBoxLayout(self)
+        main_layout = qw.QVBoxLayout(self)
 
-        label_above = QLabel("Choose WEncoder output directories to plot from")
+        label_above = qw.QLabel("Choose WEncoder output directories to plot from")
         main_layout.addWidget(label_above)
 
-        mid_layout = QHBoxLayout()
+        mid_layout = qw.QHBoxLayout()
 
-        self.list_widget = QListWidget()
+        self.list_widget = qw.QListWidget()
         self.list_widget.addItems([])
-        self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_widget.setSelectionMode(qw.QAbstractItemView.ExtendedSelection)
         mid_layout.addWidget(self.list_widget, 1)
 
-        btn_layout = QVBoxLayout()
-        self.btn_add = QPushButton('+')
+        btn_layout = qw.QVBoxLayout()
+        self.btn_add = qw.QPushButton('+')
         self.btn_add.setToolTip('Add a single input folder')
-        self.btn_add_subfolders = QPushButton('++')
+        self.btn_add_subfolders = qw.QPushButton('++')
         self.btn_add_subfolders.setToolTip('Add all child folders of the selected folder')
-        self.btn_add_recursively = QPushButton('+++')
+        self.btn_add_recursively = qw.QPushButton('+++')
         self.btn_add_recursively.setToolTip('Add any descendent folder that contains a "trials.csv" file')
-        self.btn_remove = QPushButton('-')
+        self.btn_remove = qw.QPushButton('-')
         self.btn_remove.setToolTip('Remove the selected folders')
 
         btn_layout.addWidget(self.btn_add)
@@ -68,92 +67,86 @@ class SelectFilesDialog(QDialog):
 
         main_layout.addLayout(mid_layout)
 
-        output_layout = QHBoxLayout()
-        label_output = QLabel("Output directory:")
+        output_layout = qw.QHBoxLayout()
+        label_output = qw.QLabel("Output directory:")
         output_layout.addWidget(label_output)
 
-        self.output_lineedit = QLineEdit()
+        self.output_lineedit = qw.QLineEdit()
         self.output_lineedit.setReadOnly(True)  # User selects directory, no typing
         output_layout.addWidget(self.output_lineedit)
 
-        self.btn_output_file = QPushButton("...")
+        self.btn_output_file = qw.QPushButton("...")
         self.btn_output_file.setFixedWidth(40)
         output_layout.addWidget(self.btn_output_file)
 
         main_layout.addLayout(output_layout)
 
         # ---------------- Parameters (Dialog #1) ----------------
-        params_group = QGroupBox("")
-        params_vbox = QVBoxLayout(params_group)
+        params_group = qw.QGroupBox("")
+        params_vbox = qw.QVBoxLayout(params_group)
         params_vbox.setSpacing(6)
 
         def hline():
-            line = QWidget()
+            line = qw.QWidget()
             line.setFixedHeight(1)
             line.setStyleSheet("background-color: #C0C0C0;")
             return line
 
         # Small helpers (like the other app)
         def help_link(text):
-            link = QLabel("<a href='#'>?</a>")
+            link = qw.QLabel("<a href='#'>?</a>")
             link.setToolTip(text)
             link.setTextFormat(Qt.RichText)
             link.setOpenExternalLinks(False)
             link.setFixedWidth(16)
             def _click():
-                QMessageBox.information(self, "Help", text)
+                qw.QMessageBox.information(self, "Help", text)
             link.linkActivated.connect(lambda _: _click())
             return link
 
-        def row_with_help(widget, helptext):
-            w = QWidget()
-            h = QHBoxLayout(w)
+        def row_with_help(*widgets, helptext):
+            w = qw.QWidget()
+            h = qw.QHBoxLayout(w)
             h.setContentsMargins(0, 0, 0, 0)
-            h.addWidget(widget, alignment=Qt.AlignLeft)
+            for widget in widgets:
+                h.addWidget(widget, alignment=Qt.AlignLeft)
             h.addWidget(help_link(helptext), alignment=Qt.AlignLeft)
             h.addStretch()
             return w
 
-        def align_left(widget):
-            w = QWidget()
-            h = QHBoxLayout(w)
-            h.setContentsMargins(0, 0, 0, 0)
-            h.addWidget(widget, 1)
-            return w
-
         # --- Contents section ---
         params_vbox.addWidget(hline())
-        params_vbox.addWidget(QLabel("<b>Information to show</b>"))
-        contents_form = QFormLayout()
+        params_vbox.addWidget(qw.QLabel("<b>Information to show</b>"))
+        contents_form = qw.QFormLayout()
         contents_form.setHorizontalSpacing(12)
         contents_form.setVerticalSpacing(6)
 
         # Show out-of-char strokes?
-        self.show_out_of_char_strokes = QCheckBox('Plot deleted strokes')
+        self.show_out_of_char_strokes = qw.QCheckBox('Plot deleted strokes')
         self.show_out_of_char_strokes.setChecked(False)
         contents_form.addRow(self.show_out_of_char_strokes)
 
         # Bounding box (Yes/No) + percentages for X/Y to the right
-        self.show_bounding_box = QCheckBox('Display bounding box for each character')
-        self.show_bounding_box.setChecked(False)
+        self.show_bounding_box = qw.QCheckBox('Display bounding box for each character')
+        self.show_bounding_box.setChecked(True)
         self.show_bounding_box.toggled.connect(self.on_show_bounding_box_changed)
 
         help_bb = ("You can specify the fraction of pixels that would fit in the bounding box, separately for the x/y axes (100% = all pixels)")
-        bb_row_widget = QWidget()
-        bb_row = QHBoxLayout(bb_row_widget)
+        bb_row_widget = qw.QWidget()
+        bb_row = qw.QHBoxLayout(bb_row_widget)
         bb_row.setContentsMargins(0, 0, 0, 0)
         bb_row.addWidget(self.show_bounding_box)
         bb_row.addSpacing(12)
-        lbl_pct = QLabel("% of pixels in the b.box:")
+        lbl_pct = qw.QLabel("% of pixels in the b.box:")
         lbl_pct.setToolTip(help_bb)
         bb_row.addWidget(lbl_pct)
-        self.spin_frac_x = QDoubleSpinBox()
+        self.spin_frac_x = qw.QDoubleSpinBox()
         self.spin_frac_x.setRange(0.0, 100.0)
         self.spin_frac_x.setSingleStep(1.0)
         self.spin_frac_x.setValue(100)
         self.spin_frac_x.setSuffix("% X")
         self.spin_frac_x.setToolTip(help_bb)
-        self.spin_frac_y = QDoubleSpinBox()
+        self.spin_frac_y = qw.QDoubleSpinBox()
         self.spin_frac_y.setRange(0.0, 100.0)
         self.spin_frac_y.setSingleStep(1.0)
         self.spin_frac_y.setValue(100)
@@ -162,19 +155,25 @@ class SelectFilesDialog(QDialog):
         bb_row.addWidget(self.spin_frac_x)
         bb_row.addWidget(self.spin_frac_y)
         bb_row.addStretch()
-        contents_form.addRow(row_with_help(bb_row_widget, help_bb))
+        contents_form.addRow(row_with_help(bb_row_widget, helptext=help_bb))
 
         # 2) Character order (Yes/No)
-        self.show_char_writing_order = QCheckBox('Show character writing order')
-        self.show_char_writing_order.setChecked(False)
+        self.show_char_writing_order = qw.QCheckBox('Show character writing order')
+        self.show_char_writing_order.setChecked(True)
         self.show_char_writing_order.toggled.connect(self.on_show_char_writing_order_changed)
         help_order = "Overlay an index showing the order in which the participant wrote each character."
-        contents_form.addRow(row_with_help(self.show_char_writing_order, help_order))
+        contents_form.addRow(row_with_help(self.show_char_writing_order, helptext=help_order))
 
         # 3) Temporal gaps (Yes/No)
-        self.temporal_gaps = QCheckBox('Show Inter-character temporal gaps')
-        help_gaps = "Display the inter-character temporal gaps on the page."
-        contents_form.addRow(row_with_help(self.temporal_gaps, help_gaps), QLabel())
+        self.temporal_gaps = qw.QCheckBox('Show Inter-character temporal gaps up to ')
+        self.temporal_gaps.setChecked(False)
+        self.temporal_gap_max_y = qw.QLineEdit()
+        self.temporal_gap_max_y.setValidator(qg.QIntValidator(bottom=0))
+        self.temporal_gaps.toggled.connect(self.on_temporal_gaps_changed)
+        self.on_temporal_gaps_changed()
+        help_gaps = 'Display the inter-character temporal gaps on the page as vertical bars. ' + \
+                    'Specify the gap duration reflected by full-height bar or leave empty to use the largest gap in each session.'
+        contents_form.addRow(row_with_help(self.temporal_gaps, self.temporal_gap_max_y, qw.QLabel("ms"), helptext=help_gaps))
 
         # 4) Trial title — identical style to the other app (line edit + '?' help; preview button removed)
         ttip_trial_title = ('The title to show on each trial (empty = no title). You can use {keyword} for trial-specific values')
@@ -187,10 +186,10 @@ class SelectFilesDialog(QDialog):
                             '{rc} - "OK" or the error code\n' +
                             '{nchars} - Number of response characters\n' +
                             '{nstrokes} - Number of response strokes')
-        title_row_widget = QWidget()
-        title_row = QHBoxLayout(title_row_widget)
+        title_row_widget = qw.QWidget()
+        title_row = qw.QHBoxLayout(title_row_widget)
         title_row.setContentsMargins(0, 0, 0, 0)
-        self.title_lineedit = QLineEdit()
+        self.title_lineedit = qw.QLineEdit()
         self.title_lineedit.setAttribute(Qt.WA_InputMethodEnabled, False)
         self.title_lineedit.setPlaceholderText("Enter title or use {keywords}")
         self.title_lineedit.setToolTip(ttip_trial_title)
@@ -198,65 +197,65 @@ class SelectFilesDialog(QDialog):
         self.title_lineedit.setText("Trial #{trial_id}")
         title_row.addWidget(self.title_lineedit)
         title_row.addWidget(help_link(help_trial_title))
-        contents_form.addRow(QLabel("Trial title"), title_row_widget)
+        contents_form.addRow(qw.QLabel("Trial title"), title_row_widget)
 
         params_vbox.addLayout(contents_form)
 
         #--------------- Page looks section ----------------
 
         params_vbox.addWidget(hline())
-        params_vbox.addWidget(QLabel("<b>Page looks</b>"))
-        looks_form = QFormLayout()
+        params_vbox.addWidget(qw.QLabel("<b>Page looks</b>"))
+        looks_form = qw.QFormLayout()
         looks_form.setHorizontalSpacing(12)
         looks_form.setVerticalSpacing(6)
 
         # Use real x/y proportions
-        self.real_xy_proportions = QCheckBox('Use the real x/y proportions')
+        self.real_xy_proportions = qw.QCheckBox('Use the real x/y proportions')
         self.real_xy_proportions.setChecked(True)
         help_proportions = ('By default, the plotted responses reflect the real x/y proportions, as written on the tablet.\n' +
                             'Uncheck this to use the whole print area for plotting the response, ' +
                             'irrespective of its real proportions.\n' +
                             'Even when the checkbox is checked, it is ignored for trials with extremely disproportionate ' +
                             'bounding boxes (an orange border in the output PDF marks these trials).')
-        looks_form.addRow(row_with_help(self.real_xy_proportions, help_proportions), QLabel())
+        looks_form.addRow(row_with_help(self.real_xy_proportions, helptext=help_proportions), qw.QLabel())
 
         # Mirror x
-        self.mirror_x = QCheckBox("Mirror on X axis")
+        self.mirror_x = qw.QCheckBox("Mirror on X axis")
         self.mirror_x.setChecked(False)
         looks_form.addRow(self.mirror_x)
 
-        self.mirror_y = QCheckBox("Mirror on Y axis")
+        self.mirror_y = qw.QCheckBox("Mirror on Y axis")
         self.mirror_y.setChecked(False)
         looks_form.addRow(self.mirror_y)
 
 
         # Dot size
-        self.spin_dot_size = QDoubleSpinBox()
+        self.spin_dot_size = qw.QDoubleSpinBox()
         self.spin_dot_size.setRange(1.0, 10.0)
         self.spin_dot_size.setSingleStep(0.5)
         self.spin_dot_size.setValue(2.0)
         help_dot = "Size of the plotted points on the page."
-        looks_form.addRow(QLabel("Dot size"), row_with_help(self.spin_dot_size, help_dot))
+        looks_form.addRow(qw.QLabel("Dot size"), row_with_help(self.spin_dot_size, helptext=help_dot))
 
         # Number of columns
-        self.spin_cols = QSpinBox()
+        self.spin_cols = qw.QSpinBox()
         self.spin_cols.setRange(1, 3)
         self.spin_cols.setValue(2)
         help_cols = "Number of columns (pages are laid out as a grid of rows × columns)."
-        looks_form.addRow(QLabel("Number of columns"), row_with_help(self.spin_cols, help_cols))
+        looks_form.addRow(qw.QLabel("Number of columns"), row_with_help(self.spin_cols, helptext=help_cols))
 
         # Number of rows
-        self.spin_rows = QSpinBox()
+        self.spin_rows = qw.QSpinBox()
         self.spin_rows.setRange(1, 10)
         self.spin_rows.setValue(5)
         help_rows = "Number of rows (pages are laid out as a grid of rows × columns)."
-        looks_form.addRow(QLabel("Number of rows"), row_with_help(self.spin_rows, help_rows))
+        looks_form.addRow(qw.QLabel("Number of rows"), row_with_help(self.spin_rows, helptext=help_rows))
 
         params_vbox.addLayout(looks_form)
         main_layout.addWidget(params_group)
 
         # Prepare button
-        self.btn_prepare_pdf = QPushButton("Prepare pdf!")
+        self.btn_prepare_pdf = qw.QPushButton("Prepare pdf!")
         self.btn_prepare_pdf.setEnabled(False)
         main_layout.addWidget(self.btn_prepare_pdf)
 
@@ -272,7 +271,7 @@ class SelectFilesDialog(QDialog):
     def closeEvent(self, event):
         super().closeEvent(event)
         if not self.generating:
-            QApplication.instance().quit()
+            qw.QApplication.instance().quit()
 
     #--------------------------------------------------------------------------
     # noinspection PyUnresolvedReferences
@@ -298,6 +297,10 @@ class SelectFilesDialog(QDialog):
     def on_show_char_writing_order_changed(self):
         if self.show_char_writing_order.isChecked():
             self.show_bounding_box.setChecked(True)
+
+    #--------------------------------------------------------------------------
+    def on_temporal_gaps_changed(self):
+        self.temporal_gap_max_y.setEnabled(self.temporal_gaps.isChecked())
 
     #--------------------------------------------------------------------------
     def on_clicked_remove_selected(self):
@@ -349,8 +352,8 @@ class SelectFilesDialog(QDialog):
     #--------------------------------------------------------------------------
     def select_folder(self, msg):
         if not wu.is_windows():
-            QMessageBox.information(None, 'Select folder', msg)
-        folder = QFileDialog.getExistingDirectory(self, msg)
+            qw.QMessageBox.information(None, 'Select folder', msg)
+        folder = qw.QFileDialog.getExistingDirectory(self, msg)
         return None if folder == '' else folder
 
     #--------------------------------------------------------------------------
@@ -364,7 +367,7 @@ class SelectFilesDialog(QDialog):
 
     #--------------------------------------------------------------------------
     def on_clicked_select_output_directory(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select Output Directory")
+        directory = qw.QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if directory:
             self.output_lineedit.setText(directory)
             self.update_prepare_button()
@@ -379,18 +382,18 @@ class SelectFilesDialog(QDialog):
     def on_clicked_prepare_pdf(self):
         output_dir = os.path.abspath(self.output_lineedit.text().strip())
         if not output_dir:
-            QMessageBox.critical(self, "Error", "Output directory cannot be empty.")
+            qw.QMessageBox.critical(self, "Error", "Output directory cannot be empty.")
             return
 
         if not os.path.isdir(output_dir):
-            create = QMessageBox.question(self, 'Directory does not exist',
+            create = qw.QMessageBox.question(self, 'Directory does not exist',
                                           f'The directory {output_dir} does not exist.\nDo you want to create it?',
-                                          QMessageBox.Yes | QMessageBox.No)
-            if create == QMessageBox.Yes:
+                                             qw.QMessageBox.Yes | qw.QMessageBox.No)
+            if create == qw.QMessageBox.Yes:
                 try:
                     os.makedirs(output_dir)
                 except Exception as e:
-                    QMessageBox.critical(self, 'Error', f'Failed to create directory: \n{e}')
+                    qw.QMessageBox.critical(self, 'Error', f'Failed to create directory: \n{e}')
                     return
             else:
                 return
@@ -406,12 +409,12 @@ class SelectFilesDialog(QDialog):
         if conflicting_files:
             dir_name = os.path.basename(output_dir.rstrip(os.sep)) or output_dir
             files_list = ", ".join(conflicting_files)
-            result = QMessageBox.question(
+            result = qw.QMessageBox.question(
                 self, "Overwrite confirmation",
                 f"The following files exist in '{dir_name}' and will be overridden: \n{files_list}\nAre you sure?",
-                QMessageBox.Yes | QMessageBox.No
+                    qw.QMessageBox.Yes | qw.QMessageBox.No
             )
-            if result != QMessageBox.Yes:
+            if result != qw.QMessageBox.Yes:
                 return
 
         # ------ collect parameters -> PdfPlotterConfig ------
@@ -430,13 +433,15 @@ class SelectFilesDialog(QDialog):
                 allowed = {formatter.keyword for formatter in ppdf.TrialTitle().all_title_formatters}
                 msg = 'Unknown keyword(s) in "Trial Title" definition: {}\n'.format(", ".join(invalid_kw)) + \
                       'Allowed keywords are: {}'.format(", ".join(sorted(allowed)))
-                QMessageBox.critical(self, 'Invalid keyword in trial title', msg)
+                qw.QMessageBox.critical(self, 'Invalid keyword in trial title', msg)
                 return
 
+        ylim = (0, int(self.temporal_gap_max_y.text()) / 1000) if self.temporal_gaps.isChecked() else None
         cfg = ppdf.PdfPlotterConfig(
                 bounding_box=self.show_bounding_box.isChecked(),
                 char_order=self.show_char_writing_order.isChecked(),
                 temporal_gaps=self.temporal_gaps.isChecked(),
+                temporal_gaps_ylim=ylim,
                 fraction_of_x_points=fx,
                 fraction_of_y_points=fy,
                 cols_per_page=cols,
@@ -458,7 +463,7 @@ class SelectFilesDialog(QDialog):
 
 #==================================================================================================
 # noinspection PyAttributeOutsideInit
-class PreparePdfProgressDialog(QDialog):
+class PreparePdfProgressDialog(qw.QDialog):
     """
     Execute the plotting process
     """
@@ -473,27 +478,27 @@ class PreparePdfProgressDialog(QDialog):
 
         self.resize(500, 350)
 
-        layout = QVBoxLayout(self)
-        self.top_label = QLabel("")
+        layout = qw.QVBoxLayout(self)
+        self.top_label = qw.QLabel("")
         layout.addWidget(self.top_label)
 
-        self.progress_bar = QProgressBar()
+        self.progress_bar = qw.QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
 
-        self.message_box = QTextEdit()
+        self.message_box = qw.QTextEdit()
         self.message_box.setReadOnly(True)
-        self.message_box.setLineWrapMode(QTextEdit.NoWrap)
+        self.message_box.setLineWrapMode(qw.QTextEdit.NoWrap)
         self.message_box.setFixedHeight(self.message_box.fontMetrics().lineSpacing() * 12)
         layout.addWidget(self.message_box)
 
-        button_layout = QHBoxLayout()
-        self.btn_reveal = QPushButton("preparing...")
+        button_layout = qw.QHBoxLayout()
+        self.btn_reveal = qw.QPushButton("preparing...")
         self.btn_reveal.setEnabled(False)
         button_layout.addWidget(self.btn_reveal)
 
-        self.btn_cancel = QPushButton("Cancel")
+        self.btn_cancel = qw.QPushButton("Cancel")
         self.btn_cancel.setEnabled(True)
         button_layout.addWidget(self.btn_cancel)
         layout.addLayout(button_layout)
@@ -511,7 +516,7 @@ class PreparePdfProgressDialog(QDialog):
 
     def closeEvent(self, event):
         super().closeEvent(event)
-        QApplication.instance().quit()
+        qw.QApplication.instance().quit()
 
     #--------------------------------------------------------------------------
     def on_dataset_started(self, ds_num, ds_name):
@@ -565,13 +570,13 @@ class PreparePdfProgressDialog(QDialog):
                 fn1 = self.target_dir + os.sep + os.path.basename(self.input_dirs[0]) + ".pdf"
                 subprocess.run(["open", "-R", fn1])
             except Exception as e:
-                QMessageBox.warning(self, "Error", f"Failed to open in Finder: \n{e}")
+                qw.QMessageBox.warning(self, "Error", f"Failed to open in Finder: \n{e}")
         else:
-            QMessageBox.warning(self, "File not found", "The output file does not exist.")
+            qw.QMessageBox.warning(self, "File not found", "The output file does not exist.")
 
 
 #==================================================================================================
-class PlotRunner(QThread):
+class PlotRunner(qc.QThread):
 
     def __init__(self, plotter, ui):
         super().__init__()
@@ -579,21 +584,21 @@ class PlotRunner(QThread):
         self.signaller = Signaller().connect_signals(ui)
 
     def run(self):
-        QThread.msleep(200)  # Give the UI time to update
+        qc.QThread.msleep(200)  # Give the UI time to update
         self.plotter.plot()
 
 
 #==================================================================================================
-class Signaller(QObject):
+class Signaller(qc.QObject):
     """
     As the pdf-generation is going on, we send signals from this thread to the UI in order to update the UI accordingly.
     This object mediates the signal-sending
     """
 
-    ds_started = pyqtSignal(int, str)  # send progress percent
-    ds_finished = pyqtSignal(int, bool, str)  # send progress percent
-    all_finished = pyqtSignal()  # send progress percent
-    progress_changed = pyqtSignal(int)  # send progress percent
+    ds_started = qc.pyqtSignal(int, str)  # send progress percent
+    ds_finished = qc.pyqtSignal(int, bool, str)  # send progress percent
+    all_finished = qc.pyqtSignal()  # send progress percent
+    progress_changed = qc.pyqtSignal(int)  # send progress percent
 
     # noinspection PyUnresolvedReferences
     def connect_signals(self, ui):
@@ -620,18 +625,18 @@ class MultiPlotter(ppdf.MultiFilePdfPlotter):
 
     def on_ds_started(self, ds_num, ds_dir):
         self.signaller.ds_started.emit(ds_num+1, os.path.basename(ds_dir))
-        QThread.yieldCurrentThread()
+        qc.QThread.yieldCurrentThread()
 
     def on_ds_finished(self, ds_num, ds_dir):
         ds_name = os.path.basename(ds_dir)
         self.signaller.ds_finished.emit(ds_num, True, f"Finished processing dataset #{ds_num+1}: {ds_name}")
-        QThread.yieldCurrentThread()
+        qc.QThread.yieldCurrentThread()
 
     def on_exception(self, ds_num, ds_dir, exc):
         traceback.print_exception(type(exc), exc, exc.__traceback__)
         ds_name = os.path.basename(ds_dir)
         self.signaller.ds_finished.emit(ds_num, False, f"Error in dataset #{ds_num+1} ({ds_name}): {exc}")
-        QThread.yieldCurrentThread()
+        qc.QThread.yieldCurrentThread()
 
 
 #==================================================================================================
@@ -647,4 +652,4 @@ class Plotter(ppdf.OneFilePdfPlotter):
     def update_progress_bar(self, n_done):
         percent = int((n_done / len(self.trials)) * 100)
         self.signaller.progress_changed.emit(percent)
-        QThread.yieldCurrentThread()
+        qc.QThread.yieldCurrentThread()

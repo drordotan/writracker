@@ -166,8 +166,6 @@ class Merger(object):
     def _load_session_trials(self, trials_fn, ds_dir, subj_id):
         """
         Add a DataFrame with the current dataset's trials to the trials_data array
-
-        :param raw_df: the data loaded from trials.csv
         """
 
         if self.trace:
@@ -428,11 +426,11 @@ class Merger(object):
 #-------------------------------------------------------------------
 class GetTrialWithID(object):
 
-        def __init__(self, trials_df):
-            self.trials_df = trials_df
+    def __init__(self, trials_df):
+        self.trials_df = trials_df
 
-        def __call__(self, trial_id):
-            return self.trials_df[self.trials_df.trial_id == trial_id].iloc[0]
+    def __call__(self, trial_id):
+        return self.trials_df[self.trials_df.trial_id == trial_id].iloc[0]
 
 
 #-------------------------------------------------------------------

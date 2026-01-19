@@ -97,22 +97,26 @@ class Merger(object):
 
             ds_dirs = find_session_dirs(subj_loc)
             if ds_dirs is None:
-                print(f"ERROR: No data found in {subj_loc}")
+                print(f"ERROR: Subject {subj_id} was not loaded due to errors in {subj_loc}")
                 continue
 
             for ds_dir in ds_dirs:
                 curr_trials_df, curr_chars_df = self._load_session(ds_dir, subj_id)
-                if out_trials_fn is not None:
-                    trials_data.append(curr_trials_df)
+                if curr_trials_df.empty:
+                    continue
 
-                if not curr_chars_df.empty:
-                    chars_data.append(curr_chars_df)
+                self._generate_new_columns(curr_trials_df, curr_chars_df, ds_dir, subj_id)
+                trials_data.append(curr_trials_df)
+                chars_data.append(curr_chars_df)
+
+        all_trials_df = self._merge_trials(trials_data)
+        all_chars_df = self._merge_characters(chars_data)
+        all_chars_df = self._add_columns_to_merged_chars_df(all_chars_df, all_trials_df)
 
         if out_trials_fn is not None:
-            all_trials_df = self._merge_trials(trials_data)
+            all_trials_df = self._add_columns_to_merged_trials_df(all_trials_df, all_chars_df)
             all_trials_df.to_csv(out_trials_fn, index=False, float_format='%.3g')
 
-        all_chars_df = self._merge_characters(chars_data)
         if out_chars_fn is not None:
             all_chars_df.to_csv(out_chars_fn, index=False, float_format='%.5g')
 
@@ -120,8 +124,12 @@ class Merger(object):
 
     #-------------------------------------------------------------------
     def _load_session(self, ds_dir, subj_id):
-        trials_df = self._load_session_trials(ds_dir.dir_name + os.sep + 'trials.csv', ds_dir, subj_id)
+        trials_df = self._load_session_trials(f'{ds_dir.dir_name}/trials.csv', ds_dir, subj_id)
         chars_df = self._load_session_characters(ds_dir, trials_df, subj_id)
+        return trials_df, chars_df
+
+    #-------------------------------------------------------------------
+    def _generate_new_columns(self, trials_df, chars_df, ds_dir, subj_id):
 
         self._apply_trials_col_generators(trials_df, ds_dir, subj_id, chars_df)
         self._apply_char_col_generators(chars_df, ds_dir, subj_id, trials_df)
@@ -131,36 +139,57 @@ class Merger(object):
                 print(f'NOTE: column "{col}" is empty in all rows of subject {subj_id} dataset {ds_dir.dir_name}')
                 break
 
-        return trials_df, chars_df
-
     #-------------------------------------------------------------------
     def _merge_trials(self, trials_df_per_subdir):
         return pd.concat(trials_df_per_subdir, axis='rows')
 
     #-------------------------------------------------------------------
+    def _add_columns_to_merged_trials_df(self, trials_df, chars_df):
+
+        trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'pre_trial_delay')
+        trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'pre_trial_delay_z')
+        trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay')
+        trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay_z')
+
+        return trials_df
+
+    #-------------------------------------------------------------------
+    def _copy_col_from_char1_to_trials(self, trials_df, chars_df, col_name):
+        char1_df = chars_df[chars_df.char_num == 1][self.merge_key() + [col_name]]
+        return trials_df.merge(char1_df, on=self.merge_key(), how='left')
+
+    #-------------------------------------------------------------------
     def _merge_characters(self, chars_df_per_subdir):
 
         to_concat = [df for df in chars_df_per_subdir if not df.empty]
-        all_chars_df = pd.concat(to_concat, axis='rows')
+        merged_df = pd.concat(to_concat, axis='rows')
 
         for first_col in ('block', 'subject'):
-            if first_col not in list(all_chars_df):
+            if first_col not in list(merged_df):
                 continue
-            all_chars_df = all_chars_df[[first_col] + [c for c in list(all_chars_df) if c != first_col]]
+            merged_df = merged_df[[first_col] + [c for c in list(merged_df) if c != first_col]]
 
-        all_chars_df = self.update_prev_and_next_char(all_chars_df)
+        return merged_df
 
-        variant_length = 'target_len' in all_chars_df and len(all_chars_df.target_len.unique()) > 1
+    #-------------------------------------------------------------------
+    def _add_columns_to_merged_chars_df(self, df, trials_df):
 
-        all_chars_df = self.update_pre_char_delay_at_trial_level(all_chars_df, 'pre_trial_delay', per_length=variant_length, char_num=1)
-        if 'dec_pos' in all_chars_df:
-            all_chars_df = self.update_pre_char_delay_at_trial_level(all_chars_df, 'cross_triplet_delay', per_length=variant_length, dec_pos=3)
+        df = self.update_prev_and_next_char(df)
 
-        if 'sound_file_length' in all_chars_df:
-            all_chars_df['post_stim_char1_delay'] = all_chars_df.pre_trial_delay - all_chars_df.sound_file_length
-            self.zscore_col(all_chars_df, 'post_stim_char1_delay', True)
+        #-- Add RC from trials
+        df = df.merge(trials_df[self.merge_key() + ['rc']], on=self.merge_key(), how='left')
 
-        return all_chars_df
+        variant_length = 'target_len' in df and len(df.target_len.unique()) > 1
+
+        df = self.update_pre_char_delay_at_trial_level(df, 'pre_trial_delay', per_length=variant_length, char_num=1)
+        if 'dec_pos' in df:
+            df = self.update_pre_char_delay_at_trial_level(df, 'cross_triplet_delay', per_length=variant_length, dec_pos=3)
+
+        if 'sound_file_length' in df:
+            df['post_stim_char1_delay'] = df.pre_trial_delay - df.sound_file_length
+            self.zscore_col(df, 'post_stim_char1_delay', True)
+
+        return df
 
     #-------------------------------------------------------------------
     def _load_session_trials(self, trials_fn, ds_dir, subj_id):
@@ -172,6 +201,9 @@ class Merger(object):
             print('Loading trials file')
 
         raw_df = pd.read_csv(trials_fn)
+        if raw_df.shape[0] != (raw_df.trial_id.astype(str) + raw_df.sub_trial_num.astype(str)).nunique():
+            print(f'ERROR: duplicate trials in {ds_dir.dir_name}/trials.csv ({raw_df.shape[0]} rows but only {raw_df.trial_id.nunique()} unique trial IDs). This dataset was ignored.')
+            return pd.DataFrame()
 
         all_rc = raw_df.rc.str.strip()
         new_df = dict(subject=[subj_id] * raw_df.shape[0],
@@ -414,7 +446,7 @@ class Merger(object):
             basename = os.path.basename(filename)
             m = re.match(f'^{self.traj_file_prefix}(\\d+)(_(\\d+))?_target_(\\d+).csv$', basename)
             if m is None:
-                print(f'ERROR: invalid trajectory file name "{basename}" in {dir_name}')
+                print(f'Warning: invalid trajectory file name "{basename}" in {dir_name}')
                 continue
             trial_id = int(m.group(1))
             subtrial_num = 1 if m.group(3) is None else int(m.group(3))

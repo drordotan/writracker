@@ -24,7 +24,7 @@ ColGeneratorSpec = namedtuple('ColGeneratorSpec', ['generator', 'nparams'])
 class Merger(object):
 
     def __init__(self, new_cols_trials=None, new_cols_chars=None, traj_file_prefix='trajectory_trial_', has_block_col=True,
-                 set_response_in_ok_trials=False, trace=False):
+                 set_response_in_ok_trials=False, min_ntrials_in_session=0, trace=False):
         """
         :param new_cols_trials: Specification of new columns to create in the trials.csv file.
                 The specification is a dict; in each entry,
@@ -40,7 +40,8 @@ class Merger(object):
                     The function's first argument is the row from characters.csv. It can also get two additinal argumetns:
                     the dataset directory + the subject ID. It can also get a 4th argument: the trial (a DataFrame row from trials.csv).
         :param traj_file_prefix:
-        :param has_block_col:
+        :param has_block_col: Whether the output should include a "block" column (if yes, expecting it in the input too)
+        :param min_ntrials_in_session: Ignore sessions with fewer trials than this number
         :param set_response_in_ok_trials: If True, set the response to be equal to the target in all trials with rc=='OK'
         """
         self.new_cols_trials = self._parse_generators(new_cols_trials, valid_n_params={1, 3, 4})
@@ -50,6 +51,7 @@ class Merger(object):
         self.merge_errors = {}
         self.overriden_cols = set()
         self.set_response_in_ok_trials = set_response_in_ok_trials
+        self.min_ntrials_in_session = min_ntrials_in_session
         self.trace = trace
 
     #-------------------------------------------------------------------
@@ -148,8 +150,9 @@ class Merger(object):
 
         trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'pre_trial_delay')
         trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'pre_trial_delay_z')
-        trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay')
-        trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay_z')
+        if 'cross_triplet_delay' in chars_df:
+            trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay')
+            trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay_z')
 
         return trials_df
 
@@ -181,6 +184,7 @@ class Merger(object):
 
         variant_length = 'target_len' in df and len(df.target_len.unique()) > 1
 
+        #-- The pre-char delay of character #1 is set to be the pre-trial delay
         df = self.update_pre_char_delay_at_trial_level(df, 'pre_trial_delay', per_length=variant_length, char_num=1)
         if 'dec_pos' in df:
             df = self.update_pre_char_delay_at_trial_level(df, 'cross_triplet_delay', per_length=variant_length, dec_pos=3)
@@ -205,6 +209,14 @@ class Merger(object):
             print(f'ERROR: duplicate trials in {ds_dir.dir_name}/trials.csv ({raw_df.shape[0]} rows but only {raw_df.trial_id.nunique()} unique trial IDs). This dataset was ignored.')
             return pd.DataFrame()
 
+        if self.has_block_col and 'block' not in raw_df:
+            print(f'ERROR: block column is missing in {ds_dir.dir_name}/trials.csv but expected. This dataset was ignored.')
+            return pd.DataFrame()
+
+        if raw_df.shape[0] < self.min_ntrials_in_session:
+            print(f'WARNING: only {raw_df.shape[0]} trials in {ds_dir.dir_name}/trials.csv, fewer than the required minimum of {self.min_ntrials_in_session}. This dataset was ignored.')
+            return pd.DataFrame()
+
         all_rc = raw_df.rc.str.strip()
         new_df = dict(subject=[subj_id] * raw_df.shape[0],
                       trial_id=raw_df.trial_id,
@@ -223,6 +235,7 @@ class Merger(object):
             new_df['sound_file_length'] = raw_df.sound_file_length
 
         if self.has_block_col:
+            assert ds_dir.block_unique is not None, "No block number was specified"
             new_df['block'] = [ds_dir.block_unique] * raw_df.shape[0]
 
         return new_df

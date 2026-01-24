@@ -101,7 +101,7 @@ def is_encoder_results_directory(dir_name):
     with open(index_fn, 'r') as fp:
         reader = csv.DictReader(fp)
         try:
-            u.validate_csv_format(index_fn, reader.fieldnames, trials_index_cols)
+            u.validate_csv_format(index_fn, reader, trials_index_cols)
         except ValueError:
             return False
 

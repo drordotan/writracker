@@ -481,7 +481,7 @@ class TrialEncodingWindow(qw.QMainWindow):
                 self.close()
 
         elif command == 'skip_trial':
-            self.result = 'next_trial'
+            self.result = 'skip_trial'
             self.close()
 
         elif command == 'prev_trial':
@@ -704,7 +704,7 @@ class CodeSingleTrial(object):
                     trial_queue.insert(0, char_list)
 
             #-- Continue to the next trial
-            elif rc == 'next_trial':
+            elif rc in ('next_trial', 'skip_trial'):
                 sub_trial_num += 1
 
             #-- Return to the previous trial

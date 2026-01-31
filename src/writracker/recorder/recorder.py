@@ -204,44 +204,14 @@ class MainWindow(QMainWindow):  # inherits QMainWindow, can equally define windo
 			if self.current_active_trajectory is not None and self.session_started:
 				self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
 
-	""" This is the old function to get tablet information using events. 
-		it work well, but does not allow recording tablet move above the surface ('hovering') """
-	# def tabletEvent(self, tabletEvent):
-	#     self.pen_x = self.x_resolution - tabletEvent.globalX()  # Fix tablet mirroring-flip X axis
-	#     self.pen_y = tabletEvent.globalY()
-	#     self.pen_pressure = int(tabletEvent.pressure() * 100)
-	#     self.pen_xtilt = tabletEvent.xTilt()
-	#     self.pen_ytilt = tabletEvent.yTilt()
-	#     # mark Trial started flag, but only if the ok/error are not checked.
-	#     # this allows buffer time from the moment we chose RC to pressing next and avoid new file creation
-	#     if self.btn_radio_ok.isChecked() is False and self.btn_radio_err.isChecked() is False and self.session_started:
-	#         # When we the user chose to play sounds
-	#         # the trial will start when pressing play, and not when touching the tablet.
-	#         if not self.trial_started and self.sounds_folder_path is None:
-	#             self.start_trial()
-	#
-	#     # write to traj file:
-	#     if self.current_active_trajectory is not None and self.session_started:
-	#         self.current_active_trajectory.add_row(self.pen_x, self.pen_y, self.pen_pressure)
-	#     if tabletEvent.type() == QTabletEvent.TabletPress:
-	#         self.path.moveTo(tabletEvent.pos())
-	#     elif tabletEvent.type() == QTabletEvent.TabletMove:
-	#         self.path.lineTo(tabletEvent.pos())
-	#     elif tabletEvent.type() == QTabletEvent.TabletRelease:
-	#         if self.pen_pressure != 0 and self.session_started:
-	#             # When the pen leaves the surface, add a sample point with zero pressure
-	#             self.current_active_trajectory.add_row(self.pen_x, self.pen_y, 0)
-	#     tabletEvent.accept()
-	#     self.update()                   # calls paintEvent behind the scenes
-
 	def paintEvent(self, event):
 		self.scene.addPath(self.path)
 
 	#               -------------------------- Button/Menu Functions --------------------------
 
-
 	def f_btn_mirror(self):
 		self.tablet_paint_area.scale(-1, 1)
+
 	#------------------------------------------------------------------------------------------
 	# This function rotates the graphicsView, then tablet_modulates the rotation factor for the points in the traj file.
 	def f_btn_rotate(self):

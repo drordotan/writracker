@@ -589,5 +589,5 @@ def trial_xlim(characters):
 
 #-----------------------------------------------------------------------------------
 def trial_ylim(characters):
-    ylims = [stroke.ylim for c in characters for stroke in c.strokes]
+    ylims = [stroke.ylim for c in characters for stroke in c.strokes if len(stroke.trajectory) > 0]  # check trajectory length to avoid bugs
     return min([y[0] for y in ylims]), max([y[1] for y in ylims])

@@ -107,7 +107,9 @@ class Merger(object):
                 if curr_trials_df.empty:
                     continue
 
-                self._generate_new_columns(curr_trials_df, curr_chars_df, ds_dir, subj_id)
+                if not curr_chars_df.empty:
+                    self._generate_new_columns(curr_trials_df, curr_chars_df, ds_dir, subj_id)
+
                 trials_data.append(curr_trials_df)
                 chars_data.append(curr_chars_df)
 
@@ -209,10 +211,6 @@ class Merger(object):
             print(f'ERROR: duplicate trials in {ds_dir.dir_name}/trials.csv ({raw_df.shape[0]} rows but only {raw_df.trial_id.nunique()} unique trial IDs). This dataset was ignored.')
             return pd.DataFrame()
 
-        if self.has_block_col and 'block' not in raw_df:
-            print(f'ERROR: block column is missing in {ds_dir.dir_name}/trials.csv but expected. This dataset was ignored.')
-            return pd.DataFrame()
-
         if raw_df.shape[0] < self.min_ntrials_in_session:
             print(f'WARNING: only {raw_df.shape[0]} trials in {ds_dir.dir_name}/trials.csv, fewer than the required minimum of {self.min_ntrials_in_session}. This dataset was ignored.')
             return pd.DataFrame()
@@ -235,8 +233,17 @@ class Merger(object):
             new_df['sound_file_length'] = raw_df.sound_file_length
 
         if self.has_block_col:
-            assert ds_dir.block_unique is not None, "No block number was specified"
-            new_df['block'] = [ds_dir.block_unique] * raw_df.shape[0]
+            if ds_dir.block_unique is not None:
+                #-- Use the default
+                new_df['block'] = [ds_dir.block_unique] * raw_df.shape[0]
+
+            elif 'block' in raw_df and raw_df.block.isnull().any() is False:
+                #-- Use the block column from the dataset
+                pass
+
+            else:
+                print(f'ERROR: block column is missing in {ds_dir.dir_name}/trials.csv and no default value was specified. This dataset was ignored.')
+                return pd.DataFrame()
 
         return new_df
 

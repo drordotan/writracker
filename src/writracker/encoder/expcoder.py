@@ -5,6 +5,7 @@ import os
 import sys
 import traceback
 import PyQt5.QtWidgets as qw
+from pathlib import Path
 
 import writracker.recorder.results
 import writracker.encoder
@@ -43,6 +44,12 @@ def run():
     except Exception as e:
         traceback.print_exception(e)
         qw.QMessageBox.critical(None, 'Error in WEncoder', str(e))
+
+
+#-------------------------------------------------------------------------------------
+def last_n_basenames(path, n):
+    p = Path(path).resolve()
+    return '/'.join([p.parents[i].name for i in range(n - 2, -1, -1)] + [os.path.basename(path)])
 
 
 #-------------------------------------------------------------------------------------
@@ -253,7 +260,7 @@ def code_experiment(trials, out_dir):
     reprocess_trial = False
     delta = 1
 
-    coder = writracker.encoder.trialcoder.CodeSingleTrial(out_dir)
+    coder = writracker.encoder.trialcoder.CodeSingleTrial(out_dir, last_n_basenames(out_dir, 3))
 
     while True:
 

@@ -198,7 +198,7 @@ class GraphicsView(qw.QGraphicsView):
 class TrialEncodingWindow(qw.QMainWindow):
     
     #---------------------------------------------------------------------------------------
-    def __init__(self, trial, characters, sub_trial_num, screen_size, user_response=''):
+    def __init__(self, trial, characters, sub_trial_num, screen_size, user_response='', title_prefix=None):
         super().__init__()
         self.trial = trial
         self.characters = characters
@@ -209,6 +209,7 @@ class TrialEncodingWindow(qw.QMainWindow):
         self.current_command = None
         self.result = 'continue'
         self.extra_info = None
+        self.title_prefix = title_prefix
 
         self.setup_ui()
         self.setup_connections()
@@ -217,7 +218,8 @@ class TrialEncodingWindow(qw.QMainWindow):
     #---------------------------------------------------------------------------------------
     def setup_ui(self):
 
-        title = 'Trial #{}, target={} ({} characters, {} strokes)'.format(
+        title = '{}Trial #{}, target={} ({} characters, {} strokes)'.format(
+                '' if self.title_prefix is None else self.title_prefix + '    ',
             self.trial.trial_id, self.trial.stimulus,
             len([c for c in self.characters if len(c.trajectory) > 0]),
             len([s for c in self.characters for s in c.on_paper_strokes if len(s.trajectory) > 0])
@@ -649,10 +651,11 @@ class CodeSingleTrial(object):
     """
 
     #---------------------------------------------------------------------------------------
-    def __init__(self, out_dir):
+    def __init__(self, out_dir, dataset_title=None):
         self.out_dir = out_dir
         self.inner_margin = 25  # The margin required between the most extreme dots and the edges of their plot area (in pixels)
         self.outer_margin = 25  # The margin required between the edges of the plot area and screen edges (in pixels)
+        self.dataset_title = dataset_title
 
     #---------------------------------------------------------------------------------------
     def encode(self, trial):
@@ -748,7 +751,8 @@ class CodeSingleTrial(object):
         screen_size = uiu.screen_size()
         expand_ratio, offset, screen_size = _get_expand_ratio(all_markup_dots, screen_size, self.inner_margin, self.outer_margin)
 
-        window = TrialEncodingWindow(trial, characters, sub_trial_num, screen_size, response or '')
+        window = TrialEncodingWindow(trial, characters, sub_trial_num, screen_size, response or '',
+                                     title_prefix='' if self.dataset_title is None else f'[Saving to .../{self.dataset_title}]')
         _plot_dots_for_markup(characters, window.graphics_view, screen_size, expand_ratio, offset, self.inner_margin)
 
         window.show()

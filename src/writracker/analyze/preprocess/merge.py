@@ -10,143 +10,35 @@ import os
 import pandas as pd
 import glob
 import re
-import scipy.stats
-import inspect
-from dataclasses import dataclass
 
-import mtl.utils as mu
-
-
-@dataclass
-class ColGeneratorSpec:
-    col_names: list
-    generator: callable
-    nparams: int
-    for_trials: bool
-
-    @property
-    def generates_multiple_values(self):
-        return len(self.col_names) > 1
-
-    @property
-    def export_any_column(self):
-        """ Whether the generator exports any column to the target CSV file """
-        return sum(not c.startswith('__') for c in self.col_names) > 0
-
-    @property
-    def target(self):
-        return 'trials' if self.for_trials else 'characters'
-
-    @property
-    def all_col_names(self):
-        return ','.join(self.col_names)
+import writracker.analyze.preprocess.colgenerators as colgen
 
 
 #-----------------------------------------------------------------------------
 class Merger(object):
 
     def __init__(self, new_cols=None, traj_file_prefix='trajectory_trial_', has_block_col=True,
-                 set_response_in_ok_trials=False, min_ntrials_in_session=0, trace=False):
+                 trials_csv_converters=None, set_response_in_ok_trials=False, min_ntrials_in_session=0, trace=False):
         """
         :param new_cols: Specification of new columns to create in the trials.csv or characters.csv files.
-                The specification is a dict; in each entry,
-                Key = the name(s) of the new column(s) to create, and where to create them:
-                     A single column name, preceded by 't.'/'t_' or 'c.'/'c_' to indicate whether to create it in trials.csv or characters.csv;
-                     Or a tuple/list whose first element is 't'/'trials' or 'c'/'chars', and the remaining element/s are the new column name/s
-                Value = A function to generate the new value/s (called for each row).
-                    The function returns the new columns value (or a list of values if the dict key specifiefs several columns).
-                    The function has 1, 3, or 4 arguments:
-                       1 arg = the current row from the relevant CSV file, as a dict
-                       3 args = the row, the dataset directory, and the subject ID
-                       4 args = Like the 3-arg function. The 4th argument: when creating a new column in characters.csv,
-                                this is the trial row (from trials.csv) corresponding to the character's trial_id;
-                                When creating a new column in trials.csv, this is a DataFrame with the current trial's characters
+                         See detais in ColGeneratorsManager class.
+        :param trials_csv_converters: 'converters' argument to be passed to pandas.read_csv when loading trials.csv files.
+                         (it adds on top of the default converters)
         :param traj_file_prefix:
         :param has_block_col: Whether the output should include a "block" column (if yes, expecting it in the input too)
         :param min_ntrials_in_session: Ignore sessions with fewer trials than this number
         :param set_response_in_ok_trials: If True, set the response to be equal to the target in all trials with rc=='OK'
         """
-        self.new_col_generators = self._parse_generators(new_cols)
+        self.col_generation = colgen.ColGeneratorsManager(new_cols, trace=trace)
+        self.trials_csv_converters = dict(response=parse_response_col_in_trials_csv)
+        if trials_csv_converters is not None:
+            self.trials_csv_converters.update(trials_csv_converters)
         self.traj_file_prefix = traj_file_prefix
         self.has_block_col = has_block_col
         self.merge_errors = {}
-        self.overriden_cols = set()
         self.set_response_in_ok_trials = set_response_in_ok_trials
         self.min_ntrials_in_session = min_ntrials_in_session
         self.trace = trace
-
-    #-------------------------------------------------------------------
-    def _parse_generators(self, generators):
-        """
-        Parse the definition of each generator: its number of parameters (and validate it); and whether it applies to trials.csv or characters.csv
-
-        The generators dict has keys of the form 't_colname' or 'c_colname', where 't' means trials.csv and 'c' means characters.csv
-        The values are the generation function
-        """
-        valid_n_params = {1, 3, 4}
-
-        if generators is None:
-            return []
-
-        result = []
-        for level_and_col, gen_func in generators.items():
-            m = re.match(r'^([tc])[_.](\w+)$', level_and_col)
-            if m is None:
-                print(f'ERROR: cannot parse the column name "{level_and_col}" for generator="{gen_func}"')
-                continue
-
-            v = self.parse_generator_col_names(level_and_col)
-            if v is None:
-                continue
-
-            for_trials, col_name = v
-
-            try:
-                nparams = len(inspect.signature(gen_func).parameters)
-            except TypeError as e:
-                print(f'ERROR: cannot parse the generator of column {col_name}: generator="{gen_func}": {e}')
-                continue
-
-            if nparams not in valid_n_params:
-                expected = " or ".join(str(s) for s in valid_n_params)
-                print(f'ERROR: generator for column {col_name} has {nparams} parameters, but expected {expected}')
-                continue
-
-            generator = ColGeneratorSpec(col_names=col_name, generator=gen_func, nparams=nparams, for_trials=for_trials)
-            result.append(generator)
-
-        return result
-
-    #-------------------------------------------------------------------
-    def parse_generator_col_names(self, key):
-
-        if isinstance(key, str):
-            m = re.match(r'^([tc])[_.](\w+)$', key)
-            if m is None:
-                print(f'ERROR when parsing a new column generator: cannot parse the column name "{key}": ignored')
-                return None
-
-            for_trials = (m.group(1) == 't')
-            col_name = m.group(2)
-
-            return for_trials, [col_name]
-
-        elif mu.is_collection(key) and len(key) > 1:
-            level = key[0]
-            if not isinstance(level, str) or level not in ('t', 'c', 'trials', 'chars'):
-                print(f'ERROR when parsing a new column generator: cannot parse the column name "{key}": ignored')
-                return None
-
-            for_trials = level in ('t', 'trials')
-            if sum(not isinstance(c, str) for c in key[1:]) > 0:
-                print(f'ERROR when parsing a new column generator: non-string column names in "{key}": ignored')
-                return None
-
-            return for_trials, list(key[1:])
-
-        else:
-            print(f'ERROR when parsing a new column generator: cannot parse the column name "{key}": ignored')
-            return None
 
     #-------------------------------------------------------------------
     def merge_dataset(self, subj_location, find_session_dirs, out_chars_fn=None, out_trials_fn=None):
@@ -181,7 +73,7 @@ class Merger(object):
                 if curr_trials_df.empty:
                     continue
 
-                self._generate_new_columns(curr_trials_df, curr_chars_df, ds_dir, subj_id)
+                self.col_generation.generate_columns(curr_trials_df, curr_chars_df, ds_dir, subj_id)
 
                 trials_data.append(curr_trials_df)
                 chars_data.append(curr_chars_df)
@@ -197,68 +89,6 @@ class Merger(object):
             all_chars_df.to_csv(out_chars_fn, index=False, float_format='%.5g')
 
         return all_chars_df
-
-    #-------------------------------------------------------------------
-    def _generate_new_columns(self, trials_df, chars_df, ds_dir, subj_id):
-
-        trials_rows = [dict(row) for _, row in trials_df.iterrows()]
-        chars_rows = [dict(row) for _, row in chars_df.iterrows()]
-
-        for generator in self.new_col_generators:
-
-            if self.trace:
-                print(f'  Add column/s {generator.all_col_names} to {generator.target} file')
-
-            if generator.for_trials:
-                #-- Generate a new column in trials_df
-                gen_args = TrialColGenratorArgs(new_col_name=generator.col_names, nparams=generator.nparams,
-                                                ds_dir=ds_dir, subj_id=subj_id, chars_df=chars_df)
-                self.apply_generator(generator, gen_args, trials_rows, trials_df)
-
-            else:
-                #-- Generate a new column in chars_df
-                gen_args = CharColGenratorArgs(new_col_name=generator.col_names, nparams=generator.nparams,
-                                               ds_dir=ds_dir, subj_id=subj_id, trials_df=trials_df)
-                self.apply_generator(generator, gen_args, chars_rows, chars_df)
-
-        for col in list(chars_df):
-            if col != 'extends' and chars_df[col].isna().all():
-                print(f'NOTE: column "{col}" is empty in all rows of subject {subj_id} dataset {ds_dir.dir_name}')
-                break
-
-    #-------------------------------------------------------------------
-    def apply_generator(self, generator, gen_args_func, rows, df):
-        """
-        Apply a column generator to all rows, then add the generated values as new column/s to the DataFrame
-        """
-
-        #-- Some generators don't export any column to the data frame, but just keep values on 'row'
-        if not generator.export_any_column:
-            return
-
-        new_col_values = [generator.generator(*gen_args_func(row)) for row in rows]
-
-        #-- Ensure the generated values are arrays
-        if not generator.generates_multiple_values:
-            new_col_values = [[v] for v in new_col_values]
-
-        #-- Export the generated values into the data frame
-        for i, col_name in enumerate(generator.col_names):
-
-            if col_name.startswith('__'):
-                continue
-
-            if col_name not in self.overriden_cols:
-                if col_name in df:
-                    print(f'WARNING: column "{col_name}" generated twice / overriden')
-                    self.overriden_cols.add(col_name)
-                elif col_name in rows[0]:
-                    print(f'WARNING: column "{col_name}" overrides a column that exists in the input data')
-                    self.overriden_cols.add(col_name)
-
-            df[col_name] = [v[i] for v in new_col_values]
-            for row, v in zip(rows, new_col_values):
-                row[col_name] = v[i]
 
     #-------------------------------------------------------------------
     def _copy_col_from_char1_to_trials(self, trials_df, chars_df, col_name):
@@ -301,27 +131,28 @@ class Merger(object):
         #-- Add RC from trials
         chars_df = chars_df.merge(trials_df[self.merge_key() + ['rc']], on=self.merge_key(), how='left')
 
-        variant_length = 'target_len' in chars_df and len(chars_df.target_len.unique()) > 1
-        if variant_length and 'target_len' not in trials_df:
+        multiple_target_lengths = 'target_len' in chars_df and len(chars_df.target_len.unique()) > 1
+        if multiple_target_lengths and 'target_len' not in trials_df:
             trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'target_len')
 
         #-- The pre-char delay of character #1 is set to be the pre-trial delay (because t0 was set by WRecorder as the trial's starting point)
         chars_df = self.update_pre_char_delay_at_trial_level(chars_df, 'pre_trial_delay', char_num=1)
         trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'pre_trial_delay')
-        self.zscore_col(trials_df, 'pre_trial_delay', per_length=variant_length)
+        trials_df['pre_trial_delay_z'] = colgen.compute_z_scores(trials_df, 'pre_trial_delay', per_target_length=multiple_target_lengths)
         chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'pre_trial_delay_z')
 
         #-- Cross-triplet delay
         if 'dec_pos' in chars_df:
             chars_df = self.update_pre_char_delay_at_trial_level(chars_df, 'cross_triplet_delay', dec_pos=3)
             trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay')
-            self.zscore_col(trials_df, 'cross_triplet_delay', per_length=variant_length)
+            trials_df['cross_triplet_delay_z'] = colgen.compute_z_scores(trials_df, 'cross_triplet_delay', per_target_length=multiple_target_lengths)
             chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'cross_triplet_delay_z')
 
         #-- Delay from end-of-audio to start-of-char1
         if 'sound_file_length' in trials_df:
             trials_df['endaudio_to_char1_delay'] = trials_df.pre_trial_delay - trials_df.sound_file_length
-            self.zscore_col(trials_df, 'endaudio_to_char1_delay', per_length=variant_length)
+            trials_df['endaudio_to_char1_delay_z'] = \
+                colgen.compute_z_scores(trials_df, 'endaudio_to_char1_delay', per_target_length=multiple_target_lengths)
             chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'endaudio_to_char1_delay')
             chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'endaudio_to_char1_delay_z')
 
@@ -342,7 +173,7 @@ class Merger(object):
         if self.trace:
             print('Loading trials file')
 
-        raw_df = pd.read_csv(trials_fn)
+        raw_df = pd.read_csv(trials_fn, converters=self.trials_csv_converters)
         if raw_df.shape[0] != (raw_df.trial_id.astype(str) + raw_df.sub_trial_num.astype(str)).nunique():
             print(f'ERROR: duplicate trials in {ds_dir.dir_name}/trials.csv ({raw_df.shape[0]} rows but only {raw_df.trial_id.nunique()} unique trial IDs). This dataset was ignored.')
             return pd.DataFrame()
@@ -447,20 +278,6 @@ class Merger(object):
         return data
 
     #-------------------------------------------------------------------
-    def zscore_col(self, data, col_name, per_length):
-        """
-        Z-score a given column; potentially per length
-        """
-        if per_length:
-            data[col_name + '_z'] = 0.0
-            for target_len in data.target_len.unique():
-                data.loc[data.target_len == target_len, col_name + '_z'] = \
-                    scipy.stats.zscore(data[col_name][data.target_len == target_len], nan_policy='omit')
-        else:
-            data[col_name + '_z'] = scipy.stats.zscore(data[col_name], nan_policy='omit')
-
-
-    #-------------------------------------------------------------------
     def merge_key(self):
         key = ['subject']
         if self.has_block_col:
@@ -521,95 +338,6 @@ class Merger(object):
             result[(trial_id, subtrial_num)] = int(m.group(4))
 
         return result, [os.path.basename(fn) for fn in traj_files]
-
-
-#-------------------------------------------------------------------
-class CharColGenratorArgs(object):
-    """
-    Generate arguments for the col-generation function for characters.csv
-    """
-
-    def __init__(self, new_col_name, nparams, ds_dir, subj_id, trials_df):
-        self.ds_dir = ds_dir
-        self.subj_id = subj_id
-
-        if nparams == 1:
-            self.generate_args = self.gen_1args
-
-        elif nparams == 3:
-            self.generate_args = self.gen_3args
-
-        elif nparams == 4:
-            self.trials_df = trials_df
-            self.generate_args = self.gen_4args
-
-        else:
-            raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
-
-    def gen_1args(self, row):
-        return row,
-
-    def gen_3args(self, row):
-        return row, self.ds_dir, self.subj_id
-
-    def gen_4args(self, row):
-        trial = self.trials_df[self.trials_df.trial_id == row['trial_id']].iloc[0]
-        return row, self.ds_dir, self.subj_id, trial
-
-    def __call__(self, row):
-        return self.generate_args(row)
-
-
-class TrialColGenratorArgs(object):
-    """
-    Generate arguments for the col-generation function for trials.csv
-    """
-
-    def __init__(self, new_col_name, nparams, ds_dir, subj_id, chars_df):
-        self.ds_dir = ds_dir
-        self.subj_id = subj_id
-        self.chars_df_cols = list(chars_df)
-
-        if nparams == 1:
-            self.generate_args = self.gen_1args
-
-        elif nparams == 3:
-            self.generate_args = self.gen_3args
-
-        elif nparams == 4:
-            self.trial_characters = chars_df.groupby(['trial_id', 'sub_trial_num'])
-            self.generate_args = self.gen_4args
-
-        else:
-            raise ValueError(f'Invalid number of parameters ({nparams}) for column generator {new_col_name}')
-
-    def gen_1args(self, row):
-        return row,
-
-    def gen_3args(self, row):
-        return row, self.ds_dir, self.subj_id
-
-    def gen_4args(self, row):
-        trial_key = row['trial_id'], row['sub_trial_num']
-        if trial_key in self.trial_characters.groups:
-            chars_of_curr_trial = self.trial_characters.get_group(trial_key)
-        else:
-            chars_of_curr_trial = pd.DataFrame({c: [] for c in self.chars_df_cols})
-
-        return row, self.ds_dir, self.subj_id, chars_of_curr_trial
-
-    def __call__(self, row):
-        return self.generate_args(row)
-
-
-#-------------------------------------------------------------------
-class GetTrialWithID(object):
-
-    def __init__(self, trials_df):
-        self.trials_df = trials_df
-
-    def __call__(self, trial_id):
-        return self.trials_df[self.trials_df.trial_id == trial_id].iloc[0]
 
 
 #-------------------------------------------------------------------
@@ -692,3 +420,10 @@ class EncodedSessionDir(object):
     @property
     def dir_basename(self):
         return os.path.basename(self.dir_name)
+
+
+def parse_response_col_in_trials_csv(resp):
+    if pd.isnull(resp):
+        return ''
+    resp = str(resp)
+    return resp[:-2] if resp.endswith('.0') else resp

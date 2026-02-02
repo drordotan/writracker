@@ -41,3 +41,14 @@ class ColMapper(object):
 def integer_target_length(row):
     """ The number of digits in an integer target """
     return len(str(int(row['target'])))
+
+
+#----------------------------------------------------------------------------------
+def endaudio_to_hundred(row, _, __, chars_df):
+    if sum(chars_df.dec_pos == 3) == 0:
+        return None
+    if (chars_df.target_len != 3).any():
+        return None
+    end_of_audio = row['sound_file_length']
+    t_hundred = chars_df.t0[chars_df.dec_pos == 3]
+    return t_hundred - end_of_audio

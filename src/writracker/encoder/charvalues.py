@@ -5,15 +5,11 @@ import csv
 import inspect
 import os
 import numpy as np
-from collections import namedtuple
 from collections import OrderedDict
 
 import math
 
 import writracker.utils as u
-
-
-CharBoundingBox = namedtuple('CharBoundingBox', ['xmid', 'width', 'ymid', 'height', 'xmin', 'ymin'])
 
 
 #-----------------------------------------------------------------------------------------------------
@@ -166,6 +162,32 @@ class TrialLevelValueGenerator(BaseValueGenerator):
 
 
 #-----------------------------------------------------------------------------------------------------
+class CharBoundingBox(object):
+
+    def __init__(self, xmin, ymin, width, height):
+        self.width = width
+        self.height = height
+        self.xmin = xmin
+        self.ymin = ymin
+
+    @property
+    def xmax(self):
+        return self.xmin + self.width
+
+    @property
+    def ymax(self):
+        return self.ymin + self.height
+
+    @property
+    def xmid(self):
+        return self.xmin + self.width / 2
+
+    @property
+    def ymid(self):
+        return self.ymin + self.height / 2
+
+
+#-----------------------------------------------------------------------------------------------------
 def generate_char_level_custom_values(trials, value_generators=(), trial_filter=None, char_filter=None, out_filename=None, append=False):
     """
     Compute an aggregate value (or values) per trajectory section, and potentially save to CSV
@@ -281,7 +303,6 @@ class BBoxAttr(object):
 
     def __init__(self, bbox_fld):
         self.fld_name = bbox_fld
-        self.fld_num = CharBoundingBox._fields.index(bbox_fld)
 
     def __str__(self):
         return self.fld_name
@@ -322,14 +343,12 @@ class GetTrialBoundingBox(object):
     def __call__(self, trial):
 
         points = [pt for pt in trial.traj_points if pt.z > 0] if self.only_on_paper else trial.traj_points
-        bbox = _get_bounding_box_traj(points,
-                                      fraction_of_x_points=self.fraction_of_x_points,
-                                      fraction_of_y_points=self.fraction_of_y_points)
+        bbox = get_bounding_box_traj(points,
+                                     fraction_of_x_points=self.fraction_of_x_points,
+                                     fraction_of_y_points=self.fraction_of_y_points)
 
-        if len(self.columns) == 1:
-            return bbox[self.columns[0].fld_num]
-        else:
-            return tuple(bbox[col.fld_num] for col in self.columns)
+        values = tuple(getattr(bbox, col.fld_name) for col in self.columns)
+        return values[0] if len(self.columns) == 1 else values
 
 
 #-----------------------------------------------------------------------------------------------------
@@ -383,10 +402,8 @@ class GetCharBoundingBox(object):
     #---------------------------------------------------------------
     def __call__(self, trial, character):
         bbox = get_bounding_box(character, self.fraction_of_x_points, self.fraction_of_y_points)
-        if len(self.columns) == 1:
-            return bbox[self.columns[0].fld_num]
-        else:
-            return tuple(bbox[col.fld_num] for col in self.columns)
+        flds = tuple(getattr(bbox, col.fld_name) for col in self.columns)
+        return flds[0] if len(self.columns) == 1 else flds
 
 
 #------------------------------------------------------------------------------------
@@ -402,11 +419,11 @@ def get_bounding_box(character, fraction_of_x_points=None, fraction_of_y_points=
     :param fraction_of_y_points: Percentage of y coordinates that must be in the trajectory. Value between 0 and 1.
     """
     points = [pt for stroke in character.strokes if stroke.on_paper for pt in stroke.trajectory]
-    return _get_bounding_box_traj(points, fraction_of_x_points=fraction_of_x_points, fraction_of_y_points=fraction_of_y_points)
+    return get_bounding_box_traj(points, fraction_of_x_points=fraction_of_x_points, fraction_of_y_points=fraction_of_y_points)
 
 
 #----------------------------------------------------------------
-def _get_bounding_box_traj(trajectory, fraction_of_x_points=None, fraction_of_y_points=None):
+def get_bounding_box_traj(trajectory, fraction_of_x_points=None, fraction_of_y_points=None):
     """
     Get a rectangle that surrounds a given trajectory (or at least most of it)
 
@@ -436,7 +453,7 @@ def _get_bounding_box_traj(trajectory, fraction_of_x_points=None, fraction_of_y_
     w = xmax - xmin
     h = ymax - ymin
 
-    return CharBoundingBox(xmid=xmin + w / 2, width=w, ymid=ymin + h / 2, height=h, xmin=xmin, ymin=ymin)
+    return CharBoundingBox(xmin=xmin, ymin=ymin, width=w, height=h)
 
 
 #----------------------------------------------------------------

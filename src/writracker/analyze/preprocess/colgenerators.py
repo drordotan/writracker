@@ -105,7 +105,7 @@ class ColGeneratorsManager(object):
         if not mu.is_collection(generators_spec) or sum(not isinstance(g, GeneratorSpec) for g in generators_spec) > 0:
             raise ValueError('generators_spec must be a collection of GeneratorSpec objects')
         self.generators = generators_spec
-        self.overriden_cols = set()
+        self.override_warning_issued = set()
         self.trace = trace
 
     #-------------------------------------------------------------------
@@ -113,6 +113,9 @@ class ColGeneratorsManager(object):
 
         trials_rows = [dict(row) for _, row in trials_df.iterrows()]
         chars_rows = [dict(row) for _, row in chars_df.iterrows()]
+
+        orig_trials_cols = trials_df.columns
+        orig_chars_cols = chars_df.columns
 
         for generator in self.generators:
 
@@ -123,13 +126,13 @@ class ColGeneratorsManager(object):
                 #-- Generate a new column in trials_df
                 gen_args = TrialColGenratorArgs(new_col_name=generator.col_names, nparams=generator.nparams,
                                                 ds_dir=ds_dir, subj_id=subj_id, chars_df=chars_df)
-                self.apply_generator(generator, gen_args, trials_rows, trials_df)
+                self.apply_generator(generator, gen_args, trials_rows, trials_df, orig_trials_cols)
 
             else:
                 #-- Generate a new column in chars_df
                 gen_args = CharColGenratorArgs(new_col_name=generator.col_names, nparams=generator.nparams,
                                                ds_dir=ds_dir, subj_id=subj_id, trials_df=trials_df)
-                self.apply_generator(generator, gen_args, chars_rows, chars_df)
+                self.apply_generator(generator, gen_args, chars_rows, chars_df, orig_chars_cols)
 
         for col in list(chars_df):
             if col != 'extends' and chars_df[col].isna().all():
@@ -137,14 +140,10 @@ class ColGeneratorsManager(object):
                 break
 
     #-------------------------------------------------------------------
-    def apply_generator(self, generator, gen_args_func, rows, df):
+    def apply_generator(self, generator, gen_args_func, rows, df, df_col_names_before_generation):
         """
         Apply a column generator to all rows, then add the generated values as new column/s to the DataFrame
         """
-
-        #-- Some generators don't export any column to the data frame, but just keep values on 'row'
-        if not generator.export_any_column:
-            return
 
         if generator.scope == GenerationScope.SingleRow:
             new_col_values = [generator.generator(*gen_args_func(row)) for row in rows]
@@ -160,20 +159,21 @@ class ColGeneratorsManager(object):
         #-- Export the generated values into the data frame
         for i, col_name in enumerate(generator.col_names):
 
+            for row, v in zip(rows, new_col_values):
+                row[col_name] = v[i]
+
             if col_name.startswith('__'):
                 continue
 
-            if col_name not in self.overriden_cols:
-                if col_name in df:
-                    print(f'WARNING: column "{col_name}" generated twice / overriden')
-                    self.overriden_cols.add(col_name)
-                elif len(rows) > 0 and col_name in rows[0]:
-                    print(f'WARNING: column "{col_name}" overrides a column that exists in the input data')
-                    self.overriden_cols.add(col_name)
+            if col_name in df and col_name not in self.override_warning_issued:
+                if col_name in df_col_names_before_generation:
+                    print(f'WARNING: column "{col_name}" existed in the input data and its value was modified')
+                else:
+                    print(f'WARNING: column "{col_name}" was generated and then its value was overriden')
+                self.override_warning_issued.add(col_name)
+
 
             df[col_name] = [v[i] for v in new_col_values]
-            for row, v in zip(rows, new_col_values):
-                row[col_name] = v[i]
 
 
 #--------------------------------------------------------------------------------------------

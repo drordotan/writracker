@@ -7,11 +7,12 @@ import os.path
 import re
 from matplotlib.backends import backend_pdf
 import numpy as np
+import enum
 import matplotlib.pyplot as plt
 from matplotlib import patches
 
 import writracker.utils as u
-from writracker.encoder.charvalues import get_bounding_box
+import writracker.encoder.charvalues as cval
 import writracker.encoder.dataio as dio
 
 
@@ -19,8 +20,25 @@ spine_color = .6, .6, .6
 grid_color = '#D9FAEC' # .9, .9, .9
 temporal_gaps_bar_color = '#dcefe7'
 temporal_gaps_ylabel_color = '#75bc9c'
-#bounding_box_colors = '#BF3C28', '#0E6AC2'
 bounding_box_colors = '#e57070', '#5858e0'
+
+
+class StrokesToPlot(enum.Enum):
+    """
+    Determines which stokes will be plotted
+    """
+    All = 'all'
+
+    # Only strokes belonging to a character (char_num > 0)
+    InChar = 'in_char'
+
+    # All strokes; but exclude any out-of-char stroke that is too far from the bounding box of the in-char strokes
+    ExcludeFar = 'exclude_far'
+
+    # All in-char strokes; out-of-char strokes that are before/between characters;
+    # and post-trial out-of-char strokes if they are not too far from the bounding box of the in-char strokes
+    ExcludeFarAndLast = 'exclude_far_and_last'
+
 
 #------------------------------------------------------------------------------
 class PdfPlotterConfig(object):
@@ -28,7 +46,7 @@ class PdfPlotterConfig(object):
     def __init__(self, bounding_box=False, char_order=False, temporal_gaps=False, temporal_gaps_ylim=None,
                  fraction_of_x_points=None, fraction_of_y_points=None,
                  cols_per_page=2, rows_per_page=5, n_colors=10, trial_title=None, description=None, dot_size=2, mirror_x=False, mirror_y=False,
-                 plot_out_of_char_strokes=False, real_proportions=True):
+                 strokes_to_plot: StrokesToPlot=StrokesToPlot.All, real_proportions=True):
         """
         :param bounding_box: plot bounding box for each character (True/False)
         :param char_order: Write the order of writing each character (possible only if bounding_box = True)
@@ -40,7 +58,8 @@ class PdfPlotterConfig(object):
         :param rows_per_page: Number of stimuli per column in each page
         :param n_colors: Number of grayscale color gradients for showing pen pressure
         :param trial_title: Function that sets each trial's title
-        :param plot_out_of_char_strokes: Whether to plot strokes that do not belong to any character
+        :param strokes_to_plot: Which strokes to plot: 'all'; 'in_char' (only those belonging to a character); or 'exclude_far' (exclude
+                        out-of-char strokes that are too far)
         :param real_proportions: Whether to keep the real y/x proportions of the writing area
         """
         if char_order:
@@ -60,7 +79,7 @@ class PdfPlotterConfig(object):
         self.description = None if description is None or str(description).strip() == '' else description
         self.mirror_x = mirror_x
         self.mirror_y = mirror_y
-        self.plot_out_of_char_strokes = plot_out_of_char_strokes
+        self.strokes_to_plot = strokes_to_plot
         self.real_proportions = real_proportions
 
         self.bounding_box_line_width = 0.5
@@ -142,8 +161,8 @@ class OneFilePdfPlotter(object):
         self.ds_spec = ds_spec
 
         self.exclude_proportions_outliers = True
-        self.max_condense_x = 5
-        self.max_condense_y = 2
+        self.max_condense_x = 8
+        self.max_condense_y = 3
 
     #------------------------------------------------------------------------------
     # noinspection PyAttributeOutsideInit
@@ -286,9 +305,7 @@ class OneFilePdfPlotter(object):
         lightest_color = 0.95
 
         #-- Get the points that should be plotted
-        points = trial.on_paper_points_with_char_num()
-        if not self.config.plot_out_of_char_strokes:
-            points = [p for p in points if p[1] > 0]
+        points = self._get_points_to_plot(trial)
         if len(points) == 0:
             return
 
@@ -305,9 +322,8 @@ class OneFilePdfPlotter(object):
         if ax is None:
             ax = plt.figure()
 
-        in_char_levels = [True, False] if self.config.plot_out_of_char_strokes else [True]
         for z_level in range(n_colors+1):
-            for in_char in in_char_levels:
+            for in_char in [True, False]:
                 inds = np.logical_and(z == z_level, point_belongs_to_char == in_char)
                 if sum(inds) > 0:
                     color = lightest_color * (1 - z_level/n_colors)
@@ -331,6 +347,56 @@ class OneFilePdfPlotter(object):
 
         ax.get_yaxis().set_visible(False)
         ax.get_xaxis().set_visible(False)
+
+    #-------------------------------------------------------------
+    def _get_points_to_plot(self, trial):
+        xy_bbox_fraction = 0.95
+
+        if self.config.strokes_to_plot in (StrokesToPlot.ExcludeFar, StrokesToPlot.ExcludeFarAndLast):
+            points = [(pt, s.char_num) for s in trial.strokes for pt in s if s.char_num > 0 and pt.z > 0]
+            trial_bbox = cval.get_bounding_box_traj([pt[0] for pt in points],
+                                                    fraction_of_x_points=xy_bbox_fraction, fraction_of_y_points=xy_bbox_fraction)
+
+            excessive_strokes = [s for s in trial.strokes if s.char_num == 0]
+            if self.config.strokes_to_plot == StrokesToPlot.ExcludeFarAndLast:
+                last_included_stroke_num = max(s.stroke_num for s in trial.strokes if s.char_num > 0)
+                within_trial_excessive_strokes = [s for s in excessive_strokes if s.stroke_num <= last_included_stroke_num]
+                points.extend([(pt, 0) for s in within_trial_excessive_strokes for pt in s if pt.z > 0])
+                after_trial_excessive_strokes = [s for s in excessive_strokes if s.stroke_num <= last_included_stroke_num]
+                strokes_to_include_only_if_close_enough = after_trial_excessive_strokes
+
+            else:
+                strokes_to_include_only_if_close_enough = excessive_strokes
+
+            #-- Add the excessive strokes only if they are not too far
+            points.extend([(pt, 0)
+                           for s in strokes_to_include_only_if_close_enough if len(s.trajectory) > 0 and not self._stroke_is_too_far(s, trial_bbox)
+                           for pt in s if pt.z > 0])
+            return points
+
+        else:
+            points = [(pt, s.char_num) for s in trial.strokes for pt in s if pt.z > 0]
+            if self.config.strokes_to_plot == StrokesToPlot.InChar:
+                points = [p for p in points if p[1] > 0]
+
+            return points
+
+    #-------------------------------------------------------------
+    def _stroke_is_too_far(self, stroke, trial_bounding_box):
+        """
+        Check whether an out-of-char stroke is too far from the within-char strokes
+        The calculation is according to the bounding box of all within-char strokes together versus the bounding box of the out-of-char stroke,
+        with a certain margin (distance_threshold) defined relative to the trial bounding box size.
+        """
+        xy_bbox_fraction = 0.95
+        distance_threshold = 2  # A stroke is considered as "far" if its distance from the closest boundary is twice the trial height/width
+
+        stroke_bbox = cval.get_bounding_box_traj(stroke.trajectory, fraction_of_x_points=xy_bbox_fraction, fraction_of_y_points=xy_bbox_fraction)
+
+        return stroke_bbox.xmin > trial_bounding_box.xmax + trial_bounding_box.width * distance_threshold or \
+              stroke_bbox.xmax < trial_bounding_box.xmin - trial_bounding_box.width * distance_threshold or \
+                stroke_bbox.ymin > trial_bounding_box.ymax + trial_bounding_box.height * distance_threshold or \
+                stroke_bbox.ymax < trial_bounding_box.ymin - trial_bounding_box.height * distance_threshold
 
     #-------------------------------------------------------------
     def recalibrate_to_real_proportions(self, points, pdf_yx_proportions):
@@ -375,8 +441,8 @@ class OneFilePdfPlotter(object):
         if not self.config.bounding_box and not self.config.temporal_gaps:
             return
 
-        bounding_boxes = [get_bounding_box(c, fraction_of_x_points=self.config.fraction_of_x_points,
-                                           fraction_of_y_points=self.config.fraction_of_y_points)
+        bounding_boxes = [cval.get_bounding_box(c, fraction_of_x_points=self.config.fraction_of_x_points,
+                                                fraction_of_y_points=self.config.fraction_of_y_points)
                           for c in trial.characters]
 
         trial.correct_writing_order = sum(np.diff([box.xmin for box in bounding_boxes]) < 0) == 0  # type: ignore

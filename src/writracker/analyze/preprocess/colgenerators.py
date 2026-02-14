@@ -14,6 +14,12 @@ import mtl.utils as mu
 #    Column-generation infra
 #============================================================================================================
 
+
+class GenerateFor(enum.Enum):
+    Trials = 'trials'
+    Chars = 'characters'
+
+
 class GenerationScope(enum.Enum):
     SingleRow = 1
     DataFrame = 2
@@ -22,11 +28,12 @@ class GenerationScope(enum.Enum):
 #--------------------------------------------------------------------------------------------
 class GeneratorSpec(object):
 
-    def __init__(self, level: str, col_names, generator: callable, scope: GenerationScope = None):
-        if level not in ('t', 'c', 'trials', 'chars'):
-            raise ValueError(f'Invalid level in ColGeneratorSpec: {level}')
+    def __init__(self, generate_for: GenerateFor, col_names, generator: callable, scope: GenerationScope = None):
 
-        self.for_trials = 't' in level
+        if not isinstance(generate_for, GenerateFor):
+            raise ValueError(f'Invalid generate_for = "{generate_for}"')
+
+        self.generate_for = generate_for
         self.col_names = col_names
         self.generator = generator
 
@@ -75,10 +82,6 @@ class GeneratorSpec(object):
         return sum(not c.startswith('__') for c in self.col_names) > 0
 
     @property
-    def target(self):
-        return 'trials' if self.for_trials else 'characters'
-
-    @property
     def all_col_names(self):
         return ','.join(self.col_names)
 
@@ -120,9 +123,9 @@ class ColGeneratorsManager(object):
         for generator in self.generators:
 
             if self.trace:
-                print(f'  Add column/s {generator.all_col_names} to {generator.target} file')
+                print(f'  Add column/s {generator.all_col_names} to {generator.generate_for.value} file')
 
-            if generator.for_trials:
+            if generator.generate_for == GenerateFor.Trials:
                 #-- Generate a new column in trials_df
                 gen_args = TrialColGenratorArgs(new_col_name=generator.col_names, nparams=generator.nparams,
                                                 ds_dir=ds_dir, subj_id=subj_id, chars_df=chars_df)
@@ -134,10 +137,17 @@ class ColGeneratorsManager(object):
                                                ds_dir=ds_dir, subj_id=subj_id, trials_df=trials_df)
                 self.apply_generator(generator, gen_args, chars_rows, chars_df, orig_chars_cols)
 
-        for col in list(chars_df):
-            if col != 'extends' and chars_df[col].isna().all():
-                print(f'NOTE: column "{col}" is empty in all rows of subject {subj_id} dataset {ds_dir.dir_name}')
-                break
+        if trials_df.shape[0] > 0:
+            for col in list(trials_df):
+                if col != 'extends' and trials_df[col].isna().all():
+                    print(f'NOTE: column "{col}" is empty in all trials.csv rows of subject {subj_id} dataset {ds_dir.dir_name}')
+                    break
+
+        if chars_df.shape[0] > 0:
+            for col in list(chars_df):
+                if col != 'extends' and chars_df[col].isna().all():
+                    print(f'NOTE: column "{col}" is empty in all characters.csv rows of subject {subj_id} dataset {ds_dir.dir_name}')
+                    break
 
     #-------------------------------------------------------------------
     def apply_generator(self, generator, gen_args_func, rows, df, df_col_names_before_generation):

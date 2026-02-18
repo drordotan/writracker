@@ -242,7 +242,8 @@ class OneFilePdfPlotter(object):
                     n_done += 1
 
                     trial = trials.pop(0)
-                    trial.mirror_in_place(x=self.config.mirror_x, y=self.config.mirror_y)
+                    trial.mirror_in_place(x=self.config.mirror_x or (hasattr(trial, 'mirror_x') and trial.mirror_x),
+                                          y=self.config.mirror_y or (hasattr(trial, 'mirror_y') and trial.mirror_y))
                     trial.correct_writing_order = None
                     self.plot_trial(trial, ax=ax, get_z_levels=get_z_levels, tgaps_ylim=tgaps_ylim, col_num=col_num)
                     ax.set_title(self.config.get_trial_title(trial), fontdict=dict(fontsize=5))

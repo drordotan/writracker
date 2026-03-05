@@ -277,7 +277,8 @@ class CopyColumnsFromTrialsToChars(object):
         self.col_names = col_names
 
     def __call__(self, rows, _, __, trial):
-        return [trial[col_name] for col_name in self.col_names]
+        result = [trial[col_name] for col_name in self.col_names]
+        return result[0] if len(self.col_names) == 1 else result
 
 
 #----------------------------------------------------------------------------------

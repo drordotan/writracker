@@ -20,22 +20,37 @@ class GenerateFor(enum.Enum):
     Chars = 'characters'
 
 
+#-- This specifies the scope of the genration function's arguments and return value
 class GenerationScope(enum.Enum):
-    SingleRow = 1
-    DataFrame = 2
+    SingleRow = 1   # Operate on one row at a time
+    DataFrame = 2   # Operate on the full data (either one dataset or the whole data, depending on when the generator is applied)
+
+
+class Phase(enum.Enum):
+    DatasetLoaded = 1       # After each dataset
+    AllDatasetsLoaded = 2   # After everything was loaded
 
 
 #--------------------------------------------------------------------------------------------
 class GeneratorSpec(object):
 
-    def __init__(self, generate_for: GenerateFor, col_names, generator: callable, scope: GenerationScope = None):
+    def __init__(self,
+                 generate_for: GenerateFor,
+                 col_names,
+                 generator: callable,
+                 phase: Phase = Phase.DatasetLoaded,
+                 scope: GenerationScope = GenerationScope.SingleRow):
 
         if not isinstance(generate_for, GenerateFor):
             raise ValueError(f'Invalid generate_for = "{generate_for}"')
 
+        if not isinstance(scope, GenerationScope):
+            raise ValueError(f'Invalid scope = "{scope}"')
+
         self.generate_for = generate_for
         self.col_names = col_names
         self.generator = generator
+        self.phase = phase
 
         if hasattr(generator, 'scope'):
             if scope is None:
@@ -112,7 +127,12 @@ class ColGeneratorsManager(object):
         self.trace = trace
 
     #-------------------------------------------------------------------
-    def generate_columns(self, trials_df, chars_df, ds_dir, subj_id):
+    def generate_custom_columns(self, trials_df, chars_df, phase, subj_id=None, ds_dir=None):
+        """
+        Generate new columns according to the definitions provided.
+        :param phase: The phase in which the generation is executed
+        :param ds_dir: The current dataset.
+        """
 
         trials_rows = [dict(row) for _, row in trials_df.iterrows()]
         chars_rows = [dict(row) for _, row in chars_df.iterrows()]
@@ -129,13 +149,13 @@ class ColGeneratorsManager(object):
                 #-- Generate a new column in trials_df
                 gen_args = TrialColGenratorArgs(new_col_name=generator.col_names, nparams=generator.nparams,
                                                 ds_dir=ds_dir, subj_id=subj_id, chars_df=chars_df)
-                self.apply_generator(generator, gen_args, trials_rows, trials_df, orig_trials_cols)
+                self.apply_generator(generator, gen_args, trials_rows, trials_df, orig_trials_cols, phase)
 
             else:
                 #-- Generate a new column in chars_df
                 gen_args = CharColGenratorArgs(new_col_name=generator.col_names, nparams=generator.nparams,
                                                ds_dir=ds_dir, subj_id=subj_id, trials_df=trials_df)
-                self.apply_generator(generator, gen_args, chars_rows, chars_df, orig_chars_cols)
+                self.apply_generator(generator, gen_args, chars_rows, chars_df, orig_chars_cols, phase)
 
         if trials_df.shape[0] > 0:
             for col in list(trials_df):
@@ -146,14 +166,22 @@ class ColGeneratorsManager(object):
         if chars_df.shape[0] > 0:
             for col in list(chars_df):
                 if col != 'extends' and chars_df[col].isna().all():
-                    print(f'NOTE: column "{col}" is empty in all characters.csv rows of subject {subj_id} dataset {ds_dir.dir_name}')
+                    if phase == Phase.AllDatasetsLoaded:
+                        print(f'NOTE: column "{col}" is empty in all characters.csv rows')
+                    else:
+                        print(f'NOTE: column "{col}" is empty in all characters.csv rows of subject {subj_id} dataset {ds_dir.dir_name}')
                     break
 
     #-------------------------------------------------------------------
-    def apply_generator(self, generator, gen_args_func, rows, df, df_col_names_before_generation):
+    def apply_generator(self, generator, gen_args_func, rows, df, df_col_names_before_generation, phase):
         """
         Apply a column generator to all rows, then add the generated values as new column/s to the DataFrame
+
+        :param phase: Run only if this matches self's phase
         """
+
+        if phase != generator.phase:
+            return
 
         if generator.scope == GenerationScope.SingleRow:
             new_col_values = [generator.generator(*gen_args_func(row)) for row in rows]
@@ -325,12 +353,28 @@ class ZScoreColumn(object):
     Z-score a given column; potentially separately per length
     """
 
-    def __init__(self, col_name, per_target_length=False):
+    def __init__(self, col_name, grouping_fld=None, filter_func=None):
+        """
+        :param col_name: The column containing the values to z-score
+        :param grouping_fld: If specified, compute z score separately for each group of rows
+        :param filter_func: If specified, Compute z score only for some rows. filter_func is a function that gets a data frame and returns
+                            a list for selecting rows (bool of same size; or list of indices to select)
+        """
         self.col_name = col_name
-        self.per_target_length = per_target_length
+        self.grouping_fld = grouping_fld   # Compute
+        self.filter_func = filter_func     #
 
+    #------------------------------------
     def __call__(self, df, _, __):
-        return compute_z_scores(df, self.col_name, self.per_target_length)
+
+        if self.filter_func is None:
+            result = compute_z_scores(df, self.col_name, self.grouping_fld)
+        else:
+            result = pd.Series([None] * df.shape[0])
+            included_rows = self.filter_func(df)
+            result[included_rows] = compute_z_scores(df[included_rows], self.col_name, self.grouping_fld)
+
+        return result
 
     @property
     def scope(self):
@@ -338,17 +382,18 @@ class ZScoreColumn(object):
 
 
 #-------------------------------------------------------------------
-def compute_z_scores(df, col_name, per_target_length):
+def compute_z_scores(df, col_name, grouping_fld=None):
     """
     Z-score a given column; potentially separately per length
     """
-    if not per_target_length:
+    if grouping_fld is None:
         return pd.Series(_zscore(df[col_name]))
 
-    #-- Compute per target length
+    #-- Compute per group
     result = pd.Series([0.0] * df.shape[0])
-    for target_len in df.target_len.unique():
-        result.loc[df.target_len == target_len] = _zscore(df[col_name][df.target_len == target_len])
+    for group in df[grouping_fld].unique():
+        result.loc[df[grouping_fld] == group] = _zscore(df[col_name][df[grouping_fld] == group])
+
     return result
 
 

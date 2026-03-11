@@ -73,7 +73,7 @@ class Merger(object):
                 if curr_trials_df.empty:
                     continue
 
-                self.col_generation.generate_columns(curr_trials_df, curr_chars_df, ds_dir, subj_id)
+                self.col_generation.generate_custom_columns(curr_trials_df, curr_chars_df, colgen.Phase.DatasetLoaded, subj_id, ds_dir)
 
                 trials_data.append(curr_trials_df)
                 chars_data.append(curr_chars_df)
@@ -81,6 +81,7 @@ class Merger(object):
         all_trials_df = self._merge_trials(trials_data)
         all_chars_df = self._merge_characters(chars_data)
         all_trials_df, all_chars_df = self._add_columns_to_merged_trials_and_chars(all_trials_df, all_chars_df)
+        self.col_generation.generate_custom_columns(all_trials_df, all_chars_df, colgen.Phase.AllDatasetsLoaded)
 
         if out_trials_fn is not None:
             all_trials_df.to_csv(out_trials_fn, index=False, float_format='%.3g')
@@ -134,25 +135,19 @@ class Merger(object):
         multiple_target_lengths = 'target_len' in chars_df and len(chars_df.target_len.unique()) > 1
         if multiple_target_lengths and 'target_len' not in trials_df:
             trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'target_len')
+        z_grouping_fld = 'target_len' if multiple_target_lengths else None
 
         #-- The pre-char delay of character #1 is set to be the pre-trial delay (because t0 was set by WRecorder as the trial's starting point)
         chars_df = self.update_pre_char_delay_at_trial_level(chars_df, 'pre_trial_delay', char_num=1)
         trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'pre_trial_delay')
-        trials_df['pre_trial_delay_z'] = colgen.compute_z_scores(trials_df, 'pre_trial_delay', per_target_length=multiple_target_lengths)
+        trials_df['pre_trial_delay_z'] = colgen.compute_z_scores(trials_df, 'pre_trial_delay', grouping_fld=z_grouping_fld)
         chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'pre_trial_delay_z')
-
-        #-- Cross-triplet delay
-        if 'dec_pos' in chars_df:
-            chars_df = self.update_pre_char_delay_at_trial_level(chars_df, 'cross_triplet_delay', dec_pos=3)
-            trials_df = self._copy_col_from_char1_to_trials(trials_df, chars_df, 'cross_triplet_delay')
-            trials_df['cross_triplet_delay_z'] = colgen.compute_z_scores(trials_df, 'cross_triplet_delay', per_target_length=multiple_target_lengths)
-            chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'cross_triplet_delay_z')
 
         #-- Delay from end-of-audio to start-of-char1
         if 'sound_file_length' in trials_df:
             trials_df['endaudio_to_char1_delay'] = trials_df.pre_trial_delay - trials_df.sound_file_length
             trials_df['endaudio_to_char1_delay_z'] = \
-                colgen.compute_z_scores(trials_df, 'endaudio_to_char1_delay', per_target_length=multiple_target_lengths)
+                colgen.compute_z_scores(trials_df, 'endaudio_to_char1_delay', grouping_fld=z_grouping_fld)
             chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'endaudio_to_char1_delay')
             chars_df = self._copy_col_from_trials_to_chars(trials_df, chars_df, 'endaudio_to_char1_delay_z')
 

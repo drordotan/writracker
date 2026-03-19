@@ -2,6 +2,8 @@
 Generate new columns in the trials.csv and characters.csv data frames.
 """
 import math
+
+import numpy as np
 import pandas as pd
 import inspect
 import scipy.stats
@@ -361,8 +363,8 @@ class ZScoreColumn(object):
                             a list for selecting rows (bool of same size; or list of indices to select)
         """
         self.col_name = col_name
-        self.grouping_fld = grouping_fld   # Compute
-        self.filter_func = filter_func     #
+        self.grouping_fld = grouping_fld   # z-score separately for each value of this field
+        self.filter_func = filter_func     # z-score only these rows. The others remain None.
 
     #------------------------------------
     def __call__(self, df, _, __):
@@ -371,8 +373,9 @@ class ZScoreColumn(object):
             result = compute_z_scores(df, self.col_name, self.grouping_fld)
         else:
             result = pd.Series([None] * df.shape[0])
-            included_rows = self.filter_func(df)
-            result[included_rows] = compute_z_scores(df[included_rows], self.col_name, self.grouping_fld)
+            included_rows = list(self.filter_func(df))
+            zscores = compute_z_scores(df[included_rows], self.col_name, self.grouping_fld)
+            result[included_rows] = list(zscores)
 
         return result
 
@@ -390,9 +393,9 @@ def compute_z_scores(df, col_name, grouping_fld=None):
         return pd.Series(_zscore(df[col_name]))
 
     #-- Compute per group
-    result = pd.Series([0.0] * df.shape[0])
+    result = np.array([None] * df.shape[0])
     for group in df[grouping_fld].unique():
-        result.loc[df[grouping_fld] == group] = _zscore(df[col_name][df[grouping_fld] == group])
+        result[df[grouping_fld] == group] = _zscore(df[col_name][df[grouping_fld] == group])
 
     return result
 
